@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/Header';
 import { CrisisScoreGauge } from '@/components/crisis/CrisisScoreGauge';
 import { SecurityAlert } from '@/components/crisis/SecurityAlert';
+import { TravelPackBlock } from '@/components/crisis/TravelPackBlock';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
 
@@ -178,6 +179,18 @@ export default async function DestinationPage({ params }: Props) {
             {narrative}
           </div>
         </div>
+
+        {/* ── Pack Voyage + Affiliation ── */}
+        <TravelPackBlock
+          countryCode={score.countryCode}
+          countryName={score.country}
+          mealCheapEur={score.budget.details.mealCheap
+            ? Number(score.budget.details.mealCheap)
+            : undefined}
+          hotelAvgEur={score.budget.details.hotelAvg
+            ? Number(score.budget.details.hotelAvg)
+            : undefined}
+        />
 
         {/* Sources */}
         <div style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>

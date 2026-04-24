@@ -422,6 +422,12 @@ export function SmartSearchHub() {
   const [airport, setAirport] = useState('CDG');
   const router = useRouter();
 
+  // Persiste l'aéroport pour TravelPackBlock sur les fiches destination
+  function handleAirportChange(code: string) {
+    setAirport(code);
+    if (typeof window !== 'undefined') localStorage.setItem('crisis_travel_airport', code);
+  }
+
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
     router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}`);
@@ -431,7 +437,7 @@ export function SmartSearchHub() {
     <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20 }}>
 
       {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
-      <AirportSelector value={airport} onChange={setAirport} />
+      <AirportSelector value={airport} onChange={handleAirportChange} />
 
       <TabBar active={tab} onChange={setTab} />
 
