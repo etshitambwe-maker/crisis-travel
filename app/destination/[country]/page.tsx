@@ -4,6 +4,29 @@ import { SecurityAlert } from '@/components/crisis/SecurityAlert';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
 
+const COUNTRY_PHOTO_KEYWORDS: Record<string, string> = {
+  TH: 'Thailand,temple,Bangkok', GE: 'Georgia,Caucasus,Tbilisi', PT: 'Portugal,Lisbon,azulejo',
+  MA: 'Morocco,Marrakech,medina', VN: 'Vietnam,Hanoi,rice', MX: 'Mexico,city,culture',
+  AL: 'Albania,Berat,mountains', RS: 'Serbia,Belgrade,city', BA: 'Bosnia,Mostar,bridge',
+  KG: 'Kyrgyzstan,mountains,nomad', MD: 'Moldova,vineyard', JP: 'Japan,Tokyo,cherry',
+  ID: 'Bali,Indonesia,temple,rice', CO: 'Colombia,Bogota,coffee', PE: 'Peru,Machu-Picchu,Andes',
+  TR: 'Turkey,Istanbul,Bosphorus', EG: 'Egypt,pyramids,desert', TN: 'Tunisia,desert,blue',
+  MK: 'Macedonia,Ohrid,lake', AM: 'Armenia,mountains,monastery', UZ: 'Uzbekistan,Samarkand',
+  KH: 'Cambodia,Angkor,temple', LK: 'Sri-Lanka,beach,tea', PH: 'Philippines,islands,sea',
+  EC: 'Ecuador,Galapagos,volcano', ME: 'Montenegro,Kotor,Adriatic', GR: 'Greece,Santorini,island',
+  HR: 'Croatia,Dubrovnik,sea', SN: 'Senegal,Dakar,baobab', KE: 'Kenya,savanna,safari',
+  TZ: 'Tanzania,Zanzibar,Kilimanjaro', RW: 'Rwanda,gorilla,green', ZA: 'South-Africa,Cape-Town',
+  MU: 'Mauritius,lagoon,turquoise', CG: 'Congo,Brazzaville,river', CD: 'Congo,river,jungle',
+  JO: 'Jordan,Petra,desert', AE: 'Dubai,skyline,UAE', OM: 'Oman,Muscat,desert',
+  IN: 'India,Taj-Mahal,Rajasthan', NP: 'Nepal,Himalaya,Everest', BR: 'Brazil,Rio,Christ',
+  AR: 'Argentina,Buenos-Aires,tango', CL: 'Chile,Patagonia,mountains', CU: 'Cuba,Havana,colorful',
+};
+
+function getPhotoUrl(code: string): string {
+  const kw = COUNTRY_PHOTO_KEYWORDS[code] ?? 'landscape,travel,mountains';
+  return `https://source.unsplash.com/1200x400/?${kw}`;
+}
+
 interface Props {
   params: Promise<{ country: string }>;
 }
@@ -47,28 +70,64 @@ export default async function DestinationPage({ params }: Props) {
     </div>
   );
 
+  const photoUrl = getPhotoUrl(country.toUpperCase());
+  const scoreColor = getScoreColor(score.total);
+  const statusLabel = score.status === 'ideal' ? '🟢 IDÉALE'
+    : score.status === 'recommended' ? '🟡 RECOMMANDÉE'
+    : score.status === 'possible' ? '🟠 POSSIBLE' : '🔴 DÉCONSEILLÉE';
+
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
       <Header />
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px' }}>
 
-        {/* En-tête destination */}
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', marginBottom: 32 }}>
-          <CrisisScoreGauge score={score.total} size="lg" />
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontFamily: 'var(--font-space-mono)', fontSize: '2.5rem', color: '#fff', marginBottom: 4 }}>
+      {/* ── Bannière photo ──────────────────────────────── */}
+      <div style={{ position: 'relative', height: 240, overflow: 'hidden' }}>
+        <img
+          src={photoUrl}
+          alt={score.country}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(1px)', transform: 'scale(1.05)' }}
+        />
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to bottom, rgba(10,10,15,0.2) 0%, rgba(10,10,15,0.97) 100%)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          width: '100%', maxWidth: 800, padding: '0 24px',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+        }}>
+          <div>
+            <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }}>
+              {country.toUpperCase()} · Analyse du {new Date(score.calculatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+            <h1 style={{ fontFamily: 'var(--font-space-mono)', fontSize: 'clamp(1.8rem,5vw,3rem)', color: '#fff', margin: 0, lineHeight: 1 }}>
               {score.country}
             </h1>
-            <p style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 10 }}>
-              Analyse du {new Date(score.calculatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+            <p style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem', color: '#3f3f5a', margin: '4px 0 0', fontStyle: 'italic', letterSpacing: '0.08em' }}>
+              À qui profite la crise
             </p>
-            <SecurityAlert level={meaeLevel} country={score.country} />
-            {score.confidence === 'low' && (
-              <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#ffd23f' }}>
-                ⚠ Données partielles — certaines sources étaient indisponibles
-              </div>
-            )}
           </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '2.2rem', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>
+              {score.total}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: scoreColor, fontFamily: 'var(--font-space-mono)', letterSpacing: '0.06em', marginTop: 2 }}>
+              {statusLabel}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: '28px 24px' }}>
+
+        {/* En-tête destination */}
+        <div style={{ marginBottom: 24 }}>
+          <SecurityAlert level={meaeLevel} country={score.country} />
+          {score.confidence === 'low' && (
+            <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#ffd23f' }}>
+              ⚠ Données partielles — certaines sources étaient indisponibles
+            </div>
+          )}
         </div>
 
         {/* Sous-scores */}
