@@ -14,6 +14,9 @@ const Schema = z.object({
     travelType: z.enum(['solo', 'couple', 'family', 'nomad']),
     mode: z.enum(['standard', 'bunker', 'budget_crisis']).default('standard'),
     excludedContinents: z.array(z.string()).optional(),
+    continent: z.string().optional(),        // filtre par continent
+    priority: z.string().optional(),          // securite | budget | decouverte | tout
+    sortBy: z.enum(['score', 'security', 'budget', 'alpha']).optional(),
   }),
 });
 
@@ -24,14 +27,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { profile } = Schema.parse(body);
 
     let countries = [...TARGET_COUNTRIES];
-    if (profile.excludedContinents?.length) {
+    // Filtre par continent unique (mode région)
+    if (profile.continent) {
+      countries = countries.filter((c) => c.continent === profile.continent);
+    } else if (profile.excludedContinents?.length) {
       countries = countries.filter((c) => !profile.excludedContinents!.includes(c.continent));
     }
 
-    // Analyser par batches de 8 pour ne pas surcharger les APIs
-    const BATCH = 8;
+    // Analyser tous les pays si continent filtré (max 15), sinon batch de 8 sur 24
+    const MAX = profile.continent ? countries.length : 24;
+    const BATCH = profile.continent ? countries.length : 8;
     const results = [];
-    for (let i = 0; i < Math.min(countries.length, 24); i += BATCH) {
+    for (let i = 0; i < Math.min(countries.length, MAX); i += BATCH) {
       const batch = countries.slice(i, i + BATCH);
       const settled = await Promise.allSettled(
         batch.map((c) => calculateCrisisScore(c, profile))
@@ -41,8 +48,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
 
-    let sorted = results.sort((a, b) => b.total - a.total);
-    if (profile.mode === 'bunker') sorted = sorted.filter((s) => s.security.value >= 85);
+    // Tri selon sortBy ou mode
+    let sorted = [...results];
+    const sortBy = profile.sortBy;
+    if (sortBy === 'security')     sorted = sorted.sort((a, b) => b.security.value - a.security.value);
+    else if (sortBy === 'budget')  sorted = sorted.sort((a, b) => b.budget.value - a.budget.value);
+    else                           sorted = sorted.sort((a, b) => b.total - a.total);
+
+    // Filtres mode spéciaux
+    if (profile.mode === 'bunker')        sorted = sorted.filter((s) => s.security.value >= 80);
     if (profile.mode === 'budget_crisis') sorted = sorted.filter((s) => s.budget.value >= 70 && s.security.value >= 60);
 
     const topDestinations = sorted.slice(0, 5);
