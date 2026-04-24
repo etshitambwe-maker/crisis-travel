@@ -17,6 +17,27 @@ type DiscoveryState = {
 };
 
 // ── Constants ────────────────────────────────────────────────────────────────
+const FRENCH_AIRPORTS = [
+  { code: 'CDG', name: 'Paris Charles de Gaulle', city: 'Paris' },
+  { code: 'ORY', name: 'Paris Orly',              city: 'Paris' },
+  { code: 'LYS', name: 'Lyon Saint-Exupéry',      city: 'Lyon' },
+  { code: 'MRS', name: 'Marseille Provence',       city: 'Marseille' },
+  { code: 'NCE', name: 'Nice Côte d\'Azur',        city: 'Nice' },
+  { code: 'TLS', name: 'Toulouse Blagnac',         city: 'Toulouse' },
+  { code: 'BOD', name: 'Bordeaux Mérignac',        city: 'Bordeaux' },
+  { code: 'NTE', name: 'Nantes Atlantique',        city: 'Nantes' },
+  { code: 'LIL', name: 'Lille Lesquin',            city: 'Lille' },
+  { code: 'MPL', name: 'Montpellier Méditerranée', city: 'Montpellier' },
+  { code: 'SXB', name: 'Strasbourg Entzheim',      city: 'Strasbourg' },
+  { code: 'RNS', name: 'Rennes Saint-Jacques',     city: 'Rennes' },
+  { code: 'GNB', name: 'Grenoble Alpes Isère',     city: 'Grenoble' },
+  { code: 'BIA', name: 'Bastia Poretta',           city: 'Bastia' },
+  { code: 'AJA', name: 'Ajaccio Napoléon Bonaparte', city: 'Ajaccio' },
+  { code: 'RUN', name: 'La Réunion Roland Garros', city: 'La Réunion' },
+  { code: 'PTP', name: 'Pointe-à-Pitre',           city: 'Guadeloupe' },
+  { code: 'FDF', name: 'Fort-de-France Aimé Césaire', city: 'Martinique' },
+];
+
 const CONTINENTS: { id: Continent; label: string; emoji: string; color: string }[] = [
   { id: 'Europe',     label: 'Europe',        emoji: '🌍', color: '#4f8ef7' },
   { id: 'Africa',     label: 'Afrique',       emoji: '🌍', color: '#ff8c42' },
@@ -96,8 +117,66 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ── Airport Selector ─────────────────────────────────────────────────────────
+function AirportSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const airport = FRENCH_AIRPORTS.find((a) => a.code === value) ?? FRENCH_AIRPORTS[0];
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 16 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: '#080810', border: '1px solid #1e1e2e', borderRadius: 8,
+        padding: '7px 12px', cursor: 'pointer',
+      }} onClick={() => setOpen((o) => !o)}>
+        <span style={{ fontSize: '0.8rem' }}>✈️</span>
+        <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', flexShrink: 0 }}>
+          DÉPART DEPUIS
+        </span>
+        <span style={{ fontSize: '0.82rem', color: '#e8e8e8', fontWeight: 600, flex: 1 }}>
+          {airport.city}
+        </span>
+        <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', background: '#1e1e2e', padding: '2px 6px', borderRadius: 4 }}>
+          {airport.code}
+        </span>
+        <span style={{ color: '#3f3f5a', fontSize: '0.65rem' }}>{open ? '▲' : '▼'}</span>
+      </div>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 2,
+          background: '#0d0d14', border: '1px solid #1e1e2e', borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxHeight: 280, overflowY: 'auto',
+        }}>
+          {FRENCH_AIRPORTS.map((ap) => (
+            <button
+              key={ap.code}
+              onClick={() => { onChange(ap.code); setOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '8px 12px', background: ap.code === value ? 'rgba(255,77,46,0.08)' : 'transparent',
+                border: 'none', borderBottom: '1px solid #1a1a28', cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', background: '#1e1e2e', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+                {ap.code}
+              </span>
+              <span style={{ fontSize: '0.82rem', color: ap.code === value ? '#ff4d2e' : '#e8e8e8' }}>
+                {ap.city}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: '#3f3f5a', marginLeft: 'auto' }}>
+                {ap.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Tab 2 : Region Explorer ──────────────────────────────────────────────────
-function RegionTab({ onAnalyze }: { onAnalyze: (continent: Continent, sort: SortKey) => void }) {
+function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, sort: SortKey) => void; airport: string }) {
   const [selected, setSelected] = useState<Continent | null>(null);
   const [sort, setSort] = useState<SortKey>('score');
   const router = useRouter();
@@ -205,7 +284,7 @@ function RegionTab({ onAnalyze }: { onAnalyze: (continent: Continent, sort: Sort
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,77,46,0.15)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,77,46,0.08)'; }}
           >
-            ⚡ ANALYSER TOUTE LA RÉGION {CONTINENTS.find(c => c.id === selected)?.label.toUpperCase()} EN TEMPS RÉEL →
+            ⚡ ANALYSER TOUTE LA RÉGION {CONTINENTS.find(c => c.id === selected)?.label.toUpperCase()} DEPUIS {airport} →
           </button>
         </>
       )}
@@ -280,7 +359,7 @@ function OptionGrid<T extends string>({
   );
 }
 
-function DiscoveryTab() {
+function DiscoveryTab({ airport }: { airport: string }) {
   const router = useRouter();
   const [state, setState] = useState<DiscoveryState>({ priority: null, duration: null, budget: null, travelType: null });
   const set = (key: ChoiceKey) => (val: string) => setState((s) => ({ ...s, [key]: val as never }));
@@ -293,7 +372,7 @@ function DiscoveryTab() {
     const tt = state.travelType ?? 'solo';
     const mode = state.priority === 'securite' ? 'bunker' : state.priority === 'budget' ? 'budget_crisis' : 'standard';
     const priority = state.priority ?? 'tout';
-    router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}`);
+    router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}`);
   }
 
   return (
@@ -340,15 +419,20 @@ function DiscoveryTab() {
 // ── Main component ────────────────────────────────────────────────────────────
 export function SmartSearchHub() {
   const [tab, setTab] = useState<Tab>('direct');
+  const [airport, setAirport] = useState('CDG');
   const router = useRouter();
 
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
-    router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo`);
-  }, [router]);
+    router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}`);
+  }, [router, airport]);
 
   return (
     <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20 }}>
+
+      {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
+      <AirportSelector value={airport} onChange={setAirport} />
+
       <TabBar active={tab} onChange={setTab} />
 
       {tab === 'direct' && (
@@ -360,8 +444,8 @@ export function SmartSearchHub() {
         </div>
       )}
 
-      {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} />}
-      {tab === 'discovery' && <DiscoveryTab />}
+      {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} />}
+      {tab === 'discovery' && <DiscoveryTab airport={airport} />}
     </div>
   );
 }

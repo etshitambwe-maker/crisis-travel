@@ -34,6 +34,7 @@ export function ResultsContent() {
 
   const continent = params.get('continent') ?? undefined;
   const priority  = params.get('priority') ?? 'tout';
+  const airport   = params.get('airport') ?? 'CDG';
   const sortByParam = params.get('mode') === 'bunker' ? 'security' : params.get('mode') === 'budget_crisis' ? 'budget' : 'score';
 
   // Timer affiché pendant le chargement
@@ -74,8 +75,8 @@ export function ResultsContent() {
     ? `ANALYSE ${CONTINENT_LABELS[continent]?.toUpperCase() ?? continent.toUpperCase()}`
     : labels.title;
   const pageSubtitle = continent
-    ? `${data?.meta.analyzedCountries ?? '...'} pays analysés — ${SORT_LABELS[sortByParam] ?? ''}`
-    : labels.subtitle;
+    ? `${data?.meta.analyzedCountries ?? '...'} pays analysés — ${SORT_LABELS[sortByParam] ?? ''} — depuis ${airport}`
+    : `${labels.subtitle} — Depuis ${airport}`;
 
   return (
     <main style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px' }}>
