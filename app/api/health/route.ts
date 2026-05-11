@@ -26,7 +26,7 @@ export async function GET(): Promise<NextResponse> {
       apis: checks,
       env: {
         anthropic: !!process.env.ANTHROPIC_API_KEY,
-        perplexity: !!process.env.PERPLEXITY_API_KEY,
+        openrouter: !!process.env.OPENROUTER_API_KEY,
         redis: !!process.env.UPSTASH_REDIS_REST_URL,
         acled: !!process.env.ACLED_ACCESS_KEY,
         numbeo: !!process.env.NUMBEO_API_KEY,

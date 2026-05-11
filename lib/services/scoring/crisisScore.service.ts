@@ -1,14 +1,16 @@
 import { getMEAEScore } from '@/lib/services/security/meae.service';
 import { getACLEDScore } from '@/lib/services/security/acled.service';
 import { getStateDeptScore } from '@/lib/services/security/stateDept.service';
-import { getReliefWebScore } from '@/lib/services/security/reliefweb.service';
+import { getNasaEonetScore } from '@/lib/services/security/nasaEonet.service';
 import { getPerplexityGeoScore } from '@/lib/services/geopolitical/perplexity.service';
 import { getWorldBankScore } from '@/lib/services/geopolitical/worldbank.service';
+import { getGdeltScore } from '@/lib/services/geopolitical/gdelt.service';
 import { getFrankfurterScore } from '@/lib/services/budget/frankfurter.service';
 import { getNumbeoScore } from '@/lib/services/budget/numbeo.service';
+import { getTeleportScore } from '@/lib/services/budget/teleport.service';
 import { clamp, getScoreStatus } from '@/types/crisis.types';
 import type { CrisisScore, SubScore, UserProfile } from '@/types/crisis.types';
-import type { ServiceResult } from '@/types/api.types';
+import type { ServiceResult, PerplexityGeoAnalysis } from '@/types/api.types';
 
 export interface CountryInfo {
   code: string;
@@ -38,72 +40,110 @@ function buildSubScore(
 }
 
 async function calcSecurity(c: CountryInfo): Promise<SubScore> {
-  const [r_meae, r_acled, r_state, r_relief] = await Promise.allSettled([
+  const [r_meae, r_acled, r_state, r_eonet] = await Promise.allSettled([
     getMEAEScore(c.code, c.meaeSlug),
     getACLEDScore(c.code, c.acledName),
     getStateDeptScore(c.code),
-    getReliefWebScore(c.code, c.iso3),
+    getNasaEonetScore(c.code),
   ]);
-  const meae = resolveSettled(r_meae, { score: 70, level: 2 });
+  const meae  = resolveSettled(r_meae,  { score: 70, level: 2 });
   const acled = resolveSettled(r_acled, { score: 50, incidents: 0, fatalities: 0 });
   const state = resolveSettled(r_state, { score: 70, level: 2 });
-  const relief = resolveSettled(r_relief, { score: 100, activeCrises: 0 });
+  const eonet = resolveSettled(r_eonet, { score: 85, activeEvents: 0, categories: [] });
 
-  const value = meae.data.score * 0.35 + acled.data.score * 0.30 + state.data.score * 0.20 + relief.data.score * 0.05 + 70 * 0.10;
-  return buildSubScore(value, [meae.source, acled.source, state.source, relief.source], {
-    meaeLevel: meae.data.level,
+  // MEAE 35% · ACLED 30% · State Dept 20% · NASA EONET 15%
+  const value = meae.data.score * 0.35 + acled.data.score * 0.30 + state.data.score * 0.20 + eonet.data.score * 0.15;
+  return buildSubScore(value, [meae.source, acled.source, state.source, eonet.source], {
+    meaeLevel:      meae.data.level,
     acledIncidents: acled.data.incidents,
     stateDeptLevel: state.data.level,
-    activeCrises: relief.data.activeCrises,
+    naturalEvents:  eonet.data.activeEvents,
+    eventTypes:     eonet.data.categories.slice(0, 3).join(', '),
   });
 }
 
-async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
-  const [r_perp, r_wb] = await Promise.allSettled([
-    getPerplexityGeoScore(c.code, c.name),
-    getWorldBankScore(c.code),
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
   ]);
-  const perp = resolveSettled(r_perp, { stabilityScore: 50, summary: '', mainRisks: [], recentEvents: [], trend: 'stable' as const });
-  const wb = resolveSettled(r_wb, { score: 50 });
+}
 
-  const value = perp.data.stabilityScore * 0.40 + wb.data.score * 0.25 + 50 * 0.20 + 70 * 0.15;
-  return buildSubScore(value, [perp.source, wb.source], {
+async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
+  const PERP_FALLBACK: ServiceResult<PerplexityGeoAnalysis> = {
+    data: { stabilityScore: 50, summary: '', mainRisks: [], recentEvents: [], trend: 'stable' },
+    source: 'fallback',
+  };
+  const [r_perp, r_wb, r_gdelt] = await Promise.allSettled([
+    withTimeout(getPerplexityGeoScore(c.code, c.name), 9000, PERP_FALLBACK),
+    getWorldBankScore(c.code, c.iso3),
+    getGdeltScore(c.code),
+  ]);
+  const perp  = resolveSettled(r_perp,  { stabilityScore: 50, summary: '', mainRisks: [], recentEvents: [], trend: 'stable' as const });
+  const wb    = resolveSettled(r_wb,    { score: 50 });
+  const gdelt = resolveSettled(r_gdelt, { score: 50, tone: 0, articles: 0 });
+
+  // Perplexity 40% · WorldBank 25% · GDELT 20% · base 15%
+  const value = perp.data.stabilityScore * 0.40 + wb.data.score * 0.25 + gdelt.data.score * 0.20 + 70 * 0.15;
+  return buildSubScore(value, [perp.source, wb.source, gdelt.source], {
     perplexityScore: perp.data.stabilityScore,
-    trend: perp.data.trend,
-    worldBankScore: wb.data.score,
-    summary: perp.data.summary,
+    trend:           perp.data.trend,
+    worldBankScore:  wb.data.score,
+    gdeltTone:       gdelt.data.tone,
+    gdeltArticles:   gdelt.data.articles,
+    summary:         perp.data.summary,
   });
 }
 
 async function calcBudget(c: CountryInfo, _profile: UserProfile): Promise<SubScore> {
-  const [r_fx, r_numbeo] = await Promise.allSettled([
+  const [r_fx, r_numbeo, r_teleport] = await Promise.allSettled([
     getFrankfurterScore(c.code),
     getNumbeoScore(c.code),
+    getTeleportScore(c.code),
   ]);
-  const fx = resolveSettled(r_fx, { score: 50, currency: '?', variation: 0 });
-  const numbeo = resolveSettled(r_numbeo, { score: 50, index: 55, mealCheap: 8, hotelAvg: 60 });
+  const fx       = resolveSettled(r_fx,       { score: 50, currency: '?', variation: 0 });
+  const numbeo   = resolveSettled(r_numbeo,   { score: 50, index: 55, mealCheap: 8, hotelAvg: 60 });
+  const teleport = resolveSettled(r_teleport, { score: 50, costIndex: 55, safetyScore: 50, healthcareScore: 50 });
 
-  const value = fx.data.score * 0.30 + 50 * 0.30 + numbeo.data.score * 0.25 + 50 * 0.15;
-  return buildSubScore(value, [fx.source, numbeo.source], {
-    currencyVariation: fx.data.variation,
-    currency: fx.data.currency,
-    costOfLivingScore: numbeo.data.score,
-    mealCheap: numbeo.data.mealCheap,
-    hotelAvg: numbeo.data.hotelAvg,
+  // Frankfurter 30% · Numbeo statique 20% · Teleport 30% · base 20%
+  const costScore = teleport.source === 'live'
+    ? teleport.data.score * 0.30 + numbeo.data.score * 0.20
+    : numbeo.data.score * 0.50;
+  const value = fx.data.score * 0.30 + costScore + 50 * 0.20;
+
+  return buildSubScore(value, [fx.source, numbeo.source, teleport.source], {
+    currencyVariation:  fx.data.variation,
+    currency:           fx.data.currency,
+    costOfLivingScore:  numbeo.data.score,
+    teleportCost:       teleport.data.costIndex,
+    mealCheap:          numbeo.data.mealCheap,
+    hotelAvg:           numbeo.data.hotelAvg,
   });
 }
 
-function calcPracticality(): SubScore {
-  return buildSubScore(65, [], { note: 'Calculé en Phase 2' });
+async function calcPracticality(c: CountryInfo): Promise<SubScore> {
+  try {
+    const r_teleport = await getTeleportScore(c.code);
+    if (r_teleport.source === 'fallback') {
+      return buildSubScore(65, ['fallback' as const], { note: 'Données Teleport indisponibles' });
+    }
+    const value = r_teleport.data.healthcareScore * 0.50 + r_teleport.data.safetyScore * 0.30 + 65 * 0.20;
+    return buildSubScore(value, ['live' as const], {
+      healthcareScore: r_teleport.data.healthcareScore,
+      safetyScore:     r_teleport.data.safetyScore,
+    });
+  } catch {
+    return buildSubScore(65, ['fallback' as const], { note: 'Données Teleport indisponibles' });
+  }
 }
 
 export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile): Promise<CrisisScore> {
-  const [security, geopolitical, budget] = await Promise.all([
+  const [security, geopolitical, budget, practicality] = await Promise.all([
     calcSecurity(c),
     calcGeopolitical(c),
     calcBudget(c, profile),
+    calcPracticality(c),
   ]);
-  const practicality = calcPracticality();
 
   const total = clamp(Math.round(
     security.value * 0.40 + geopolitical.value * 0.30 + budget.value * 0.20 + practicality.value * 0.10

@@ -1,48 +1,51 @@
 import { Header } from '@/components/layout/Header';
-import { CrisisScoreGauge } from '@/components/crisis/CrisisScoreGauge';
+import { GaugeWithTooltip } from '@/components/crisis/GaugeWithTooltip';
 import { SecurityAlert } from '@/components/crisis/SecurityAlert';
 import { TravelPackBlock } from '@/components/crisis/TravelPackBlock';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
+import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
+import { generateDestinationNarrative } from '@/lib/claude/claude.service';
+import { findCountry } from '@/lib/utils/countries';
+import { getFlagUrlLarge, getCountryColors } from '@/lib/utils/countryPhoto';
 
-const COUNTRY_PHOTO_KEYWORDS: Record<string, string> = {
-  TH: 'Thailand,temple,Bangkok', GE: 'Georgia,Caucasus,Tbilisi', PT: 'Portugal,Lisbon,azulejo',
-  MA: 'Morocco,Marrakech,medina', VN: 'Vietnam,Hanoi,rice', MX: 'Mexico,city,culture',
-  AL: 'Albania,Berat,mountains', RS: 'Serbia,Belgrade,city', BA: 'Bosnia,Mostar,bridge',
-  KG: 'Kyrgyzstan,mountains,nomad', MD: 'Moldova,vineyard', JP: 'Japan,Tokyo,cherry',
-  ID: 'Bali,Indonesia,temple,rice', CO: 'Colombia,Bogota,coffee', PE: 'Peru,Machu-Picchu,Andes',
-  TR: 'Turkey,Istanbul,Bosphorus', EG: 'Egypt,pyramids,desert', TN: 'Tunisia,desert,blue',
-  MK: 'Macedonia,Ohrid,lake', AM: 'Armenia,mountains,monastery', UZ: 'Uzbekistan,Samarkand',
-  KH: 'Cambodia,Angkor,temple', LK: 'Sri-Lanka,beach,tea', PH: 'Philippines,islands,sea',
-  EC: 'Ecuador,Galapagos,volcano', ME: 'Montenegro,Kotor,Adriatic', GR: 'Greece,Santorini,island',
-  HR: 'Croatia,Dubrovnik,sea', SN: 'Senegal,Dakar,baobab', KE: 'Kenya,savanna,safari',
-  TZ: 'Tanzania,Zanzibar,Kilimanjaro', RW: 'Rwanda,gorilla,green', ZA: 'South-Africa,Cape-Town',
-  MU: 'Mauritius,lagoon,turquoise', CG: 'Congo,Brazzaville,river', CD: 'Congo,river,jungle',
-  JO: 'Jordan,Petra,desert', AE: 'Dubai,skyline,UAE', OM: 'Oman,Muscat,desert',
-  IN: 'India,Taj-Mahal,Rajasthan', NP: 'Nepal,Himalaya,Everest', BR: 'Brazil,Rio,Christ',
-  AR: 'Argentina,Buenos-Aires,tango', CL: 'Chile,Patagonia,mountains', CU: 'Cuba,Havana,colorful',
+
+const MEAE_DATA: Record<number, { title: string; desc: string; ic: string }> = {
+  1: { title: 'SURVEILLANCE NORMALE',           desc: "Aucune précaution particulière au-delà de la vigilance usuelle.", ic: '✓' },
+  2: { title: 'VIGILANCE RENFORCÉE',            desc: 'Prendre des précautions supplémentaires dans certaines zones.',    ic: '!' },
+  3: { title: 'DÉCONSEILLÉ SAUF IMPÉRATIF',    desc: "Ne s'y rendre que si un motif professionnel ou familial impératif l'exige.", ic: '⚠' },
+  4: { title: 'FORMELLEMENT DÉCONSEILLÉ',      desc: 'Toute présence est fortement déconseillée, quel que soit le motif.', ic: '✕' },
 };
 
-function getPhotoUrl(code: string): string {
-  const kw = COUNTRY_PHOTO_KEYWORDS[code] ?? 'landscape,travel,mountains';
-  return `https://source.unsplash.com/1200x400/?${kw}`;
-}
+const MEAE_STYLES: Record<number, { border: string; bg: string; icBg: string; icColor: string; titleColor: string }> = {
+  1: { border: 'rgba(61,220,151,0.25)',  bg: 'linear-gradient(135deg, rgba(61,220,151,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(61,220,151,0.15)',  icColor: '#3ddc97', titleColor: '#3ddc97' },
+  2: { border: 'rgba(255,178,36,0.25)',  bg: 'linear-gradient(135deg, rgba(255,178,36,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(255,178,36,0.15)',  icColor: '#ffb224', titleColor: '#ffb224' },
+  3: { border: 'rgba(255,140,66,0.25)',  bg: 'linear-gradient(135deg, rgba(255,140,66,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(255,140,66,0.15)',  icColor: '#ff8c42', titleColor: '#ff8c42' },
+  4: { border: 'rgba(255,59,47,0.25)',   bg: 'linear-gradient(135deg, rgba(255,59,47,0.06), rgba(17,17,28,0.5))',   icBg: 'rgba(255,59,47,0.15)',   icColor: '#ff3b2f', titleColor: '#ff3b2f' },
+};
 
 interface Props {
   params: Promise<{ country: string }>;
 }
 
-async function getData(code: string): Promise<{ score: CrisisScore; narrative: string } | null> {
+async function getData(code: string): Promise<{ score: CrisisScore; narrative: string; flagUrl: string; colors: [string, string] } | null> {
+  const country = findCountry(code);
+  if (!country) return null;
   try {
-    const base = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-    const res = await fetch(`${base}/api/destination/${code}/explain`, {
-      next: { revalidate: 1800 },
-    });
-    if (!res.ok) return null;
-    return res.json();
+    const profile = { departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType: 'solo' as const, mode: 'standard' as const };
+    const score = await calculateCrisisScore(country, profile);
+    const narrative = await generateDestinationNarrative(score, profile);
+    return { score, narrative, flagUrl: getFlagUrlLarge(code), colors: getCountryColors(code) };
   } catch {
     return null;
   }
+}
+
+function scoreColor(v: number) {
+  if (v >= 80) return '#3ddc97';
+  if (v >= 60) return '#ffb224';
+  if (v >= 40) return '#ff8c42';
+  return '#ff3b2f';
 }
 
 export default async function DestinationPage({ params }: Props) {
@@ -51,161 +54,323 @@ export default async function DestinationPage({ params }: Props) {
 
   if (!data) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0a0a0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100vh', background: '#07070c' }}>
         <Header />
-        <p style={{ color: '#6b7280' }}>Destination non trouvée ou analyse indisponible.</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <p style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', color: '#6b6b85', letterSpacing: '0.12em' }}>
+            DESTINATION NON TROUVÉE
+          </p>
+        </div>
       </div>
     );
   }
 
-  const { score, narrative } = data;
-  const meaeLevel = Number(score.security.details.meaeLevel ?? 2);
+  const { score, narrative, flagUrl, colors } = data;
+  const meaeLevel = Math.min(4, Math.max(1, Number(score.security.details.meaeLevel ?? 2)));
+  const meae = MEAE_DATA[meaeLevel];
+  const meaeStyle = MEAE_STYLES[meaeLevel];
+  const statusLabel = score.status === 'ideal' ? 'IDÉALE'
+    : score.status === 'recommended' ? 'RECOMMANDÉE'
+    : score.status === 'possible' ? 'POSSIBLE' : 'DÉCONSEILLÉE';
 
-  const SubScoreBox = ({ label, value, weight }: { label: string; value: number; weight: string }) => (
-    <div style={{ background: '#0d0d14', border: '1px solid #1e1e2e', borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-      <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '1.8rem', fontWeight: 700, color: getScoreColor(value) }}>
-        {value}
-      </div>
-      <div style={{ fontSize: '0.65rem', color: '#6b7280', letterSpacing: '0.08em', marginTop: 2 }}>{label}</div>
-      <div style={{ fontSize: '0.6rem', color: '#3f3f5a', marginTop: 1 }}>{weight}</div>
-    </div>
-  );
-
-  const photoUrl = getPhotoUrl(country.toUpperCase());
-  const scoreColor = getScoreColor(score.total);
-  const statusLabel = score.status === 'ideal' ? '🟢 IDÉALE'
-    : score.status === 'recommended' ? '🟡 RECOMMANDÉE'
-    : score.status === 'possible' ? '🟠 POSSIBLE' : '🔴 DÉCONSEILLÉE';
+  const subScores = [
+    { lbl: 'SÉCURITÉ',    val: score.security.value,     ic: '🛡', weight: '40%' },
+    { lbl: 'GÉOPOLITIQUE', val: score.geopolitical.value, ic: '🌐', weight: '30%' },
+    { lbl: 'BUDGET',      val: score.budget.value,        ic: '€',  weight: '20%' },
+    { lbl: 'PRATICITÉ',   val: score.practicality.value,  ic: '☀',  weight: '10%' },
+  ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
+    <div style={{ minHeight: '100vh', background: '#07070c' }}>
       <Header />
 
-      {/* ── Bannière photo ──────────────────────────────── */}
-      <div style={{ position: 'relative', height: 240, overflow: 'hidden' }}>
+      {/* ── Hero : fond couleurs du pays + drapeau ─── */}
+      <div style={{
+        position: 'relative', width: '100%', minHeight: 220,
+        background: `linear-gradient(135deg, ${colors[0]}40 0%, ${colors[1]}25 60%, #07070c 100%), #07070c`,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '32px 20px 24px', gap: 16,
+        borderBottom: '1px solid #1f1f30',
+      }}>
+        {/* Drapeau */}
         <img
-          src={photoUrl}
-          alt={score.country}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(1px)', transform: 'scale(1.05)' }}
+          src={flagUrl}
+          alt={`Drapeau ${score.country}`}
+          style={{
+            height: 90, width: 'auto', maxWidth: 160,
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 6px 20px rgba(0,0,0,0.7))',
+            borderRadius: 4,
+          }}
         />
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(to bottom, rgba(10,10,15,0.2) 0%, rgba(10,10,15,0.97) 100%)',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          width: '100%', maxWidth: 800, padding: '0 24px',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-        }}>
-          <div>
-            <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', letterSpacing: '0.12em', display: 'block', marginBottom: 4 }}>
-              {country.toUpperCase()} · Analyse du {new Date(score.calculatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-            <h1 style={{ fontFamily: 'var(--font-space-mono)', fontSize: 'clamp(1.8rem,5vw,3rem)', color: '#fff', margin: 0, lineHeight: 1 }}>
-              {score.country}
-            </h1>
-            <p style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem', color: '#3f3f5a', margin: '4px 0 0', fontStyle: 'italic', letterSpacing: '0.08em' }}>
-              À qui profite la crise
-            </p>
+        {/* Nom + meta */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.2em', color: '#9898b0', textTransform: 'uppercase', marginBottom: 6 }}>
+            {country.toUpperCase()} · FICHE DESTINATION
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '2.2rem', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>
-              {score.total}
-            </div>
-            <div style={{ fontSize: '0.65rem', color: scoreColor, fontFamily: 'var(--font-space-mono)', letterSpacing: '0.06em', marginTop: 2 }}>
-              {statusLabel}
-            </div>
+          <h1 style={{ margin: 0, fontFamily: 'var(--font-space-mono), monospace', fontSize: 'clamp(28px, 6vw, 42px)', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1 }}>
+            {score.country}
+          </h1>
+        </div>
+        {/* Badges */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{
+            background: 'rgba(7,7,12,0.7)', backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)', padding: '5px 10px', borderRadius: 6,
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.14em',
+            color: '#9898b0', textTransform: 'uppercase',
+          }}>
+            MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')}
+          </div>
+          <div style={{
+            background: scoreColor(score.total), color: '#07070c',
+            padding: '5px 10px', borderRadius: 6,
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.14em',
+            fontWeight: 700, textTransform: 'uppercase', boxShadow: `0 0 12px ${scoreColor(score.total)}66`,
+          }}>
+            {statusLabel}
           </div>
         </div>
       </div>
 
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '28px 24px' }}>
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: '0 20px 60px' }}>
 
-        {/* En-tête destination */}
-        <div style={{ marginBottom: 24 }}>
-          <SecurityAlert level={meaeLevel} country={score.country} />
+        {/* Source badges + meta */}
+        <div style={{ borderTop: '1px solid #1f1f30', padding: '16px 0 20px', borderBottom: '1px solid #1f1f30', marginBottom: 0 }}>
           {score.confidence === 'low' && (
-            <div style={{ marginTop: 8, fontSize: '0.75rem', color: '#ffd23f' }}>
-              ⚠ Données partielles — certaines sources étaient indisponibles
+            <div style={{ marginBottom: 10, fontSize: '0.75rem', color: '#ffb224', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)' }}>
+              ⚠ DONNÉES PARTIELLES — certaines sources étaient indisponibles
             </div>
           )}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            {(['security', 'geopolitical', 'budget'] as const).map((key) => (
+              <span key={key} style={{
+                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                fontSize: 8.5, letterSpacing: '0.16em',
+                padding: '3px 7px', borderRadius: 3,
+                textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 5,
+                border: '1px solid #1f1f30', color: '#9898b0', fontWeight: 700,
+                background: 'rgba(10,10,18,0.5)',
+              }}>
+                <span style={{
+                  width: 5, height: 5, borderRadius: '50%', display: 'inline-block',
+                  background: score[key].source === 'live' ? '#3ddc97' : '#ffb224',
+                  boxShadow: score[key].source === 'live' ? '0 0 5px #3ddc97' : 'none',
+                }} />
+                {key.toUpperCase()} {score[key].source === 'live' ? 'LIVE' : 'PARTIEL'}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Gauge */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '28px 20px 20px', position: 'relative' }}>
+          <div style={{
+            position: 'absolute', top: 30, left: '50%', transform: 'translateX(-50%)',
+            width: 200, height: 200,
+            background: `radial-gradient(circle, ${scoreColor(score.total)}20, transparent 70%)`,
+            pointerEvents: 'none',
+          }} />
+          <GaugeWithTooltip score={score} />
         </div>
 
         {/* Sous-scores */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
-          <SubScoreBox label="SÉCURITÉ" value={score.security.value} weight="40%" />
-          <SubScoreBox label="GÉOPOLITIQUE" value={score.geopolitical.value} weight="30%" />
-          <SubScoreBox label="BUDGET" value={score.budget.value} weight="20%" />
-          <SubScoreBox label="PRATICITÉ" value={score.practicality.value} weight="10%" />
+        <div style={{ marginBottom: 4 }}>
+          <SectionHead num="01" label="SOUS-SCORES" meta="PONDÉRÉ" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 20 }}>
+          {subScores.map((s) => (
+            <div key={s.lbl} style={{
+              background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
+              borderRadius: 12, padding: 14, position: 'relative', overflow: 'hidden',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: 9, letterSpacing: '0.16em', color: '#6b6b85',
+                  textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ fontSize: 12 }}>{s.ic}</span> {s.lbl}
+                </div>
+                <span style={{
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: 8, color: '#6b6b85', letterSpacing: '0.08em',
+                }}>
+                  ×{s.weight}
+                </span>
+              </div>
+              <div style={{
+                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1,
+                color: scoreColor(s.val),
+              }}>
+                {s.val}<span style={{ color: '#6b6b85', fontSize: 16, marginLeft: 2, fontWeight: 500 }}>/100</span>
+              </div>
+              <div style={{ marginTop: 12, height: 3, background: '#1f1f30', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ height: '100%', borderRadius: 2, background: scoreColor(s.val), width: `${s.val}%`, transition: 'width 1s cubic-bezier(0.2,0.8,0.2,1)' }} />
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Détails budget */}
+        {/* MEAE alert */}
+        <SectionHead num="02" label="ALERTE MEAE" meta="OFFICIEL" />
+        <div style={{
+          margin: '0 0 20px',
+          borderRadius: 12, padding: '14px 16px',
+          display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'flex-start',
+          border: `1px solid ${meaeStyle.border}`, background: meaeStyle.bg,
+        }}>
+          <div style={{
+            width: 38, height: 38, display: 'grid', placeItems: 'center',
+            borderRadius: 8, background: meaeStyle.icBg, color: meaeStyle.icColor,
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 18, fontWeight: 700,
+            flexShrink: 0,
+          }}>
+            {meae.ic}
+          </div>
+          <div>
+            <div style={{
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 9, letterSpacing: '0.16em', color: '#6b6b85',
+              textTransform: 'uppercase', marginBottom: 4,
+              display: 'flex', justifyContent: 'space-between', gap: 8,
+            }}>
+              <span>MEAE · NIVEAU {meaeLevel}/4</span>
+              <span>MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')}</span>
+            </div>
+            <div style={{
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+              fontWeight: 700, marginBottom: 4, lineHeight: 1.3, color: meaeStyle.titleColor,
+            }}>
+              {meae.title}
+            </div>
+            <div style={{ color: '#9898b0', fontSize: 12, lineHeight: 1.45 }}>{meae.desc}</div>
+          </div>
+        </div>
+
+        {/* SecurityAlert legacy */}
+        <div style={{ marginBottom: 20 }}>
+          <SecurityAlert level={meaeLevel} country={score.country} />
+        </div>
+
+        {/* Budget sur place */}
         {(score.budget.details.mealCheap || score.budget.details.hotelAvg) && (
-          <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 12, padding: '20px', marginBottom: 20 }}>
-            <h2 style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.85rem', color: '#e8e8e8', letterSpacing: '0.1em', marginBottom: 14 }}>
-              💶 BUDGET SUR PLACE
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: '0.85rem' }}>
-              {score.budget.details.mealCheap && (
-                <div>
-                  <div style={{ color: '#6b7280', fontSize: '0.7rem', marginBottom: 2 }}>REPAS BON MARCHÉ</div>
-                  <div style={{ color: '#e8e8e8', fontFamily: 'var(--font-space-mono)' }}>~{score.budget.details.mealCheap}€</div>
-                </div>
-              )}
-              {score.budget.details.hotelAvg && (
-                <div>
-                  <div style={{ color: '#6b7280', fontSize: '0.7rem', marginBottom: 2 }}>HÔTEL MOYEN /NUIT</div>
-                  <div style={{ color: '#e8e8e8', fontFamily: 'var(--font-space-mono)' }}>~{score.budget.details.hotelAvg}€</div>
-                </div>
-              )}
-              {score.budget.details.currencyVariation !== undefined && (
-                <div>
-                  <div style={{ color: '#6b7280', fontSize: '0.7rem', marginBottom: 2 }}>TAUX DE CHANGE EUR</div>
-                  <div style={{ color: Number(score.budget.details.currencyVariation) > 5 ? '#00e5a0' : '#e8e8e8', fontFamily: 'var(--font-space-mono)' }}>
-                    {Number(score.budget.details.currencyVariation) > 0 ? '+' : ''}{score.budget.details.currencyVariation}% (12 mois)
+          <>
+            <SectionHead num="03" label="BUDGET RÉEL" meta="ESTIMÉ 14J" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+              {[
+                score.budget.details.mealCheap && {
+                  ic: '🍽', label: 'REPAS BON MARCHÉ', sub: '~3 repas / jour',
+                  val: `${score.budget.details.mealCheap}€`, icBg: 'rgba(255,178,36,0.1)', icColor: '#ffb224',
+                },
+                score.budget.details.hotelAvg && {
+                  ic: '🛏', label: 'HÔTEL MOYEN × 14', sub: 'Médiane hôtel 3★',
+                  val: `${(Number(score.budget.details.hotelAvg) * 14).toLocaleString('fr-FR')}€`, icBg: 'rgba(61,220,151,0.1)', icColor: '#3ddc97',
+                },
+                score.budget.details.currencyVariation !== undefined && {
+                  ic: '↯', label: `IMPACT FX · ${score.countryCode}`,
+                  sub: Number(score.budget.details.currencyVariation) > 5 ? 'AVANTAGEUX VS EUR' : 'NEUTRE',
+                  val: `${Number(score.budget.details.currencyVariation) > 0 ? '+' : ''}${score.budget.details.currencyVariation}%`,
+                  icBg: Number(score.budget.details.currencyVariation) > 5 ? 'rgba(61,220,151,0.15)' : 'rgba(107,107,133,0.15)',
+                  icColor: Number(score.budget.details.currencyVariation) > 5 ? '#3ddc97' : '#9898b0',
+                },
+              ].filter(Boolean).map((row, i) => row && (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px',
+                  background: 'rgba(17,17,28,0.6)', border: '1px solid #1f1f30', borderRadius: 10,
+                }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
+                    background: row.icBg, color: row.icColor, flexShrink: 0, fontSize: 14,
+                  }}>{row.ic}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.15em', color: '#6b6b85', textTransform: 'uppercase', marginBottom: 2 }}>
+                      {row.label}
+                    </div>
+                    <div style={{ color: '#9898b0', fontSize: 11, fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', letterSpacing: '0.02em' }}>
+                      {row.sub}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: '#f0f0f5', textAlign: 'right' }}>
+                    {row.val}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
+          </>
         )}
 
-        {/* Analyse narrative Claude */}
-        <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 12, padding: '24px' }}>
-          <h2 style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.85rem', color: '#e8e8e8', letterSpacing: '0.1em', marginBottom: 16 }}>
-            🤖 ANALYSE IA — CLAUDE SONNET
-          </h2>
-          <div style={{ color: '#c0c0c0', lineHeight: 1.7, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
+        {/* AI synthesis */}
+        <SectionHead num="04" label="SYNTHÈSE IA" meta="CLAUDE SONNET" />
+        <div style={{
+          background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
+          borderRadius: 14, padding: '16px 18px', marginBottom: 20,
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {/* Top accent line */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+            background: 'linear-gradient(90deg, transparent 0%, #ff3b2f 30%, #ff8c42 70%, transparent 100%)',
+          }} />
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #1f1f30' }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: 'conic-gradient(from 45deg, #ff3b2f, #ff8c42, #ffb224, #ff3b2f)',
+              display: 'grid', placeItems: 'center', position: 'relative',
+            }}>
+              <div style={{ position: 'absolute', inset: 3, background: '#0b0b14', borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 1 }}>
+                <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 8, fontWeight: 700, color: '#f0f0f5', letterSpacing: '-0.02em', position: 'relative', zIndex: 2 }}>AI</span>
+              </div>
+            </div>
+            <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#f0f0f5' }}>
+              SYNTHÈSE CLAUDE <span style={{ color: '#6b6b85', fontWeight: 500 }}>· SONNET 4.6</span>
+            </div>
+            <div style={{ marginLeft: 'auto', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: '#3ddc97', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3ddc97', boxShadow: '0 0 5px #3ddc97', display: 'inline-block' }} />
+              TEMPS RÉEL
+            </div>
+          </div>
+          {/* Body */}
+          <div style={{ fontSize: 13.5, lineHeight: 1.6, color: '#f0f0f5', whiteSpace: 'pre-wrap' }}>
             {narrative}
           </div>
         </div>
 
-        {/* ── Pack Voyage + Affiliation ── */}
+        {/* Pack Voyage */}
+        <SectionHead num="05" label="PACK VOYAGE" meta="AFFILIÉS" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}
-          mealCheapEur={score.budget.details.mealCheap
-            ? Number(score.budget.details.mealCheap)
-            : undefined}
-          hotelAvgEur={score.budget.details.hotelAvg
-            ? Number(score.budget.details.hotelAvg)
-            : undefined}
+          mealCheapEur={score.budget.details.mealCheap ? Number(score.budget.details.mealCheap) : undefined}
+          hotelAvgEur={score.budget.details.hotelAvg ? Number(score.budget.details.hotelAvg) : undefined}
         />
 
-        {/* Sources */}
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {(['security', 'geopolitical', 'budget'] as const).map((key) => (
-            <span key={key} style={{
-              fontSize: '0.65rem', color: score[key].source === 'live' ? '#00e5a0' : '#ffd23f',
-              background: score[key].source === 'live' ? 'rgba(0,229,160,0.08)' : 'rgba(255,210,63,0.08)',
-              border: `1px solid ${score[key].source === 'live' ? 'rgba(0,229,160,0.2)' : 'rgba(255,210,63,0.2)'}`,
-              borderRadius: 4, padding: '3px 8px',
-            }}>
-              {key.toUpperCase()} {score[key].source === 'live' ? '✓ LIVE' : '⚠ PARTIEL'}
-            </span>
-          ))}
-        </div>
       </main>
+    </div>
+  );
+}
+
+function SectionHead({ num, label, meta }: { num: string; label: string; meta: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #1f1f30',
+    }}>
+      <div style={{
+        fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+        fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase',
+        fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8, color: '#f0f0f5',
+      }}>
+        <span style={{ width: 8, height: 8, background: '#ff3b2f', transform: 'rotate(45deg)', display: 'inline-block' }} />
+        <span style={{ color: '#6b6b85', fontWeight: 500 }}>{num} /</span>
+        {label}
+      </div>
+      <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9.5, letterSpacing: '0.12em', color: '#6b6b85', textTransform: 'uppercase' }}>
+        {meta}
+      </span>
     </div>
   );
 }

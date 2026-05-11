@@ -4,28 +4,83 @@ import Link from 'next/link';
 export function Header() {
   return (
     <header style={{
-      background: '#0a0a0f', borderBottom: '1px solid #1e1e2e',
-      padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      position: 'sticky', top: 0, zIndex: 50,
+      backdropFilter: 'blur(24px) saturate(1.5)',
+      WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+      background: 'rgba(7,7,12,0.80)',
+      borderBottom: '1px solid #1f1f30',
     }}>
-      <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ color: '#ff4d2e', fontSize: '1.4rem', fontWeight: 700, letterSpacing: '0.15em', fontFamily: 'var(--font-space-mono)' }}>
-          ⚡ CRISIS TRAVEL
-        </span>
-      </Link>
-      <nav style={{ display: 'flex', gap: 24 }}>
-        <Link href="/results" style={{ color: '#6b7280', fontSize: '0.85rem', textDecoration: 'none', transition: 'color 0.2s' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#e8e8e8')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-        >
-          Analyser
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px' }}>
+        {/* Logo */}
+        <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            width: 22, height: 22,
+            background: '#ff3b2f',
+            borderRadius: 5,
+            display: 'grid', placeItems: 'center',
+            boxShadow: '0 0 12px rgba(255,59,47,0.4)',
+            flexShrink: 0,
+          }}>
+            <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12, color: '#fff' }}>
+              <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
+            </svg>
+          </span>
+          <span style={{
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontWeight: 700, fontSize: 11,
+            letterSpacing: '0.18em',
+            color: '#f0f0f5',
+            textTransform: 'uppercase',
+          }}>
+            CRISIS TRAVEL
+          </span>
         </Link>
-        <Link href="/api/health" style={{ color: '#6b7280', fontSize: '0.85rem', textDecoration: 'none' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#e8e8e8')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-        >
-          Statut APIs
-        </Link>
-      </nav>
+
+        {/* Status badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+          fontSize: 9.5, letterSpacing: '0.15em',
+          color: '#9898b0', textTransform: 'uppercase',
+          padding: '5px 9px',
+          border: '1px solid #1f1f30',
+          borderRadius: 999,
+          background: 'rgba(17,17,28,0.5)',
+        }}>
+          <span className="ct-pulse-dot" />
+          LIVE · 4/4 APIS
+        </div>
+      </div>
+
+      {/* Sub-nav */}
+      <div style={{
+        display: 'flex', gap: 0,
+        borderTop: '1px solid #1f1f30',
+        padding: '0 20px',
+      }}>
+        {[
+          { href: '/', label: 'ACCUEIL' },
+          { href: '/results?mode=standard&budget=1500&duration=7&travelType=solo', label: 'ANALYSER' },
+          { href: '/api/health', label: 'STATUT' },
+        ].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            style={{
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 9, letterSpacing: '0.14em',
+              color: '#6b6b85', textDecoration: 'none',
+              padding: '8px 12px',
+              display: 'inline-block',
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#f0f0f5')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b6b85')}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
     </header>
   );
 }

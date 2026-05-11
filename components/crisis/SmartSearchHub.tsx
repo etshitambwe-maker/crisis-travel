@@ -3,6 +3,9 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CountrySearchBar } from './CountrySearchBar';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
+import { getFlagUrl, getCountryColors } from '@/lib/utils/countryPhoto';
+import { getHint } from '@/lib/utils/staticHints';
+import type { CrisisScore } from '@/types/crisis.types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Tab = 'direct' | 'region' | 'discovery';
@@ -65,29 +68,6 @@ const DURATION_MAP: Record<NonNullable<DiscoveryState['duration']>, number> = {
   long: 21,
 };
 
-// ── Static score hints (used for sorting when no live data) ───────────────────
-// Each country has a static "opportunity hint" so sorting in region tab makes sense.
-// This is a curated ranking, not a live score.
-const STATIC_HINTS: Record<string, { score: number; security: number; budget: number }> = {
-  GE: { score: 82, security: 85, budget: 90 }, TH: { score: 72, security: 80, budget: 85 },
-  PT: { score: 70, security: 90, budget: 60 }, VN: { score: 68, security: 82, budget: 88 },
-  AL: { score: 75, security: 80, budget: 85 }, GR: { score: 68, security: 85, budget: 65 },
-  HR: { score: 65, security: 85, budget: 62 }, RS: { score: 70, security: 78, budget: 80 },
-  ME: { score: 72, security: 80, budget: 78 }, JP: { score: 65, security: 90, budget: 50 },
-  KH: { score: 62, security: 72, budget: 88 }, MA: { score: 63, security: 75, budget: 78 },
-  SN: { score: 60, security: 72, budget: 80 }, RW: { score: 68, security: 78, budget: 75 },
-  KE: { score: 55, security: 62, budget: 72 }, TN: { score: 62, security: 73, budget: 76 },
-  MU: { score: 72, security: 85, budget: 60 }, UZ: { score: 70, security: 78, budget: 88 },
-  KG: { score: 68, security: 75, budget: 90 }, PE: { score: 62, security: 65, budget: 78 },
-  CO: { score: 58, security: 60, budget: 75 }, CR: { score: 65, security: 80, budget: 68 },
-  MX: { score: 60, security: 62, budget: 72 }, AR: { score: 65, security: 72, budget: 85 },
-  JO: { score: 68, security: 80, budget: 72 }, OM: { score: 72, security: 88, budget: 60 },
-};
-
-function getHint(code: string) {
-  return STATIC_HINTS[code] ?? { score: 55, security: 55, budget: 55 };
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
@@ -108,8 +88,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
           <span>{t.icon}</span>
-          <span style={{ display: 'none' }} className="tab-label">{t.label}</span>
-          <style>{`@media (min-width: 480px) { .tab-label { display: inline !important } }`}</style>
+          <style>{`@media (max-width: 479px) { .tab-label { display: none } }`}</style>
           <span className="tab-label">{t.label}</span>
         </button>
       ))}
@@ -359,20 +338,173 @@ function OptionGrid<T extends string>({
   );
 }
 
-function DiscoveryTab({ airport }: { airport: string }) {
+// ── Surprise Proposal Cards ───────────────────────────────────────────────────
+type Proposal = { score: CrisisScore; reason: string };
+
+function ProposalCard({ proposal, onReset: _onReset }: { proposal: Proposal; onReset: () => void }) {
+  const router = useRouter();
+  const { score, reason } = proposal;
+  const flagUrl = getFlagUrl(score.countryCode);
+  const [color1, color2] = getCountryColors(score.countryCode);
+  const scoreColor = score.total >= 80 ? '#3ddc97' : score.total >= 60 ? '#ffb224' : score.total >= 40 ? '#ff8c42' : '#ff3b2f';
+
+  return (
+    <div
+      onClick={() => router.push(`/destination/${score.countryCode}`)}
+      style={{
+        position: 'relative', borderRadius: 14, overflow: 'hidden',
+        border: '1px solid #1e1e2e', cursor: 'pointer',
+        transition: 'transform 0.2s, border-color 0.2s',
+        background: '#0d0d14',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = '#3f3f5a'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#1e1e2e'; }}
+    >
+      {/* Hero drapeau */}
+      <div style={{
+        position: 'relative', height: 100,
+        background: `linear-gradient(135deg, ${color1}50 0%, ${color2}30 100%), #0d0d18`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <img src={flagUrl} alt={score.country} loading="lazy" style={{ height: 52, width: 'auto', maxWidth: 90, objectFit: 'contain', filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))', borderRadius: 2 }} />
+        {/* Score badge */}
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          background: scoreColor, color: '#07070c',
+          fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem', fontWeight: 700,
+          padding: '3px 7px', borderRadius: 4,
+        }}>
+          {score.total}/100
+        </div>
+        {/* Country name */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          padding: '16px 10px 6px',
+          background: 'linear-gradient(0deg, rgba(7,7,12,0.9) 0%, transparent 100%)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+        }}>
+          <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{score.country}</div>
+          <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.55rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em' }}>
+            {score.countryCode}
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '10px 12px 12px' }}>
+        {/* Sub-scores */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4, marginBottom: 10 }}>
+          {[
+            { l: 'SÉC', v: score.security.value },
+            { l: 'GEO', v: score.geopolitical.value },
+            { l: 'BUD', v: score.budget.value },
+            { l: 'PRAT', v: score.practicality.value },
+          ].map((c) => {
+            const cc = c.v >= 80 ? '#3ddc97' : c.v >= 60 ? '#ffb224' : c.v >= 40 ? '#ff8c42' : '#ff3b2f';
+            return (
+              <div key={c.l} style={{ textAlign: 'center', background: 'rgba(10,10,18,0.6)', border: '1px solid #1e1e2e', borderRadius: 5, padding: '5px 4px' }}>
+                <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.5rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 2 }}>{c.l}</div>
+                <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.72rem', fontWeight: 700, color: cc }}>{c.v}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Reason */}
+        <p style={{ fontSize: '0.75rem', color: '#9898b0', lineHeight: 1.45, margin: 0 }}>{reason}</p>
+        {/* CTA */}
+        <div style={{
+          marginTop: 10, paddingTop: 8, borderTop: '1px solid #1e1e2e',
+          fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem',
+          color: '#ff4d2e', letterSpacing: '0.1em', textAlign: 'right',
+        }}>
+          VOIR LA FICHE COMPLÈTE →
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscoveryTab({ airport, dateDepart, dateRetour }: {
+  airport: string;
+  dateDepart: string;
+  dateRetour: string;
+}) {
   const router = useRouter();
   const [state, setState] = useState<DiscoveryState>({ priority: null, duration: null, budget: null, travelType: null });
-  const set = (key: ChoiceKey) => (val: string) => setState((s) => ({ ...s, [key]: val as never }));
+  const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const set = (key: ChoiceKey) => (val: string) => {
+    setState((s) => ({ ...s, [key]: val as never }));
+    setProposals(null); // reset proposals on change
+  };
   const completed = Object.values(state).filter(Boolean).length;
   const total = 4;
 
-  function handleGenerate() {
+  async function handleGenerate() {
     const b = BUDGET_MAP[state.budget ?? 'moyen'];
     const d = DURATION_MAP[state.duration ?? 'semaine'];
     const tt = state.travelType ?? 'solo';
     const mode = state.priority === 'securite' ? 'bunker' : state.priority === 'budget' ? 'budget_crisis' : 'standard';
     const priority = state.priority ?? 'tout';
-    router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}`);
+
+    setLoading(true);
+    setProposals(null);
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: {
+          departureCountry: 'FR', budget: b, duration: d,
+          travelType: tt, mode, priority,
+          sortBy: mode === 'bunker' ? 'security' : mode === 'budget_crisis' ? 'budget' : 'score',
+          departureDate: dateDepart || undefined,
+          returnDate: dateRetour || undefined,
+        }}),
+      });
+      const data = await res.json();
+      const top3: CrisisScore[] = data.topDestinations?.slice(0, 3) ?? data.results?.slice(0, 3) ?? [];
+
+      const reasonMap: Record<string, string[]> = {
+        securite: [
+          `Score sécurité de ${top3[0]?.security.value ?? '—'}/100 — l'une des destinations les plus sûres selon le MEAE et le State Dept.`,
+          `Niveau d'alerte minimal, infrastructures stables, idéal pour voyager l'esprit tranquille.`,
+          `Signalée comme destination sûre par plusieurs sources officielles avec très peu d'incidents.`,
+        ],
+        budget: [
+          `Coût de vie très favorable pour les Européens, votre budget ira beaucoup plus loin ici.`,
+          `Excellent rapport qualité/prix : hébergement, repas et transports restent très accessibles.`,
+          `Devises locales favorables + prix bas = parfait pour voyager serré sans sacrifier le confort.`,
+        ],
+        decouverte: [
+          `Destination authentique, peu fréquentée par les touristes français, expériences uniques garanties.`,
+          `Hors des sentiers battus, culture riche et contacts locaux authentiques.`,
+          `Destination encore préservée du tourisme de masse, une vraie découverte.`,
+        ],
+        tout: [
+          `Meilleur équilibre sécurité/budget/expérience parmi les 24 destinations analysées.`,
+          `Score global solide sur tous les critères — le choix le plus polyvalent selon votre profil.`,
+          `Recommandée pour son équilibre optimal : sûre, abordable et riche en expériences.`,
+        ],
+      };
+      const reasons = reasonMap[priority] ?? reasonMap.tout;
+
+      setProposals(top3.map((s, i) => ({ score: s, reason: reasons[i] ?? reasons[0] })));
+    } catch {
+      // fallback : rediriger vers results
+      router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSeeAll() {
+    const b = BUDGET_MAP[state.budget ?? 'moyen'];
+    const d = DURATION_MAP[state.duration ?? 'semaine'];
+    const tt = state.travelType ?? 'solo';
+    const mode = state.priority === 'securite' ? 'bunker' : state.priority === 'budget' ? 'budget_crisis' : 'standard';
+    const priority = state.priority ?? 'tout';
+    router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
   }
 
   return (
@@ -399,9 +531,10 @@ function DiscoveryTab({ airport }: { airport: string }) {
 
       <button
         onClick={handleGenerate}
-        disabled={completed < 2}
+        disabled={completed < 2 || loading}
         style={{
-          width: '100%', padding: '13px', borderRadius: 10, cursor: completed < 2 ? 'not-allowed' : 'pointer',
+          width: '100%', padding: '13px', borderRadius: 10,
+          cursor: completed < 2 || loading ? 'not-allowed' : 'pointer',
           background: completed >= 2 ? '#ff4d2e' : '#1e1e2e',
           border: 'none',
           color: completed >= 2 ? '#fff' : '#3f3f5a',
@@ -410,8 +543,38 @@ function DiscoveryTab({ airport }: { airport: string }) {
           boxShadow: completed >= 2 ? '0 4px 20px rgba(255,77,46,0.3)' : 'none',
         }}
       >
-        {completed >= 4 ? '✨ GÉNÉRER MES RECOMMANDATIONS PERSONNALISÉES →' : completed >= 2 ? '⚡ VOIR LES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
+        {loading ? '⏳ ANALYSE EN COURS...' : completed >= 4 ? '✨ SURPRENDS-MOI →' : completed >= 2 ? '⚡ VOIR MES PROPOSITIONS →' : 'Réponds à au moins 2 questions'}
       </button>
+
+      {/* Proposals */}
+      {proposals && proposals.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{
+            fontFamily: 'var(--font-space-mono)', fontSize: '0.62rem', color: '#3f3f5a',
+            letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ width: 6, height: 6, background: '#3ddc97', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 6px #3ddc97' }} />
+            3 PROPOSITIONS POUR TOI
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {proposals.map((p) => (
+              <ProposalCard key={p.score.countryCode} proposal={p} onReset={() => setProposals(null)} />
+            ))}
+          </div>
+          <button
+            onClick={handleSeeAll}
+            style={{
+              width: '100%', marginTop: 12, padding: '10px', borderRadius: 8, cursor: 'pointer',
+              background: 'transparent', border: '1px solid #2e2e45',
+              color: '#6b7280', fontFamily: 'var(--font-space-mono)',
+              fontSize: '0.62rem', letterSpacing: '0.1em',
+            }}
+          >
+            VOIR TOUTES LES DESTINATIONS →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -420,6 +583,8 @@ function DiscoveryTab({ airport }: { airport: string }) {
 export function SmartSearchHub() {
   const [tab, setTab] = useState<Tab>('direct');
   const [airport, setAirport] = useState('CDG');
+  const [dateDepart, setDateDepart] = useState('');
+  const [dateRetour, setDateRetour] = useState('');
   const router = useRouter();
 
   // Persiste l'aéroport pour TravelPackBlock sur les fiches destination
@@ -430,8 +595,8 @@ export function SmartSearchHub() {
 
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
-    router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}`);
-  }, [router, airport]);
+    router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+  }, [router, airport, dateDepart, dateRetour]);
 
   return (
     <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20 }}>
@@ -442,16 +607,75 @@ export function SmartSearchHub() {
       <TabBar active={tab} onChange={setTab} />
 
       {tab === 'direct' && (
-        <div>
-          <CountrySearchBar />
-          <p style={{ fontSize: '0.68rem', color: '#3f3f5a', marginTop: 8, textAlign: 'center' }}>
-            Tape un pays, une ville ou un code — ex : &quot;Congo&quot;, &quot;Bali&quot;, &quot;TH&quot;
-          </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Étape 2 — Dates */}
+          <div>
+            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
+              DATES DU VOYAGE
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
+                  Départ
+                </label>
+                <input
+                  type="date"
+                  value={dateDepart}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => {
+                    setDateDepart(e.target.value);
+                    if (dateRetour && e.target.value > dateRetour) setDateRetour('');
+                  }}
+                  style={{
+                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3e',
+                    borderRadius: 8, padding: '8px 12px', color: dateDepart ? '#ffffff' : '#4a4a6a',
+                    fontSize: '0.85rem', colorScheme: 'dark', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
+                  Retour
+                </label>
+                <input
+                  type="date"
+                  value={dateRetour}
+                  min={dateDepart || new Date().toISOString().split('T')[0]}
+                  onChange={e => setDateRetour(e.target.value)}
+                  style={{
+                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3e',
+                    borderRadius: 8, padding: '8px 12px', color: dateRetour ? '#ffffff' : '#4a4a6a',
+                    fontSize: '0.85rem', colorScheme: 'dark', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+            {!dateDepart && (
+              <div style={{ fontSize: '0.65rem', color: '#3f3f5a', marginTop: 4 }}>
+                Optionnel — laisse vide pour une analyse indépendante des dates
+              </div>
+            )}
+          </div>
+
+          {/* Séparateur */}
+          <div style={{ height: 1, background: '#1e1e2e' }} />
+
+          {/* Étape 3 — Destination */}
+          <div>
+            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
+              DESTINATION
+            </div>
+            <CountrySearchBar />
+            <p style={{ fontSize: '0.65rem', color: '#3f3f5a', marginTop: 6, textAlign: 'center' }}>
+              Tape un pays, une ville ou un code — ex : &quot;Congo&quot;, &quot;Bali&quot;, &quot;TH&quot;
+            </p>
+          </div>
         </div>
       )}
 
       {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} />}
-      {tab === 'discovery' && <DiscoveryTab airport={airport} />}
+      {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} />}
     </div>
   );
 }

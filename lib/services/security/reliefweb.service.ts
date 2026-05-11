@@ -16,20 +16,21 @@ export async function getReliefWebScore(
         const since = new Date();
         since.setDate(since.getDate() - 90); // 90 jours pour plus de signal
         const t0 = Date.now();
-        // Utiliser GET sur /disasters qui est stable (reports/v1 est deprecated)
-        const res = await axios.get(
-          'https://api.reliefweb.int/v1/disasters',
+        const res = await axios.post(
+          'https://api.reliefweb.int/v1/reports',
           {
-            params: {
-              appname: 'crisis-travel',
-              'filter[field]': 'country.iso3',
-              'filter[value]': iso3,
-              'filter[operator]': 'AND',
-              'fields[include][]': 'name',
-              limit: 5,
+            appname: 'crisis-travel',
+            filter: {
+              operator: 'AND',
+              conditions: [
+                { field: 'country.iso3', value: iso3 },
+                { field: 'theme.name', value: 'Disaster Management' },
+              ],
             },
-            timeout: 5000,
-          }
+            fields: { include: ['title'] },
+            limit: 5,
+          },
+          { timeout: 5000 }
         );
         logger.api('ReliefWeb', countryCode, Date.now() - t0, false);
         const count = (res.data?.totalCount as number) ?? (res.data?.data?.length ?? 0);
@@ -42,9 +43,8 @@ export async function getReliefWebScore(
       data: { score: data.count > 0 ? 40 : 100, activeCrises: data.count },
       source: 'live',
     };
-  } catch (error) {
-    logger.error('ReliefWeb', error);
-    // Fallback neutre : on suppose pas de crise active
-    return { data: { score: 100, activeCrises: 0 }, source: 'fallback', error: String(error) };
+  } catch {
+    // Fallback neutre silencieux — ReliefWeb est optionnel
+    return { data: { score: 100, activeCrises: 0 }, source: 'fallback' };
   }
 }

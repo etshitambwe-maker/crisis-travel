@@ -9,22 +9,24 @@ const INDICATORS = ['PV.EST', 'RL.EST', 'GE.EST'] as const;
 async function fetchIndicator(code: string, indicator: string): Promise<number | null> {
   const res = await axios.get(
     `https://api.worldbank.org/v2/country/${code.toLowerCase()}/indicator/${indicator}`,
-    { params: { format: 'json', mrv: 1 }, timeout: 5000 }
+    { params: { format: 'json', mrv: 1 }, timeout: 12000 }
   );
   const rows = res.data as [unknown, Array<{ value: number | null }>];
   return rows[1]?.[0]?.value ?? null;
 }
 
 export async function getWorldBankScore(
-  countryCode: string
+  countryCode: string,
+  iso3?: string
 ): Promise<ServiceResult<{ score: number }>> {
-  const key = buildCacheKey('worldbank', countryCode);
+  const codeToUse = iso3 ?? countryCode;
+  const key = buildCacheKey('worldbank', codeToUse);
   try {
     const { data, fromCache } = await withCache(
       key,
       async () => {
         const t0 = Date.now();
-        const values = await Promise.all(INDICATORS.map((ind) => fetchIndicator(countryCode, ind)));
+        const values = await Promise.all(INDICATORS.map((ind) => fetchIndicator(codeToUse, ind)));
         logger.api('WorldBank', countryCode, Date.now() - t0, false);
         return values.map((v) => normalizeWorldBankIndicator(v));
       },

@@ -17,6 +17,8 @@ const Schema = z.object({
     continent: z.string().optional(),        // filtre par continent
     priority: z.string().optional(),          // securite | budget | decouverte | tout
     sortBy: z.enum(['score', 'security', 'budget', 'alpha']).optional(),
+    departureDate: z.string().optional(),
+    returnDate: z.string().optional(),
   }),
 });
 
@@ -34,9 +36,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       countries = countries.filter((c) => !profile.excludedContinents!.includes(c.continent));
     }
 
-    // Analyser tous les pays si continent filtré (max 15), sinon batch de 8 sur 24
-    const MAX = profile.continent ? countries.length : 24;
-    const BATCH = profile.continent ? countries.length : 8;
+    // Shuffle pour varier les destinations analysées à chaque requête (Fisher-Yates)
+    for (let i = countries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [countries[i], countries[j]] = [countries[j], countries[i]];
+    }
+
+    // Analyser tous les pays si continent filtré, sinon batch de 6 sur tous
+    const MAX = profile.continent ? countries.length : countries.length;
+    const BATCH = profile.continent ? countries.length : 6;
     const results = [];
     for (let i = 0; i < Math.min(countries.length, MAX); i += BATCH) {
       const batch = countries.slice(i, i + BATCH);

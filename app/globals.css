@@ -95,9 +95,155 @@
   }
 }
 
-/* Animations ticker */
+/* ── Design tokens Crisis Travel ─────────────────── */
+:root {
+  --ct-bg: #07070c;
+  --ct-surface: #11111c;
+  --ct-surface-2: #16162440;
+  --ct-surface-3: #1a1a2a;
+  --ct-border: #1f1f30;
+  --ct-border-hi: #2e2e45;
+  --ct-border-bright: #3a3a5a;
+  --ct-danger: #ff3b2f;
+  --ct-danger-2: #ff6b4a;
+  --ct-warn: #ffb224;
+  --ct-safe: #3ddc97;
+  --ct-orange: #ff8c42;
+  --ct-blue: #4a9eff;
+  --ct-text: #f0f0f5;
+  --ct-muted: #6b6b85;
+  --ct-muted-2: #9898b0;
+  --ct-mono: "Space Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ── Animations ticker ───────────────────────────── */
+@keyframes tscroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes ct-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.85); }
+}
+@keyframes ct-spin { to { transform: rotate(360deg); } }
+@keyframes ct-spin-reverse { to { transform: rotate(-360deg); } }
+@keyframes ct-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes ct-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ct-plane-orbit {
+  from { transform: rotate(0deg) translateX(54px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(54px) rotate(-360deg); }
+}
+@keyframes ct-globe-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,158,255,0.4), 0 0 30px rgba(74,158,255,0.15); }
+  50%       { box-shadow: 0 0 0 12px rgba(74,158,255,0), 0 0 40px rgba(74,158,255,0.25); }
+}
+@keyframes ct-dot-blink {
+  0%, 80%, 100% { opacity: 0; transform: scale(0.5); }
+  40%            { opacity: 1; transform: scale(1); }
+}
+
+/* Legacy ticker */
 @keyframes ticker {
-  0% { transform: translateX(100%); }
+  0%   { transform: translateX(100%); }
   100% { transform: translateX(-100%); }
 }
 .animate-ticker { animation: ticker 35s linear infinite; }
+
+/* ── Pulse dot ───────────────────────────────────── */
+.ct-pulse-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ct-safe);
+  box-shadow: 0 0 8px var(--ct-safe);
+  animation: ct-pulse 2s ease-in-out infinite;
+}
+.ct-pulse-dot-danger {
+  background: var(--ct-danger);
+  box-shadow: 0 0 6px var(--ct-danger);
+  animation: ct-pulse 1.2s ease-in-out infinite;
+}
+
+/* ── Spinner ─────────────────────────────────────── */
+.ct-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--ct-border);
+  border-top-color: var(--ct-danger);
+  border-radius: 50%;
+  animation: ct-spin 0.8s linear infinite;
+}
+
+/* ── Shimmer progress bar ────────────────────────── */
+.ct-shimmer-bar {
+  height: 3px;
+  background: linear-gradient(90deg, #ff3b2f 0%, #ff8c42 50%, #ff3b2f 100%);
+  background-size: 200% 100%;
+  animation: ct-shimmer 2s infinite linear;
+  border-radius: 2px;
+}
+
+/* ── Analyse overlay ─────────────────────────────── */
+.ct-overlay {
+  position: fixed; inset: 0;
+  background: rgba(7,7,12,0.94);
+  backdrop-filter: blur(12px);
+  z-index: 200;
+  display: grid; place-items: center;
+  padding: 20px;
+  animation: ct-fade-in 0.2s ease-out;
+}
+.ct-analyse-box {
+  width: 100%; max-width: 340px;
+  background: var(--ct-surface);
+  border: 1px solid var(--ct-border-hi);
+  border-radius: 14px; padding: 20px;
+}
+.ct-analyse-step {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--ct-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ct-muted);
+  opacity: 0.4;
+  transition: opacity 0.3s;
+}
+.ct-analyse-step.active { opacity: 1; color: var(--ct-text); }
+.ct-analyse-step.done   { opacity: 1; color: var(--ct-muted-2); }
+.ct-analyse-step-ic {
+  width: 14px; height: 14px;
+  border: 1.5px solid var(--ct-border);
+  border-radius: 50%;
+}
+.ct-analyse-step.active .ct-analyse-step-ic {
+  border-color: var(--ct-danger);
+  border-top-color: transparent;
+  animation: ct-spin 0.8s linear infinite;
+}
+.ct-analyse-step.done .ct-analyse-step-ic {
+  border-color: var(--ct-safe);
+  background: var(--ct-safe);
+  display: grid; place-items: center;
+  color: var(--ct-bg); font-size: 9px; font-weight: 700;
+}
+.ct-analyse-step.done .ct-analyse-step-ic::after { content: "✓"; }
+
+/* ── Status chips ────────────────────────────────── */
+.ct-status-ideal { background: rgba(61,220,151,0.12); color: #3ddc97; border: 1px solid rgba(61,220,151,0.3); }
+.ct-status-reco  { background: rgba(255,178,36,0.10); color: #ffb224; border: 1px solid rgba(255,178,36,0.3); }
+.ct-status-poss  { background: rgba(255,140,66,0.10); color: #ff8c42; border: 1px solid rgba(255,140,66,0.3); }
+.ct-status-deco  { background: rgba(255,59,47,0.10);  color: #ff3b2f; border: 1px solid rgba(255,59,47,0.3); }
+
+/* ── Score chip colors ───────────────────────────── */
+.sc-good { color: #3ddc97; }
+.sc-mid  { color: #ffb224; }
+.sc-low  { color: #ff8c42; }
+.sc-bad  { color: #ff3b2f; }

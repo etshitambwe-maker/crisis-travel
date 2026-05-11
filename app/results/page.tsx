@@ -4,7 +4,7 @@ import { ResultsContent } from './ResultsContent';
 
 export default function ResultsPage() {
   return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
+    <div style={{ minHeight: '100vh', background: '#07070c' }}>
       <Header />
       <Suspense fallback={
         <main style={{ maxWidth: 800, margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>

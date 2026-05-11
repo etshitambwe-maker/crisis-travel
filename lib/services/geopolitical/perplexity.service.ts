@@ -16,46 +16,53 @@ function buildPrompt(country: string): string {
   return `Analyse la situation géopolitique actuelle de ${country} pour un voyageur français en ${month}.
 
 Retourne UNIQUEMENT ce JSON valide, sans markdown ni texte avant/après :
-{"stabilityScore":<entier 0-100>,"summary":"<2 phrases>","mainRisks":["<risque1>","<risque2>"],"recentEvents":["<événement>"],"trend":"<improving|stable|deteriorating>"}`;
+{"stabilityScore":<entier 0-100>,"summary":"<2 phrases max>","mainRisks":["<risque1>","<risque2>"],"recentEvents":["<événement récent>"],"trend":"<improving|stable|deteriorating>"}`;
 }
 
 export async function getPerplexityGeoScore(
   countryCode: string,
   countryName: string
 ): Promise<ServiceResult<PerplexityGeoAnalysis>> {
-  if (!process.env.PERPLEXITY_API_KEY) {
-    logger.warn('Perplexity', 'API Key manquante');
+  const apiKey = process.env.OPENROUTER_API_KEY ?? '';
+  if (!apiKey || apiKey.length < 20) {
     return { data: FALLBACK, source: 'fallback' };
   }
 
-  const key = buildCacheKey('perplexity', countryCode);
+  const cacheKey = buildCacheKey('perplexity', countryCode);
   try {
     const { data, fromCache } = await withCache(
-      key,
+      cacheKey,
       async () => {
         const t0 = Date.now();
         const res = await axios.post(
-          'https://api.perplexity.ai/chat/completions',
+          'https://openrouter.ai/api/v1/chat/completions',
           {
-            model: 'sonar',
+            model: 'perplexity/sonar-pro',
             messages: [{ role: 'user', content: buildPrompt(countryName) }],
             max_tokens: 400,
           },
           {
-            headers: { Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}` },
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'HTTP-Referer': 'https://crisis-travel.app',
+              'X-Title': 'Crisis Travel',
+            },
             timeout: 8000,
           }
         );
-        logger.api('Perplexity', countryCode, Date.now() - t0, false);
+        logger.api('Perplexity/OpenRouter', countryCode, Date.now() - t0, false);
         const text = res.data.choices[0].message.content as string;
-        return JSON.parse(text) as PerplexityGeoAnalysis;
+        // sonar-pro peut encapsuler dans du markdown — on extrait le JSON
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('No JSON in response');
+        return JSON.parse(jsonMatch[0]) as PerplexityGeoAnalysis;
       },
       1800
     );
-    logger.api('Perplexity', countryCode, 0, fromCache);
+    if (fromCache) logger.api('Perplexity/OpenRouter', countryCode, 0, true);
     return { data, source: 'live' };
   } catch (error) {
-    logger.error('Perplexity', error);
+    logger.error('Perplexity/OpenRouter', error);
     return { data: FALLBACK, source: 'fallback', error: String(error) };
   }
 }

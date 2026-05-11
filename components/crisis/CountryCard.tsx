@@ -1,112 +1,162 @@
 'use client';
 import Link from 'next/link';
-import { CrisisScoreGauge } from './CrisisScoreGauge';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
+import { getFlagUrl, getCountryColors } from '@/lib/utils/countryPhoto';
+import { ScoreTooltip } from './ScoreTooltip';
 
 interface Props {
   score: CrisisScore;
 }
 
-// Mots-clés Unsplash par code pays pour une photo pertinente
-const COUNTRY_PHOTO_KEYWORDS: Record<string, string> = {
-  TH: 'Thailand,temple,Bangkok', GE: 'Georgia,Caucasus,Tbilisi', PT: 'Portugal,Lisbon,azulejo',
-  MA: 'Morocco,Marrakech,medina', VN: 'Vietnam,Hanoi,rice',     MX: 'Mexico,city,culture',
-  AL: 'Albania,Berat,mountains', RS: 'Serbia,Belgrade,city',    BA: 'Bosnia,Mostar,bridge',
-  KG: 'Kyrgyzstan,mountains,nomad', MD: 'Moldova,vineyard,countryside', JP: 'Japan,Tokyo,cherry',
-  ID: 'Bali,Indonesia,temple,rice', CO: 'Colombia,Bogota,coffee', PE: 'Peru,Machu-Picchu,Andes',
-  TR: 'Turkey,Istanbul,Bosphorus', EG: 'Egypt,pyramids,desert', TN: 'Tunisia,desert,blue',
-  MK: 'Macedonia,Ohrid,lake',    AM: 'Armenia,mountains,monastery', UZ: 'Uzbekistan,Samarkand,silk-road',
-  KH: 'Cambodia,Angkor,temple',  LK: 'Sri-Lanka,beach,tea',   PH: 'Philippines,islands,sea',
-  EC: 'Ecuador,Galapagos,volcano', ME: 'Montenegro,Kotor,Adriatic', XK: 'Kosovo,Pristina',
-  GR: 'Greece,Santorini,island', HR: 'Croatia,Dubrovnik,sea', HU: 'Hungary,Budapest,parliament',
-  SN: 'Senegal,Dakar,baobab',   CI: 'Ivory-Coast,Abidjan,lagoon', GH: 'Ghana,Accra,coast',
-  KE: 'Kenya,savanna,safari',   TZ: 'Tanzania,Zanzibar,Kilimanjaro', RW: 'Rwanda,gorilla,green',
-  ET: 'Ethiopia,Addis,landscape',ZA: 'South-Africa,Cape-Town,mountain', MU: 'Mauritius,lagoon,turquoise',
-  MG: 'Madagascar,baobab,landscape', CM: 'Cameroon,landscape,mountain', CG: 'Congo,Brazzaville,river',
-  CD: 'Congo,DRC,river,jungle', NG: 'Nigeria,Lagos,city',      AO: 'Angola,Luanda,coast',
-  MY: 'Malaysia,Kuala-Lumpur,jungle', SG: 'Singapore,skyline,modern', MM: 'Myanmar,Bagan,temple',
-  NP: 'Nepal,Himalaya,Everest', IN: 'India,Taj-Mahal,Rajasthan', KZ: 'Kazakhstan,steppe,Almaty',
-  BO: 'Bolivia,Salar,Uyuni',    PY: 'Paraguay,Asuncion,landscape', UY: 'Uruguay,Montevideo,coast',
-  GT: 'Guatemala,Maya,volcano', CR: 'Costa-Rica,jungle,waterfall', PA: 'Panama,canal,city',
-  CU: 'Cuba,Havana,classic-car,colorful', DO: 'Dominican-Republic,Punta-Cana,beach',
-  BR: 'Brazil,Rio,Christ',      AR: 'Argentina,Buenos-Aires,tango', CL: 'Chile,Patagonia,mountains',
-  JO: 'Jordan,Petra,desert',    AE: 'Dubai,skyline,UAE',       OM: 'Oman,Muscat,desert',
-};
-
-function getPhotoUrl(code: string): string {
-  const keywords = COUNTRY_PHOTO_KEYWORDS[code] ?? 'landscape,travel,mountains';
-  return `https://source.unsplash.com/800x300/?${keywords}`;
+function scoreChipClass(v: number): string {
+  if (v >= 80) return 'sc-good';
+  if (v >= 60) return 'sc-mid';
+  if (v >= 40) return 'sc-low';
+  return 'sc-bad';
 }
 
+const STATUS_MAP: Record<string, { label: string; cls: string; color: string }> = {
+  ideal:       { label: 'IDÉALE',       cls: 'ct-status-ideal', color: '#3ddc97' },
+  recommended: { label: 'RECOMMANDÉE',  cls: 'ct-status-reco',  color: '#ffb224' },
+  possible:    { label: 'POSSIBLE',     cls: 'ct-status-poss',  color: '#ff8c42' },
+  dangerous:   { label: 'DÉCONSEILLÉE', cls: 'ct-status-deco',  color: '#ff3b2f' },
+};
+
 export function CountryCard({ score }: Props) {
-  const color = getScoreColor(score.total);
-  const photoUrl = getPhotoUrl(score.countryCode);
+  const flagUrl = getFlagUrl(score.countryCode);
+  const [color1, color2] = getCountryColors(score.countryCode);
+  const statusInfo = STATUS_MAP[score.status] ?? STATUS_MAP.possible;
+  const totalColor = getScoreColor(score.total);
+  const fxDelta = Number(score.budget.details.currencyVariation ?? 0);
 
   return (
     <Link href={`/destination/${score.countryCode}`} style={{ textDecoration: 'none', display: 'block' }}>
       <div
         style={{
-          position: 'relative', overflow: 'hidden',
-          background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 12,
-          transition: 'border-color 0.2s, transform 0.2s, box-shadow 0.2s',
+          background: 'rgba(17,17,28,0.7)', backdropFilter: 'blur(12px)',
+          border: '1px solid #1f1f30', borderRadius: 14,
+          transition: 'all 0.2s ease', cursor: 'pointer',
+          overflow: 'hidden', padding: 0,
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = '#3f3f5a';
+          e.currentTarget.style.borderColor = '#2e2e45';
           e.currentTarget.style.transform = 'translateY(-2px)';
           e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = '#1e1e2e';
+          e.currentTarget.style.borderColor = '#1f1f30';
           e.currentTarget.style.transform = 'translateY(0)';
           e.currentTarget.style.boxShadow = 'none';
         }}
       >
-        {/* Photo de fond */}
-        <img
-          src={photoUrl}
-          alt={score.country}
-          loading="lazy"
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', opacity: 0.15, filter: 'blur(0.5px)',
-          }}
-        />
-        {/* Overlay gradient */}
+        {/* Hero : fond couleurs du pays + drapeau centré */}
         <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(135deg, rgba(19,19,26,0.95) 50%, rgba(19,19,26,0.7) 100%)',
-        }} />
-
-        {/* Contenu */}
-        <div style={{ position: 'relative', padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'center' }}>
-          <CrisisScoreGauge score={score.total} size="sm" showLabel={false} />
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#e8e8e8', marginBottom: 5 }}>
+          position: 'relative', width: '100%', height: 120,
+          overflow: 'hidden', borderRadius: '14px 14px 0 0',
+          background: `linear-gradient(135deg, ${color1}55 0%, ${color2}33 100%), #0d0d18`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {/* Drapeau */}
+          <img
+            src={flagUrl}
+            alt={`Drapeau ${score.country}`}
+            loading="lazy"
+            style={{
+              height: 64, width: 'auto', maxWidth: 110,
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.6))',
+              borderRadius: 3,
+            }}
+          />
+          {/* Badge score en haut à droite */}
+          <div style={{ position: 'absolute', top: 10, right: 10 }}>
+            <ScoreTooltip
+              security={score.security.value}
+              geopolitical={score.geopolitical.value}
+              budget={score.budget.value}
+              practicality={score.practicality.value}
+              total={score.total}
+            >
+              <div style={{
+                background: totalColor, color: '#07070c',
+                padding: '4px 8px', borderRadius: 4,
+                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                fontSize: 9, letterSpacing: '0.12em', fontWeight: 700,
+              }}>
+                {score.total}/100
+              </div>
+            </ScoreTooltip>
+          </div>
+          {/* Nom du pays en bas à gauche */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            padding: '20px 12px 8px',
+            background: 'linear-gradient(0deg, rgba(7,7,12,0.9) 0%, transparent 100%)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em', lineHeight: 1 }}>
               {score.country}
             </div>
-            <div style={{ display: 'flex', gap: 12, fontSize: '0.75rem', color: '#6b7280' }}>
-              <span>🛡 {score.security.value}</span>
-              <span>🌐 {score.geopolitical.value}</span>
-              <span>💶 {score.budget.value}</span>
+            <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.5)' }}>
+              {score.countryCode}
             </div>
-            {Number(score.budget.details.currencyVariation) > 10 ? (
-              <div style={{ marginTop: 5, fontSize: '0.68rem', color: '#00e5a0', fontFamily: 'var(--font-space-mono)' }}>
-                ✦ EUR +{score.budget.details.currencyVariation}% sur 12 mois
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '14px 16px 16px' }}>
+          {/* Score chips */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 12 }}>
+            {[
+              { lbl: 'SÉC', val: score.security.value },
+              { lbl: 'GEO', val: score.geopolitical.value },
+              { lbl: 'BUD', val: score.budget.value },
+              { lbl: 'PRAT', val: score.practicality.value },
+            ].map((chip) => (
+              <div key={chip.lbl} style={{
+                padding: '7px 6px', background: 'rgba(10,10,18,0.6)',
+                border: '1px solid #1f1f30', borderRadius: 6, textAlign: 'center',
+              }}>
+                <div style={{
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: 8, letterSpacing: '0.14em', color: '#6b6b85', textTransform: 'uppercase', marginBottom: 2,
+                }}>
+                  {chip.lbl}
+                </div>
+                <div className={scoreChipClass(chip.val)} style={{
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: 13, fontWeight: 700, letterSpacing: '-0.02em',
+                }}>
+                  {chip.val}
+                </div>
               </div>
-            ) : null}
+            ))}
           </div>
 
+          {/* Meta row */}
           <div style={{
-            fontSize: '0.65rem', letterSpacing: '0.08em', color,
-            fontWeight: 700, whiteSpace: 'nowrap', fontFamily: 'var(--font-space-mono)',
-            textAlign: 'right',
+            display: 'flex', gap: 10, alignItems: 'center',
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontSize: 10, color: '#9898b0', letterSpacing: '0.04em',
+            paddingTop: 10, borderTop: '1px solid #1f1f30',
+            flexWrap: 'wrap',
           }}>
-            {score.status === 'ideal'        ? '🟢 IDÉALE'
-            : score.status === 'recommended' ? '🟡 RECOMMANDÉE'
-            : score.status === 'possible'    ? '🟠 POSSIBLE'
-            :                                  '🔴 DÉCONSEILLÉE'}
+            <span>
+              SCORE <strong style={{ color: '#f0f0f5' }}>{score.total}/100</strong>
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#2e2e45', display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ color: fxDelta > 10 ? '#3ddc97' : fxDelta < -5 ? '#ff3b2f' : '#9898b0', fontWeight: fxDelta > 10 ? 700 : 400 }}>
+              {fxDelta > 0 ? `EUR +${fxDelta.toFixed(0)}%` : fxDelta === 0 ? 'ZONE EURO' : `EUR ${fxDelta.toFixed(0)}%`}
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#2e2e45', display: 'inline-block', flexShrink: 0 }} />
+            <span className={statusInfo.cls} style={{
+              fontSize: 8, padding: '2px 6px', borderRadius: 3,
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+            }}>
+              {statusInfo.label}
+            </span>
           </div>
         </div>
       </div>

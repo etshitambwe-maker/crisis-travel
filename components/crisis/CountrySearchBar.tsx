@@ -2,8 +2,83 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchCountries } from '@/lib/utils/countries';
+import { getFlagUrl } from '@/lib/utils/countryPhoto';
+import { getHint, hintToStatus } from '@/lib/utils/staticHints';
 
 type Country = ReturnType<typeof searchCountries>[number];
+
+const continentLabel: Record<string, string> = {
+  Europe: '🌍 Europe',
+  Africa: '🌍 Afrique',
+  Asia: '🌏 Asie',
+  Americas: '🌎 Amériques',
+  MiddleEast: '🕌 Moyen-Orient',
+};
+
+function CountryResultItem({
+  country,
+  focused,
+  onClick,
+  onHover,
+}: {
+  country: Country;
+  focused: boolean;
+  onClick: () => void;
+  onHover: () => void;
+}) {
+  const flagUrl = getFlagUrl(country.code);
+  const hint = getHint(country.code);
+  const status = hintToStatus(hint.score);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={onHover}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        width: '100%', padding: '10px 14px',
+        background: focused ? 'rgba(255,77,46,0.08)' : 'transparent',
+        border: 'none', borderBottom: '1px solid #1e1e2e',
+        cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s',
+      }}
+    >
+      <img
+        src={flagUrl}
+        alt={`Drapeau ${country.name}`}
+        style={{
+          width: 40, height: 27, borderRadius: 3,
+          objectFit: 'cover', flexShrink: 0, border: '1px solid #2a2a3e',
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '0.88rem',
+          color: focused ? '#fff' : '#e8e8e8',
+          fontWeight: 600,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {country.name}
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-space-mono)', fontSize: '0.58rem',
+          color: '#6b7280', letterSpacing: '0.06em', marginTop: 2,
+        }}>
+          {continentLabel[country.continent] ?? country.continent}
+        </div>
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-space-mono)', fontSize: '0.55rem',
+        letterSpacing: '0.08em', fontWeight: 700,
+        color: status.color,
+        background: `${status.color}18`,
+        border: `1px solid ${status.color}40`,
+        padding: '2px 6px', borderRadius: 4, flexShrink: 0,
+      }}>
+        {status.label}
+      </div>
+    </button>
+  );
+}
 
 export function CountrySearchBar() {
   const router = useRouter();
@@ -60,14 +135,6 @@ export function CountrySearchBar() {
     }
   }
 
-  const continentLabel: Record<string, string> = {
-    Europe: '🌍 Europe',
-    Africa: '🌍 Afrique',
-    Asia: '🌏 Asie',
-    Americas: '🌎 Amériques',
-    MiddleEast: '🕌 Moyen-Orient',
-  };
-
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
       {/* Input */}
@@ -119,33 +186,13 @@ export function CountrySearchBar() {
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         }}>
           {results.map((country, i) => (
-            <button
+            <CountryResultItem
               key={country.code}
+              country={country}
+              focused={focused === i}
               onClick={() => navigate(country)}
-              onMouseEnter={() => setFocused(i)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                width: '100%', padding: '10px 16px', background: focused === i ? 'rgba(255,77,46,0.08)' : 'transparent',
-                border: 'none', borderBottom: i < results.length - 1 ? '1px solid #1e1e2e' : 'none',
-                cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{
-                  fontSize: '0.65rem', fontFamily: 'var(--font-space-mono)',
-                  background: '#1e1e2e', color: '#6b7280', padding: '2px 6px', borderRadius: 4,
-                  letterSpacing: '0.06em',
-                }}>
-                  {country.code}
-                </span>
-                <span style={{ color: focused === i ? '#fff' : '#e8e8e8', fontSize: '0.9rem', fontWeight: 500 }}>
-                  {country.name}
-                </span>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>
-                {continentLabel[country.continent] ?? country.continent}
-              </span>
-            </button>
+              onHover={() => setFocused(i)}
+            />
           ))}
 
           {/* Hint clavier */}
