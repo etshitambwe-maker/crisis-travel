@@ -4,6 +4,7 @@ import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
 import { getFlagUrl, getCountryColors } from '@/lib/utils/countryPhoto';
 import { ScoreTooltip } from './ScoreTooltip';
+import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 
 interface Props {
   score: CrisisScore;
@@ -29,6 +30,9 @@ export function CountryCard({ score }: Props) {
   const statusInfo = STATUS_MAP[score.status] ?? STATUS_MAP.possible;
   const totalColor = getScoreColor(score.total);
   const fxDelta = Number(score.budget.details.currencyVariation ?? 0);
+  const visa = VISA_REQUIREMENTS[score.countryCode];
+  const isJackpot = fxDelta > 15 && score.total >= 65;
+  const isBunkerSafe = score.security.value >= 88;
 
   return (
     <Link href={`/destination/${score.countryCode}`} style={{ textDecoration: 'none', display: 'block' }}>
@@ -133,6 +137,46 @@ export function CountryCard({ score }: Props) {
               </div>
             ))}
           </div>
+
+          {/* Badges opportunité */}
+          {(isJackpot || isBunkerSafe || (visa && visa.type === 'none')) && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+              {isJackpot && (
+                <span style={{
+                  padding: '2px 7px', borderRadius: 4,
+                  background: 'linear-gradient(135deg, rgba(255,178,36,0.2), rgba(255,140,66,0.1))',
+                  border: '1px solid rgba(255,178,36,0.4)', color: '#ffb224',
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: '0.5rem', letterSpacing: '0.1em', fontWeight: 700,
+                  boxShadow: '0 0 10px rgba(255,178,36,0.2)',
+                }}>
+                  ✨ JACKPOT FX
+                </span>
+              )}
+              {isBunkerSafe && (
+                <span style={{
+                  padding: '2px 7px', borderRadius: 4,
+                  background: 'rgba(61,220,151,0.12)', border: '1px solid rgba(61,220,151,0.3)',
+                  color: '#3ddc97',
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: '0.5rem', letterSpacing: '0.1em', fontWeight: 700,
+                }}>
+                  🛡 ULTRA-SAFE
+                </span>
+              )}
+              {visa && visa.type === 'none' && (
+                <span style={{
+                  padding: '2px 7px', borderRadius: 4,
+                  background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.25)',
+                  color: '#4a9eff',
+                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontSize: '0.5rem', letterSpacing: '0.1em', fontWeight: 700,
+                }}>
+                  ✓ SANS VISA
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Meta row */}
           <div style={{

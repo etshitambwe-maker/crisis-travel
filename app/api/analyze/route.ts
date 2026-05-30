@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
 import { detectOpportunities } from '@/lib/claude/claude.service';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
+import { checkRateLimit, getClientIdentifier } from '@/lib/middleware/rateLimit';
+import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
+import { getUser } from '@/lib/auth/supabase-server';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
 const Schema = z.object({
@@ -24,6 +27,46 @@ const Schema = z.object({
 
 export async function POST(request: Request): Promise<NextResponse> {
   const t0 = Date.now();
+
+  // Rate limiting — protège les APIs payantes (Claude, Perplexity)
+  const ip = getClientIdentifier(request);
+  const rl = await checkRateLimit(ip, 'anonymous');
+  if (!rl.success) {
+    return NextResponse.json(
+      {
+        error: 'Limite de requêtes atteinte. Réessayez dans 1 heure.',
+        retryAfter: Math.ceil((rl.reset - Date.now()) / 1000),
+        remaining: 0,
+      },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
+          'X-RateLimit-Limit': String(rl.limit),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(rl.reset),
+        },
+      }
+    );
+  }
+
+  // Quota analyses gratuites (3/mois pour les comptes free)
+  const user = await getUser();
+  const quota = await checkAndIncrementQuota(user?.id ?? null);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      {
+        error: 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.',
+        quota: { used: quota.used, limit: quota.limit, remaining: 0 },
+        upgradeUrl: '/pricing',
+      },
+      {
+        status: 402,
+        headers: { 'X-Quota-Remaining': '0', 'X-Quota-Limit': String(quota.limit) },
+      }
+    );
+  }
+
   try {
     const body = await request.json();
     const { profile } = Schema.parse(body);
@@ -82,7 +125,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       opportunities,
       meta: { analyzedCountries: results.length, duration: Date.now() - t0, cacheHitRate: 0 },
     };
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: {
+        'X-Quota-Remaining': quota.isPremium ? '999' : String(quota.remaining),
+        'X-Quota-Limit': quota.isPremium ? '999' : '3',
+        'X-Quota-Used': String(quota.used),
+      },
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Données invalides', details: error.issues }, { status: 400 });

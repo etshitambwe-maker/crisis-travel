@@ -1,13 +1,50 @@
+import type { Metadata } from 'next';
 import { Header } from '@/components/layout/Header';
 import { GaugeWithTooltip } from '@/components/crisis/GaugeWithTooltip';
 import { SecurityAlert } from '@/components/crisis/SecurityAlert';
 import { TravelPackBlock } from '@/components/crisis/TravelPackBlock';
+import { AlertButton } from '@/components/crisis/AlertButton';
+import { ScoreHistory } from '@/components/crisis/ScoreHistory';
+import { PremiumGate } from '@/components/auth/PremiumGate';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
 import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
 import { generateDestinationNarrative } from '@/lib/claude/claude.service';
 import { findCountry } from '@/lib/utils/countries';
 import { getFlagUrlLarge, getCountryColors } from '@/lib/utils/countryPhoto';
+import { getUserWithSubscription } from '@/lib/auth/supabase-server';
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { country } = await params;
+  const c = findCountry(country.toUpperCase());
+  if (!c) return { title: 'Destination inconnue | Crisis Travel' };
+
+  const statusLabels: Record<string, string> = {
+    ideal: 'Destination idéale',
+    recommended: 'Recommandée avec vigilance',
+    possible: 'Possible avec préparation',
+    discouraged: 'Fortement déconseillée',
+  };
+
+  return {
+    title: `${c.name} — Fiche voyage & CrisisScore | Crisis Travel`,
+    description: `Analyse géopolitique et sécuritaire de ${c.name} pour les voyageurs français. Données officielles MEAE, budget estimé, alertes sécurité et synthèse IA en temps réel.`,
+    openGraph: {
+      title: `Est-ce sûr de voyager en ${c.name} en ce moment ?`,
+      description: `Analyse CrisisScore de ${c.name} — sécurité, géopolitique, budget. Sources officielles MEAE, State Dept, ACLED.`,
+      type: 'article',
+      locale: 'fr_FR',
+      siteName: 'Crisis Travel',
+    },
+    alternates: {
+      canonical: `/destination/${country.toLowerCase()}`,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+  };
+}
 
 
 const MEAE_DATA: Record<number, { title: string; desc: string; ic: string }> = {
@@ -50,7 +87,10 @@ function scoreColor(v: number) {
 
 export default async function DestinationPage({ params }: Props) {
   const { country } = await params;
-  const data = await getData(country.toUpperCase());
+  const [data, { user, isPremium }] = await Promise.all([
+    getData(country.toUpperCase()),
+    getUserWithSubscription(),
+  ]);
 
   if (!data) {
     return (
@@ -304,43 +344,92 @@ export default async function DestinationPage({ params }: Props) {
 
         {/* AI synthesis */}
         <SectionHead num="04" label="SYNTHÈSE IA" meta="CLAUDE SONNET" />
-        <div style={{
-          background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
-          borderRadius: 14, padding: '16px 18px', marginBottom: 20,
-          position: 'relative', overflow: 'hidden',
-        }}>
-          {/* Top accent line */}
+        <PremiumGate
+          feature="Synthèse IA complète"
+          description="Accédez à l'analyse narrative approfondie de Claude AI : contexte géopolitique, risques résiduels, recommandations personnalisées."
+          isPremium={isPremium}
+          isLoggedIn={!!user}
+        >
           <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-            background: 'linear-gradient(90deg, transparent 0%, #ff3b2f 30%, #ff8c42 70%, transparent 100%)',
-          }} />
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #1f1f30' }}>
+            background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
+            borderRadius: 14, padding: '16px 18px', marginBottom: 20,
+            position: 'relative', overflow: 'hidden',
+          }}>
+            {/* Top accent line */}
             <div style={{
-              width: 26, height: 26, borderRadius: '50%',
-              background: 'conic-gradient(from 45deg, #ff3b2f, #ff8c42, #ffb224, #ff3b2f)',
-              display: 'grid', placeItems: 'center', position: 'relative',
-            }}>
-              <div style={{ position: 'absolute', inset: 3, background: '#0b0b14', borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 1 }}>
-                <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 8, fontWeight: 700, color: '#f0f0f5', letterSpacing: '-0.02em', position: 'relative', zIndex: 2 }}>AI</span>
+              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+              background: 'linear-gradient(90deg, transparent 0%, #ff3b2f 30%, #ff8c42 70%, transparent 100%)',
+            }} />
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #1f1f30' }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: 'conic-gradient(from 45deg, #ff3b2f, #ff8c42, #ffb224, #ff3b2f)',
+                display: 'grid', placeItems: 'center', position: 'relative',
+              }}>
+                <div style={{ position: 'absolute', inset: 3, background: '#0b0b14', borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 1 }}>
+                  <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 8, fontWeight: 700, color: '#f0f0f5', letterSpacing: '-0.02em', position: 'relative', zIndex: 2 }}>AI</span>
+                </div>
+              </div>
+              <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#f0f0f5' }}>
+                SYNTHÈSE CLAUDE <span style={{ color: '#6b6b85', fontWeight: 500 }}>· SONNET 4.6</span>
+              </div>
+              <div style={{ marginLeft: 'auto', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: '#3ddc97', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3ddc97', boxShadow: '0 0 5px #3ddc97', display: 'inline-block' }} />
+                TEMPS RÉEL
               </div>
             </div>
-            <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#f0f0f5' }}>
-              SYNTHÈSE CLAUDE <span style={{ color: '#6b6b85', fontWeight: 500 }}>· SONNET 4.6</span>
-            </div>
-            <div style={{ marginLeft: 'auto', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: '#3ddc97', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3ddc97', boxShadow: '0 0 5px #3ddc97', display: 'inline-block' }} />
-              TEMPS RÉEL
+            {/* Body */}
+            <div style={{ fontSize: 13.5, lineHeight: 1.6, color: '#f0f0f5', whiteSpace: 'pre-wrap' }}>
+              {narrative}
             </div>
           </div>
-          {/* Body */}
-          <div style={{ fontSize: 13.5, lineHeight: 1.6, color: '#f0f0f5', whiteSpace: 'pre-wrap' }}>
-            {narrative}
-          </div>
+        </PremiumGate>
+
+        {/* Actions utilisateur */}
+        <div style={{
+          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
+          padding: '16px 0', marginBottom: 8,
+          borderTop: '1px solid #1f1f30',
+        }}>
+          <AlertButton
+            countryCode={score.countryCode}
+            countryName={score.country}
+            isLoggedIn={!!user}
+          />
+
+          <PremiumGate
+            feature="Export PDF"
+            description="Téléchargez le rapport complet au format PDF."
+            isPremium={isPremium}
+            isLoggedIn={!!user}
+          >
+            <a
+              href={`/api/export-pdf/${score.countryCode}`}
+              download
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '9px 16px', borderRadius: 8,
+                background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.3)',
+                color: '#4a9eff',
+                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                fontSize: '0.6rem', letterSpacing: '0.12em', fontWeight: 700,
+                textDecoration: 'none', transition: 'all 0.2s',
+              }}
+            >
+              ↓ EXPORTER PDF
+            </a>
+          </PremiumGate>
+        </div>
+
+        {/* Historique scores */}
+        <SectionHead num="05" label="HISTORIQUE" meta="6 MOIS" />
+        <div style={{ marginBottom: 20 }}>
+          <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
         </div>
 
         {/* Pack Voyage */}
-        <SectionHead num="05" label="PACK VOYAGE" meta="AFFILIÉS" />
+        <SectionHead num="06" label="PACK VOYAGE" meta="AFFILIÉS" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}

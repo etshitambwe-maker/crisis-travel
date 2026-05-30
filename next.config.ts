@@ -1,10 +1,7 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: path.resolve(__dirname),
-  },
+  // Turbopack désactivé — bug de résolution avec les chemins contenant des espaces
 };
 
 export default nextConfig;

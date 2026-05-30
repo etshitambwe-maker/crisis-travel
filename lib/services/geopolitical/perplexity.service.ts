@@ -1,7 +1,16 @@
 import axios from 'axios';
+import { z } from 'zod';
 import { withCache, buildCacheKey } from '@/lib/cache/redis';
 import { logger } from '@/lib/utils/logger';
 import type { PerplexityGeoAnalysis, ServiceResult } from '@/types/api.types';
+
+const PerplexitySchema = z.object({
+  stabilityScore: z.number().min(0).max(100),
+  summary: z.string().max(500),
+  mainRisks: z.array(z.string()).max(5),
+  recentEvents: z.array(z.string()).max(5),
+  trend: z.enum(['improving', 'stable', 'deteriorating']),
+});
 
 const FALLBACK: PerplexityGeoAnalysis = {
   stabilityScore: 50,
@@ -53,9 +62,11 @@ export async function getPerplexityGeoScore(
         logger.api('Perplexity/OpenRouter', countryCode, Date.now() - t0, false);
         const text = res.data.choices[0].message.content as string;
         // sonar-pro peut encapsuler dans du markdown — on extrait le JSON
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
         if (!jsonMatch) throw new Error('No JSON in response');
-        return JSON.parse(jsonMatch[0]) as PerplexityGeoAnalysis;
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Validation Zod — garantit la structure avant utilisation
+        return PerplexitySchema.parse(parsed) as PerplexityGeoAnalysis;
       },
       1800
     );

@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { UserMenu } from '@/components/auth/UserMenu';
 
 export function Header() {
   return (
@@ -36,19 +37,22 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Status badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-          fontSize: 9.5, letterSpacing: '0.15em',
-          color: '#9898b0', textTransform: 'uppercase',
-          padding: '5px 9px',
-          border: '1px solid #1f1f30',
-          borderRadius: 999,
-          background: 'rgba(17,17,28,0.5)',
-        }}>
-          <span className="ct-pulse-dot" />
-          LIVE · 4/4 APIS
+        {/* Right side: status + auth */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontSize: 9.5, letterSpacing: '0.15em',
+            color: '#9898b0', textTransform: 'uppercase',
+            padding: '5px 9px',
+            border: '1px solid #1f1f30',
+            borderRadius: 999,
+            background: 'rgba(17,17,28,0.5)',
+          }}>
+            <span className="ct-pulse-dot" />
+            LIVE · 4/4 APIS
+          </div>
+          <UserMenu />
         </div>
       </div>
 
@@ -61,6 +65,7 @@ export function Header() {
         {[
           { href: '/', label: 'ACCUEIL' },
           { href: '/results?mode=standard&budget=1500&duration=7&travelType=solo', label: 'ANALYSER' },
+          { href: '/pricing', label: 'TARIFS' },
           { href: '/api/health', label: 'STATUT' },
         ].map((item) => (
           <Link

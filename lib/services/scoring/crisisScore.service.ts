@@ -8,6 +8,7 @@ import { getGdeltScore } from '@/lib/services/geopolitical/gdelt.service';
 import { getFrankfurterScore } from '@/lib/services/budget/frankfurter.service';
 import { getNumbeoScore } from '@/lib/services/budget/numbeo.service';
 import { getTeleportScore } from '@/lib/services/budget/teleport.service';
+import { calculatePracticalityScore } from '@/lib/services/scoring/practicality.service';
 import { clamp, getScoreStatus } from '@/types/crisis.types';
 import type { CrisisScore, SubScore, UserProfile } from '@/types/crisis.types';
 import type { ServiceResult, PerplexityGeoAnalysis } from '@/types/api.types';
@@ -122,19 +123,27 @@ async function calcBudget(c: CountryInfo, _profile: UserProfile): Promise<SubSco
 }
 
 async function calcPracticality(c: CountryInfo): Promise<SubScore> {
+  // Utilise visa + connexions aériennes en base, enrichi par Teleport si disponible
+  const baseScore = calculatePracticalityScore(c.code);
+
   try {
     const r_teleport = await getTeleportScore(c.code);
-    if (r_teleport.source === 'fallback') {
-      return buildSubScore(65, ['fallback' as const], { note: 'Données Teleport indisponibles' });
+    if (r_teleport.source === 'live') {
+      // Combine visa/vols (60%) + santé/sécurité Teleport (40%)
+      const teleportContrib = r_teleport.data.healthcareScore * 0.25 + r_teleport.data.safetyScore * 0.15;
+      const combined = baseScore.value * 0.60 + teleportContrib;
+      return buildSubScore(combined, ['live'], {
+        ...baseScore.details,
+        healthcareScore: r_teleport.data.healthcareScore,
+        safetyScore:     r_teleport.data.safetyScore,
+        teleportCost:    r_teleport.data.costIndex,
+      });
     }
-    const value = r_teleport.data.healthcareScore * 0.50 + r_teleport.data.safetyScore * 0.30 + 65 * 0.20;
-    return buildSubScore(value, ['live' as const], {
-      healthcareScore: r_teleport.data.healthcareScore,
-      safetyScore:     r_teleport.data.safetyScore,
-    });
   } catch {
-    return buildSubScore(65, ['fallback' as const], { note: 'Données Teleport indisponibles' });
+    // Teleport indisponible — on utilise uniquement visa + vols
   }
+
+  return baseScore;
 }
 
 export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile): Promise<CrisisScore> {
