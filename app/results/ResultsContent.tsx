@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CountryCard } from '@/components/crisis/CountryCard';
+import { TravelPackMiniBlock } from '@/components/crisis/TravelPackMiniBlock';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
 const CONTINENT_LABELS: Record<string, string> = {
@@ -271,6 +272,9 @@ export function ResultsContent() {
               {data.results.length - 5} AUTRES DESTINATIONS ANALYSÉES · Lance une analyse par région pour tout voir
             </p>
           )}
+
+          {/* Pack Voyage affiliation — visible dès la page résultats (CTA tracés via /api/affiliate/click) */}
+          <TravelPackMiniBlock />
         </>
       )}
     </main>
