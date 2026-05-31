@@ -22,13 +22,19 @@ function buildClickUrl(category: Category, countryCode?: string, countryName?: s
   return `/api/affiliate/click?${params.toString()}`;
 }
 
-const CTAS: { category: Category; icon: string; label: string; bg: string; hover: string }[] = [
-  { category: 'flight',    icon: '✈',  label: 'Trouver un vol',     bg: '#dc2626', hover: '#ef4444' },
-  { category: 'hotel',     icon: '🏨', label: 'Réserver un hôtel',  bg: '#1d4ed8', hover: '#2563eb' },
-  { category: 'insurance', icon: '🛡', label: 'Assurance voyage',   bg: '#065f46', hover: '#047857' },
+// Libellés génériques (sans pays) + variante contextuelle (avec pays).
+// Si countryName est fourni → "Vol Japon" ; sinon → "Trouver un vol".
+const CTAS: { category: Category; icon: string; generic: string; prefix: string; bg: string; hover: string }[] = [
+  { category: 'flight',    icon: '✈',  generic: 'Trouver un vol',    prefix: 'Vol',       bg: '#dc2626', hover: '#ef4444' },
+  { category: 'hotel',     icon: '🏨', generic: 'Réserver un hôtel', prefix: 'Hôtel',     bg: '#1d4ed8', hover: '#2563eb' },
+  { category: 'insurance', icon: '🛡', generic: 'Assurance voyage',  prefix: 'Assurance', bg: '#065f46', hover: '#047857' },
 ];
 
 export function TravelPackMiniBlock({ countryCode, countryName }: TravelPackMiniBlockProps) {
+  // Dégradation gracieuse : avec pays → contextuel, sans pays → générique (comportement actuel).
+  const title = countryName ? `Préparer votre voyage : ${countryName}` : 'Préparer ce voyage';
+  const ctaLabel = (c: (typeof CTAS)[number]) => (countryName ? `${c.prefix} ${countryName}` : c.generic);
+
   return (
     <div style={{
       background: 'linear-gradient(135deg, #13131a 0%, #0f0f1a 100%)',
@@ -43,7 +49,7 @@ export function TravelPackMiniBlock({ countryCode, countryName }: TravelPackMini
           fontSize: '0.85rem', color: '#ff4d2e', letterSpacing: '0.1em',
           margin: 0, textTransform: 'uppercase', fontWeight: 700,
         }}>
-          ✈️ Préparer ce voyage
+          ✈️ {title}
         </h2>
         <p style={{
           fontSize: '0.72rem', color: '#9898b0', margin: '4px 0 0',
@@ -63,7 +69,7 @@ export function TravelPackMiniBlock({ countryCode, countryName }: TravelPackMini
             rel="noopener noreferrer"
             style={{ textDecoration: 'none' }}
           >
-            <MiniCta icon={c.icon} label={c.label} bgColor={c.bg} hoverColor={c.hover} />
+            <MiniCta icon={c.icon} label={ctaLabel(c)} bgColor={c.bg} hoverColor={c.hover} />
           </a>
         ))}
       </div>

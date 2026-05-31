@@ -273,8 +273,13 @@ export function ResultsContent() {
             </p>
           )}
 
-          {/* Pack Voyage affiliation — visible dès la page résultats (CTA tracés via /api/affiliate/click) */}
-          <TravelPackMiniBlock />
+          {/* Pack Voyage affiliation — contextualisé sur la meilleure destination (top 1),
+              avec dégradation gracieuse vers le bloc générique si la liste est vide.
+              CTA tracés via /api/affiliate/click (country_code + country_name renseignés). */}
+          {(() => {
+            const top = (continent ? data.results : data.topDestinations)[0];
+            return <TravelPackMiniBlock countryCode={top?.countryCode} countryName={top?.country} />;
+          })()}
         </>
       )}
     </main>
