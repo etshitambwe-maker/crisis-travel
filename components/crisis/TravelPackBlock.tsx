@@ -60,10 +60,24 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
   const dailyBudget = mealCheapEur ? Math.round(mealCheapEur * 3 * duration) : null;
   const total = flightCost + (hotelCost ?? 0) + (dailyBudget ?? 0);
 
-  // Liens affiliés (à remplacer par les IDs Travelpayouts une fois inscrits)
+  // URLs cibles contextualisées (publiques pour l'instant : aucun ID d'affiliation réel).
   const skyscannerUrl = `https://www.skyscanner.fr/transport/vols/${airport.toLowerCase()}/anywhere/?adults=1&currency=EUR`;
   const bookingUrl    = `https://www.booking.com/searchresults.fr.html?ss=${encodeURIComponent(countryName)}&lang=fr&currency=EUR`;
   const chapkaUrl     = `https://www.chapkadirect.fr/`;
+
+  // Tous les CTA passent par /api/affiliate/click : le clic est tracé côté serveur
+  // PUIS l'utilisateur est redirigé (302) vers le partenaire. L'ID d'affiliation réel
+  // sera injecté en base plus tard sans toucher au front.
+  const trackUrl = (category: 'flight' | 'hotel' | 'insurance', partner: string, target: string) =>
+    `/api/affiliate/click?category=${category}&partner=${partner}` +
+    `&url=${encodeURIComponent(target)}` +
+    `&country=${encodeURIComponent(countryCode)}` +
+    `&countryName=${encodeURIComponent(countryName)}` +
+    `&total=${total}`;
+
+  const flightHref    = trackUrl('flight', 'skyscanner', skyscannerUrl);
+  const hotelHref     = trackUrl('hotel', 'booking', bookingUrl);
+  const insuranceHref = trackUrl('insurance', 'chapka', chapkaUrl);
 
   const durationOptions = [
     { v: 5, label: '5 jours' }, { v: 7, label: '1 semaine' },
@@ -166,7 +180,7 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
 
       {/* CTAs affiliés */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <a href={skyscannerUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+        <a href={flightHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
           <CtaButton
             icon="🛫"
             label="TROUVER MON VOL"
@@ -175,7 +189,7 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
             hoverColor="#ef4444"
           />
         </a>
-        <a href={bookingUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+        <a href={hotelHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
           <CtaButton
             icon="🏨"
             label="RÉSERVER MON HÔTEL"
@@ -184,7 +198,7 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
             hoverColor="#2563eb"
           />
         </a>
-        <a href={chapkaUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+        <a href={insuranceHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
           <CtaButton
             icon="🛡️"
             label="ASSURANCE VOYAGE"
