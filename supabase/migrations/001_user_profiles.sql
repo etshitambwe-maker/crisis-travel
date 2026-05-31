@@ -32,7 +32,8 @@ CREATE POLICY "Users can update own profile"
 -- Service role peut tout faire (webhooks Stripe)
 CREATE POLICY "Service role full access"
   ON public.user_profiles
-  USING (auth.role() = 'service_role');
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
 
 -- Trigger : créer le profil automatiquement à l'inscription
 CREATE OR REPLACE FUNCTION public.handle_new_user()

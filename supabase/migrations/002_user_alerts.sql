@@ -24,11 +24,13 @@ ALTER TABLE public.user_alerts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can manage own alerts"
   ON public.user_alerts
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Service role full access alerts"
   ON public.user_alerts
-  USING (auth.role() = 'service_role');
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
 
 -- Historique des CrisisScores (time series)
 CREATE TABLE IF NOT EXISTS public.crisis_score_history (
@@ -56,4 +58,4 @@ CREATE POLICY "Anyone can read score history"
 
 CREATE POLICY "Service role can insert history"
   ON public.crisis_score_history FOR INSERT
-  USING (auth.role() = 'service_role');
+  WITH CHECK (auth.role() = 'service_role');
