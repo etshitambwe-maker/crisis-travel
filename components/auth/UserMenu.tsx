@@ -8,6 +8,7 @@ export function UserMenu() {
   const [user, setUser] = useState<User | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
@@ -24,6 +25,26 @@ export function UserMenu() {
     await supabase.auth.signOut();
     setShowMenu(false);
     setUser(null);
+  }
+
+  async function handleManageSubscription() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch('/api/stripe/portal', { method: 'POST' });
+      const data = await res.json();
+      if (res.status === 404) {
+        // Aucun abonnement actif → diriger vers les tarifs
+        window.location.href = '/pricing';
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      window.location.href = '/pricing';
+    } finally {
+      setPortalLoading(false);
+    }
   }
 
   if (!user) {
@@ -86,6 +107,23 @@ export function UserMenu() {
               {user.email}
             </div>
           </div>
+
+          <button
+            onClick={handleManageSubscription}
+            disabled={portalLoading}
+            style={{
+              width: '100%', padding: '7px 10px', borderRadius: 6, cursor: portalLoading ? 'default' : 'pointer',
+              background: 'transparent', border: 'none', textAlign: 'left',
+              color: '#9898b0', fontSize: 13,
+              display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#1e1e2e'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <span style={{ fontSize: 11 }}>⚙</span>
+            {portalLoading ? 'Redirection…' : 'Gérer l\'abonnement'}
+          </button>
 
           <button
             onClick={handleSignOut}

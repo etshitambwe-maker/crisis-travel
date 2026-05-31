@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 
 export async function GET(
   _request: Request,
@@ -7,6 +8,15 @@ export async function GET(
 ): Promise<NextResponse> {
   const { code } = await params;
   const countryCode = code.toUpperCase();
+
+  // Avantage Premium : l'historique des scores est réservé aux abonnés.
+  const { isPremium } = await getUserWithSubscription();
+  if (!isPremium) {
+    return NextResponse.json(
+      { history: [], premiumRequired: true, upgradeUrl: '/pricing' },
+      { status: 402 }
+    );
+  }
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ history: [] });

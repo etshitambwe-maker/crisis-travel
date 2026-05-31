@@ -379,9 +379,13 @@ export default async function DestinationPage({ params }: Props) {
                 TEMPS RÉEL
               </div>
             </div>
-            {/* Body */}
+            {/* Body — la synthèse réelle ne quitte le serveur que pour les Premium.
+                Pour les non-Premium, le PremiumGate floute déjà ; on n'envoie qu'un
+                aperçu générique afin de ne pas exposer le contenu payant dans le HTML. */}
             <div style={{ fontSize: 13.5, lineHeight: 1.6, color: '#f0f0f5', whiteSpace: 'pre-wrap' }}>
-              {narrative}
+              {isPremium
+                ? narrative
+                : 'Analyse narrative approfondie de Claude AI : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées. Réservé aux abonnés Premium.'}
             </div>
           </div>
         </PremiumGate>

@@ -98,8 +98,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
-        // current_period_end est dans billing_cycle_anchor ou items.data[0].period.end
-        const periodEnd = (sub as unknown as { current_period_end?: number }).current_period_end
+        // API 2026-05-27.dahlia : current_period_end est au niveau de l'item
+        // (sub.items.data[0]), plus à la racine de la souscription.
+        // On lit l'item en priorité, puis la racine (compat), puis fallback +30j.
+        const periodEnd = sub.items?.data?.[0]?.current_period_end
+          ?? (sub as unknown as { current_period_end?: number }).current_period_end
           ?? Math.floor(Date.now() / 1000) + 2592000; // fallback +30j
         await upsertSubscription(
           sub.customer as string,
