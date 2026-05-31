@@ -15,10 +15,24 @@ interface TravelPackMiniBlockProps {
 
 type Category = 'flight' | 'hotel' | 'insurance';
 
+// Target URLs contextualisées par catégorie (utilisées quand un pays est connu).
+// flight → homepage Skyscanner (MiniBlock n'a pas l'IATA, /anywhere/ sans IATA est invalide)
+// hotel  → recherche Booking pré-remplie avec le nom du pays
+// insurance → chapkadirect.fr (URL finale, aucun paramètre requis)
+function targetUrl(category: Category, countryName?: string): string | undefined {
+  if (!countryName) return undefined;
+  if (category === 'flight')    return 'https://www.skyscanner.fr/';
+  if (category === 'hotel')     return `https://www.booking.com/searchresults.fr.html?ss=${encodeURIComponent(countryName)}&lang=fr&currency=EUR`;
+  if (category === 'insurance') return 'https://www.chapkadirect.fr/';
+  return undefined;
+}
+
 function buildClickUrl(category: Category, countryCode?: string, countryName?: string): string {
   const params = new URLSearchParams({ category });
   if (countryCode) params.set('country', countryCode);
   if (countryName) params.set('countryName', countryName);
+  const dest = targetUrl(category, countryName);
+  if (dest) params.set('url', dest);
   return `/api/affiliate/click?${params.toString()}`;
 }
 

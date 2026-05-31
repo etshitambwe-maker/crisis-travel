@@ -61,7 +61,7 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
   const total = flightCost + (hotelCost ?? 0) + (dailyBudget ?? 0);
 
   // URLs cibles contextualisées (publiques pour l'instant : aucun ID d'affiliation réel).
-  const skyscannerUrl = `https://www.skyscanner.fr/transport/vols/${airport.toLowerCase()}/anywhere/?adults=1&currency=EUR`;
+  const skyscannerUrl = 'https://www.skyscanner.fr/';
   const bookingUrl    = `https://www.booking.com/searchresults.fr.html?ss=${encodeURIComponent(countryName)}&lang=fr&currency=EUR`;
   const chapkaUrl     = `https://www.chapkadirect.fr/`;
 
