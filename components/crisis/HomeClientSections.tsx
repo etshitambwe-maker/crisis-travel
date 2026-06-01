@@ -1,31 +1,43 @@
 'use client';
+import { useRouter } from 'next/navigation';
 
+// Budget and duration extracted from the meta strings so clicking navigates to /results
+// with pre-filled parameters matching the opportunity window.
 const OPPORTUNITIES = [
   {
     dates: '28 AVR → 12 MAI',
     title: 'Shoulder season Méditerranée',
     desc: 'Portugal + Grèce : −18% hébergement, météo optimale, affluence faible.',
     tag: 'OPTIMAL', meta: ['DURÉE 15J', 'BUDGET 1800€', 'SÉCURITÉ 92'],
+    href: '/results?mode=standard&budget=1800&duration=15&travelType=solo&continent=Europe',
   },
   {
     dates: '05 MAI → 19 MAI',
     title: 'Yen historiquement bas — Japon',
     desc: 'JPY à −22% vs EUR, vols LCC en promo, hanami tardif Hokkaidō.',
     tag: 'FX PLAY', meta: ['DURÉE 14J', 'BUDGET 2400€', 'FX −22%'],
+    href: '/results?mode=standard&budget=2400&duration=14&travelType=solo&continent=Asia',
   },
   {
     dates: '19 MAI → 02 JUN',
     title: 'Maroc pré-été Atlantique',
     desc: '22°C côte, MAD favorable, Paris-Marrakech 119€ A/R.',
     tag: 'BUDGET', meta: ['DURÉE 14J', 'BUDGET 1200€', 'FX +12%'],
+    href: '/results?mode=budget_crisis&budget=1200&duration=14&travelType=solo&continent=Africa',
   },
 ];
 
 export function OpportunityCards() {
+  const router = useRouter();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {OPPORTUNITIES.map((o, i) => (
         <div key={i}
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push(o.href)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(o.href); }}
           style={{
             position: 'relative',
             background: 'linear-gradient(135deg, rgba(61,220,151,0.06), rgba(61,220,151,0.02))',

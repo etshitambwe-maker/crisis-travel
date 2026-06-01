@@ -23,11 +23,14 @@ export function TravelForm() {
   const [mode, setMode] = useState('standard');
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     const params = new URLSearchParams({ budget: String(budget), duration: String(duration), travelType, mode });
     router.push(`/results?${params.toString()}`);
+    // router.push is fire-and-forget; reset loading so the button is not
+    // permanently disabled if the user navigates back to this form.
+    setTimeout(() => setLoading(false), 3000);
   }
 
   const inputStyle = {

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Mono, DM_Sans } from 'next/font/google';
+import { Suspense } from 'react';
+import { AuthTrigger } from '@/components/auth/AuthTrigger';
 import './globals.css';
 
 const spaceMono = Space_Mono({
@@ -24,6 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fr" className={`dark ${spaceMono.variable} ${dmSans.variable}`}>
       <body className="min-h-screen antialiased" style={{ backgroundColor: '#0a0a0f', color: '#e8e8e8', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
         {children}
+        <Suspense fallback={null}>
+          <AuthTrigger />
+        </Suspense>
       </body>
     </html>
   );
