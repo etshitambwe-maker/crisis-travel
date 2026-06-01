@@ -14,6 +14,10 @@ import { findCountry } from '@/lib/utils/countries';
 import { getFlagUrlLarge, getCountryColors } from '@/lib/utils/countryPhoto';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 
+// Plafond technique : scoring + synthèse Claude en Server Component peuvent
+// dépasser les 10s par défaut de Vercel sur cold cache. 60s évite le timeout.
+export const maxDuration = 60;
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { country } = await params;
   const c = findCountry(country.toUpperCase());
@@ -65,16 +69,24 @@ interface Props {
   params: Promise<{ country: string }>;
 }
 
-async function getData(code: string): Promise<{ score: CrisisScore; narrative: string; flagUrl: string; colors: [string, string] } | null> {
+type DestinationData = { score: CrisisScore; narrative: string; flagUrl: string; colors: [string, string] };
+type DestinationResult =
+  | { kind: 'ok'; data: DestinationData }
+  | { kind: 'not_found' }      // le code pays n'existe pas dans notre référentiel
+  | { kind: 'error' };          // le pays existe mais l'analyse a échoué techniquement
+
+async function getData(code: string): Promise<DestinationResult> {
   const country = findCountry(code);
-  if (!country) return null;
+  if (!country) return { kind: 'not_found' };
   try {
     const profile = { departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType: 'solo' as const, mode: 'standard' as const };
     const score = await calculateCrisisScore(country, profile);
     const narrative = await generateDestinationNarrative(score, profile);
-    return { score, narrative, flagUrl: getFlagUrlLarge(code), colors: getCountryColors(code) };
+    return { kind: 'ok', data: { score, narrative, flagUrl: getFlagUrlLarge(code), colors: getCountryColors(code) } };
   } catch {
-    return null;
+    // Le pays existe mais une exception est survenue (scoring/narrative) —
+    // ce n'est PAS une erreur "introuvable", c'est un échec technique.
+    return { kind: 'error' };
   }
 }
 
@@ -87,25 +99,43 @@ function scoreColor(v: number) {
 
 export default async function DestinationPage({ params }: Props) {
   const { country } = await params;
-  const [data, { user, isPremium }] = await Promise.all([
+  const [result, { user, isPremium }] = await Promise.all([
     getData(country.toUpperCase()),
     getUserWithSubscription(),
   ]);
 
-  if (!data) {
+  if (result.kind !== 'ok') {
+    // Deux messages distincts : pays inconnu de notre référentiel vs panne technique.
+    const isNotFound = result.kind === 'not_found';
     return (
       <div style={{ minHeight: '100vh', background: '#07070c' }}>
         <Header />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-          <p style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', color: '#6b6b85', letterSpacing: '0.12em' }}>
-            DESTINATION NON TROUVÉE
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, padding: '0 24px', textAlign: 'center' }}>
+          <div style={{
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontSize: 32, fontWeight: 700, color: isNotFound ? '#6b6b85' : '#ff4d2e', letterSpacing: '-0.02em',
+          }}>
+            {isNotFound ? 'DESTINATION INCONNUE' : 'ANALYSE INDISPONIBLE'}
+          </div>
+          <p style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', color: '#6b6b85', letterSpacing: '0.1em', fontSize: 12, maxWidth: 360, lineHeight: 1.6 }}>
+            {isNotFound
+              ? 'Ce pays ne fait pas partie des destinations analysées par Crisis Travel.'
+              : 'L\'analyse n\'a pas pu aboutir — les sources de données sont momentanément indisponibles. Réessayez dans quelques instants.'}
           </p>
+          <a href="/" style={{
+            padding: '10px 20px', borderRadius: 8, textDecoration: 'none',
+            border: '1px solid #1f1f30', color: '#9898b0',
+            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+          }}>
+            ← RETOUR ACCUEIL
+          </a>
         </div>
       </div>
     );
   }
 
-  const { score, narrative, flagUrl, colors } = data;
+  const { score, narrative, flagUrl, colors } = result.data;
   const meaeLevel = Math.min(4, Math.max(1, Number(score.security.details.meaeLevel ?? 2)));
   const meae = MEAE_DATA[meaeLevel];
   const meaeStyle = MEAE_STYLES[meaeLevel];

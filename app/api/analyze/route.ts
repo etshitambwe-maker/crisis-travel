@@ -8,6 +8,11 @@ import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
 import { getUser } from '@/lib/auth/supabase-server';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
+// Plafond technique : l'analyse cold-cache de tous les pays peut dépasser les
+// 10s par défaut de Vercel. 60s couvre tous les plans (Hobby max 60s) et évite
+// que la fonction soit tuée avant la fin — cause racine des fausses erreurs réseau.
+export const maxDuration = 60;
+
 const Schema = z.object({
   profile: z.object({
     departureCountry: z.string().min(2),

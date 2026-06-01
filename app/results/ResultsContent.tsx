@@ -94,31 +94,49 @@ export function ResultsContent() {
       body: JSON.stringify({ profile }),
     })
       .then(async (r) => {
-        const json = await r.json();
-        if (!r.ok) {
-          // Quota mensuel (402)
-          if (r.status === 402) {
-            setError(json.error ?? 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.');
-            setErrorMeta({ upgradeUrl: json.upgradeUrl ?? '/pricing' });
-          // Rate limit (429)
-          } else if (r.status === 429) {
-            const wait = json.retryAfter ? ` Réessayez dans ${Math.ceil(json.retryAfter / 60)} min.` : '';
-            setError((json.error ?? 'Limite de requêtes atteinte.') + wait);
-            setErrorMeta({ retryAfter: json.retryAfter });
-          // Erreur de validation (400)
-          } else if (r.status === 400) {
-            setError('Paramètres invalides. Retournez à l\'accueil et relancez une analyse.');
-          // Erreur serveur (500+)
-          } else {
-            setError(json.error ?? 'Erreur serveur. Réessayez dans quelques instants.');
-          }
+        // Lire le statut AVANT de parser : une 504 Vercel renvoie du HTML, pas du JSON.
+        // On tente le JSON dans un try local pour ne pas confondre "réponse serveur
+        // non-JSON" (timeout/504) avec une vraie coupure réseau (gérée par .catch).
+        let json: Record<string, unknown> | null = null;
+        try {
+          json = await r.json();
+        } catch {
+          json = null; // réponse non-JSON (ex : page d'erreur 504/502 de Vercel)
+        }
+
+        if (r.ok && json) {
+          setData(json as unknown as AnalyzeResponse);
+          setLoading(false);
+          return;
+        }
+
+        // À partir d'ici : erreur côté SERVEUR (on a bien reçu une réponse HTTP).
+        const serverErr = (json?.error as string | undefined);
+        if (r.status === 402) {
+          setError(serverErr ?? 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.');
+          setErrorMeta({ upgradeUrl: (json?.upgradeUrl as string) ?? '/pricing' });
+        } else if (r.status === 429) {
+          const retryAfter = json?.retryAfter as number | undefined;
+          const wait = retryAfter ? ` Réessayez dans ${Math.ceil(retryAfter / 60)} min.` : '';
+          setError((serverErr ?? 'Limite de requêtes atteinte.') + wait);
+          setErrorMeta({ retryAfter });
+        } else if (r.status === 400) {
+          setError('Paramètres invalides. Retournez à l\'accueil et relancez une analyse.');
+        } else if (r.status === 504 || r.status === 502 || !json) {
+          // Timeout / passerelle : l'analyse a pris trop de temps côté serveur.
+          // NE PAS présenter comme une erreur réseau de l'utilisateur.
+          setError('L\'analyse a pris trop de temps et n\'a pas pu aboutir. Réessayez dans quelques instants.');
         } else {
-          setData(json as AnalyzeResponse);
+          setError(serverErr ?? 'Erreur serveur. Réessayez dans quelques instants.');
         }
         setLoading(false);
       })
-      .catch(() => {
-        setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+      .catch((err: unknown) => {
+        // On n'a PAS reçu de réponse HTTP du tout → vraie défaillance réseau client.
+        const isNetwork = err instanceof TypeError;
+        setError(isNetwork
+          ? 'Impossible de contacter le serveur. Vérifiez votre connexion.'
+          : 'Une erreur inattendue s\'est produite. Réessayez dans quelques instants.');
         setLoading(false);
       });
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
