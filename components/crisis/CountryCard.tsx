@@ -40,7 +40,9 @@ export function CountryCard({ score }: Props) {
   useEffect(() => {
     fetch(`/api/photo/${score.countryCode}`)
       .then((r) => r.json())
-      .then((d: { url?: string }) => { if (d.url) setPhotoUrl(d.url); })
+      .then((d: { url?: string }) => {
+        if (d.url && /^https:\/\//.test(d.url)) setPhotoUrl(d.url);
+      })
       .catch(() => {});
   }, [score.countryCode]);
 
@@ -129,7 +131,7 @@ export function CountryCard({ score }: Props) {
                 fontSize: 18, fontWeight: 700, color: '#fff',
                 letterSpacing: '-0.01em', lineHeight: 1,
                 textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
               }}>
                 {score.country}
               </div>

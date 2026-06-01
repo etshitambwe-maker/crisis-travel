@@ -50,4 +50,27 @@ export function getCountryPhotoUrlLarge(code: string): string {
 }
 
 // Garde WIKI_NAME exporté pour ne pas casser les imports existants
-export const WIKI_NAME: Record<string, string> = {};
+export const WIKI_NAME: Record<string, string> = {
+  PT: 'Portugal',        GE: 'Georgia_(country)',  AL: 'Albania',
+  RS: 'Serbia',          BA: 'Bosnia_and_Herzegovina', MD: 'Moldova',
+  MK: 'North_Macedonia', AM: 'Armenia',             TR: 'Turkey',
+  ME: 'Montenegro',      XK: 'Kosovo',              GR: 'Greece',
+  HR: 'Croatia',         HU: 'Hungary',             MA: 'Morocco',
+  TN: 'Tunisia',         EG: 'Egypt',               SN: 'Senegal',
+  CI: 'Ivory_Coast',     GH: 'Ghana',               KE: 'Kenya',
+  TZ: 'Tanzania',        RW: 'Rwanda',              ET: 'Ethiopia',
+  ZA: 'South_Africa',    MU: 'Mauritius',           MG: 'Madagascar',
+  CM: 'Cameroon',        CG: 'Republic_of_the_Congo', CD: 'Democratic_Republic_of_the_Congo',
+  NG: 'Nigeria',         AO: 'Angola',              TH: 'Thailand',
+  VN: 'Vietnam',         JP: 'Japan',               ID: 'Indonesia',
+  KG: 'Kyrgyzstan',      UZ: 'Uzbekistan',          KH: 'Cambodia',
+  LK: 'Sri_Lanka',       PH: 'Philippines',         MY: 'Malaysia',
+  SG: 'Singapore',       MM: 'Myanmar',             NP: 'Nepal',
+  IN: 'India',           KZ: 'Kazakhstan',          MX: 'Mexico',
+  CO: 'Colombia',        PE: 'Peru',                EC: 'Ecuador',
+  BO: 'Bolivia',         PY: 'Paraguay',            UY: 'Uruguay',
+  GT: 'Guatemala',       CR: 'Costa_Rica',          PA: 'Panama',
+  CU: 'Cuba',            DO: 'Dominican_Republic',  BR: 'Brazil',
+  AR: 'Argentina',       CL: 'Chile',               JO: 'Jordan',
+  AE: 'United_Arab_Emirates', OM: 'Oman',
+};
