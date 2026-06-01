@@ -122,11 +122,16 @@ export function ResultsContent() {
           setErrorMeta({ retryAfter });
         } else if (r.status === 400) {
           setError('Paramètres invalides. Retournez à l\'accueil et relancez une analyse.');
-        } else if (r.status === 504 || r.status === 502 || !json) {
-          // Timeout / passerelle : l'analyse a pris trop de temps côté serveur.
-          // NE PAS présenter comme une erreur réseau de l'utilisateur.
+        } else if (r.status === 504 || r.status === 502) {
+          // Passerelle/timeout RÉEL : l'analyse a pris trop de temps côté serveur.
+          // Rattaché au seul statut HTTP — une réponse non-JSON ne suffit plus à
+          // déduire un timeout (un 503/500 amont est aussi non typé).
           setError('L\'analyse a pris trop de temps et n\'a pas pu aboutir. Réessayez dans quelques instants.');
+        } else if (r.status === 503) {
+          // Service amont indisponible (détecté par /api/analyze avant l'analyse).
+          setError(serverErr ?? 'Le service d\'analyse est temporairement indisponible. Réessayez dans quelques instants.');
         } else {
+          // 500 ou tout autre statut serveur, y compris réponse non-JSON inattendue.
           setError(serverErr ?? 'Erreur serveur. Réessayez dans quelques instants.');
         }
         setLoading(false);

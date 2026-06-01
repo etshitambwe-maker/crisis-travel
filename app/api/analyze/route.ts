@@ -30,34 +30,80 @@ const Schema = z.object({
   }),
 });
 
+/**
+ * Réponse 503 structurée pour une panne d'un service AMONT (Redis, Supabase),
+ * survenue AVANT l'analyse. Distincte du 500 (erreur d'analyse/scoring).
+ * Le champ `stage` identifie l'étage fautif pour le diagnostic ; le message
+ * utilisateur reste neutre et ne mentionne jamais Redis ni Supabase.
+ */
+function upstreamUnavailable(stage: 'rate-limit' | 'auth' | 'quota'): NextResponse {
+  return NextResponse.json(
+    {
+      error: 'Le service d\'analyse est temporairement indisponible. Réessayez dans quelques instants.',
+      stage,
+    },
+    { status: 503 }
+  );
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const t0 = Date.now();
 
-  // Rate limiting — protège les APIs payantes (Claude, Perplexity)
-  const ip = getClientIdentifier(request);
-  const rl = await checkRateLimit(ip, 'anonymous');
-  if (!rl.success) {
-    return NextResponse.json(
-      {
-        error: 'Limite de requêtes atteinte. Réessayez dans 1 heure.',
-        retryAfter: Math.ceil((rl.reset - Date.now()) / 1000),
-        remaining: 0,
-      },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
-          'X-RateLimit-Limit': String(rl.limit),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(rl.reset),
+  // ── Étapes pré-analyse (rate-limit, auth, quota) ──────────────────────────
+  // Toute exception ici (Redis/Supabase injoignable) doit renvoyer un 503 JSON
+  // propre — sinon Vercel renvoie une page d'erreur HTML brute que le client
+  // ne sait pas classer. Fail-closed sur le quota : on ne lance JAMAIS l'analyse
+  // si le contrôle quota échoue, pour protéger les APIs payantes (Claude/Perplexity).
+  let quota: Awaited<ReturnType<typeof checkAndIncrementQuota>>;
+  try {
+    // Rate limiting — protège les APIs payantes (Claude, Perplexity)
+    const ip = getClientIdentifier(request);
+    let rl;
+    try {
+      rl = await checkRateLimit(ip, 'anonymous');
+    } catch (e) {
+      console.error('[API/analyze] rate-limit', e);
+      return upstreamUnavailable('rate-limit');
+    }
+    if (!rl.success) {
+      return NextResponse.json(
+        {
+          error: 'Limite de requêtes atteinte. Réessayez dans 1 heure.',
+          retryAfter: Math.ceil((rl.reset - Date.now()) / 1000),
+          remaining: 0,
         },
-      }
-    );
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rl.reset - Date.now()) / 1000)),
+            'X-RateLimit-Limit': String(rl.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rl.reset),
+          },
+        }
+      );
+    }
+
+    // Quota analyses gratuites (3/mois pour les comptes free)
+    let user;
+    try {
+      user = await getUser();
+    } catch (e) {
+      console.error('[API/analyze] auth', e);
+      return upstreamUnavailable('auth');
+    }
+    try {
+      quota = await checkAndIncrementQuota(user?.id ?? null);
+    } catch (e) {
+      console.error('[API/analyze] quota', e);
+      return upstreamUnavailable('quota');
+    }
+  } catch (e) {
+    // Filet de sécurité : toute exception inattendue dans le bloc pré-analyse.
+    console.error('[API/analyze] pre-analyse', e);
+    return upstreamUnavailable('auth');
   }
 
-  // Quota analyses gratuites (3/mois pour les comptes free)
-  const user = await getUser();
-  const quota = await checkAndIncrementQuota(user?.id ?? null);
   if (!quota.allowed) {
     return NextResponse.json(
       {
@@ -141,7 +187,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Données invalides', details: error.issues }, { status: 400 });
     }
-    console.error('[API/analyze]', error);
+    console.error('[API/analyze] analyse', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }
