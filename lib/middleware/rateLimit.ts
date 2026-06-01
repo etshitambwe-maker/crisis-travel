@@ -51,6 +51,8 @@ export interface RateLimitResult {
   remaining: number;
   reset: number;
   tier: RateLimitTier;
+  /** true quand Upstash a échoué et qu'on a laissé passer (fail-open). Sert au diagnostic, jamais exposé au client. */
+  degraded?: boolean;
 }
 
 export async function checkRateLimit(
@@ -64,14 +66,24 @@ export async function checkRateLimit(
     return { success: true, limit: 999, remaining: 999, reset: 0, tier };
   }
 
-  const result = await limiter[tier].limit(identifier);
-  return {
-    success: result.success,
-    limit: result.limit,
-    remaining: result.remaining,
-    reset: result.reset,
-    tier,
-  };
+  // Fail-open contrôlé : si l'appel Upstash lève une exception (Redis injoignable,
+  // token invalide, base suspendue/quota Upstash épuisé…), on NE bloque PAS tout le
+  // produit. On logue côté serveur et on laisse passer — le quota Supabase (fail-closed)
+  // reste le garde-fou des coûts API. Un `success: false` LÉGITIME (limite réellement
+  // atteinte) n'est pas concerné : il sort du try sans exception et reste un 429.
+  try {
+    const result = await limiter[tier].limit(identifier);
+    return {
+      success: result.success,
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: result.reset,
+      tier,
+    };
+  } catch (err) {
+    console.error('[RateLimit] Upstash unavailable — failing open', err);
+    return { success: true, limit: 999, remaining: 999, reset: 0, tier, degraded: true };
+  }
 }
 
 export function getClientIdentifier(request: Request): string {
