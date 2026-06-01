@@ -62,7 +62,19 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
 
   // URLs cibles contextualisées (publiques pour l'instant : aucun ID d'affiliation réel).
   const skyscannerUrl = 'https://www.skyscanner.fr/';
-  const bookingUrl    = `https://www.booking.com/searchresults.fr.html?ss=${encodeURIComponent(countryName)}&lang=fr&currency=EUR`;
+  // Booking URL enriched with group_adults=1 and no_rooms=1.
+  // No dates injected here: the destination page has no date picker, so checkin/checkout
+  // would require guessing — omitting is safer than sending wrong dates.
+  const bookingUrl = (() => {
+    const p = new URLSearchParams({
+      ss: countryName,
+      lang: 'fr',
+      currency: 'EUR',
+      group_adults: '1',
+      no_rooms: '1',
+    });
+    return `https://www.booking.com/searchresults.fr.html?${p.toString()}`;
+  })();
   const chapkaUrl     = `https://www.chapkadirect.fr/`;
 
   // Tous les CTA passent par /api/affiliate/click : le clic est tracé côté serveur

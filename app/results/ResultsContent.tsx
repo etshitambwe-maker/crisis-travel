@@ -278,7 +278,15 @@ export function ResultsContent() {
               CTA tracés via /api/affiliate/click (country_code + country_name renseignés). */}
           {(() => {
             const top = (continent ? data.results : data.topDestinations)[0];
-            return <TravelPackMiniBlock countryCode={top?.countryCode} countryName={top?.country} />;
+            return (
+              <TravelPackMiniBlock
+                countryCode={top?.countryCode}
+                countryName={top?.country}
+                travelType={(params.get('travelType') ?? 'solo') as 'solo' | 'couple' | 'family' | 'nomad'}
+                checkin={dateFrom || undefined}
+                checkout={dateTo || undefined}
+              />
+            );
           })()}
         </>
       )}
