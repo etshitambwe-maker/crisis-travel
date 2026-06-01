@@ -26,7 +26,10 @@ export function ScoreTooltip({
 
   useEffect(() => {
     function handleOutside(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setVisible(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        setVisible(false);
+      }
     }
     if (visible) {
       document.addEventListener('mousedown', handleOutside);
@@ -38,6 +41,7 @@ export function ScoreTooltip({
     };
   }, [visible]);
 
+  // cancel auto-dismiss timer on unmount
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const vals: Record<string, number | undefined> = { security, geopolitical, budget, practicality };
@@ -49,7 +53,7 @@ export function ScoreTooltip({
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
       onTouchStart={(e) => {
-        e.preventDefault(); // prevent ghost click
+        e.preventDefault(); // safe: trigger is in non-scrollable hero — prevents ghost click
         if (timerRef.current) clearTimeout(timerRef.current);
         setVisible((v) => {
           if (!v) timerRef.current = setTimeout(() => setVisible(false), 2500);
