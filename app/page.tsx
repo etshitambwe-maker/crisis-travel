@@ -129,7 +129,7 @@ export default function HomePage() {
         </section>
 
         {/* ── SEARCH HUB ─────────────────────────────── */}
-        <section style={{ marginBottom: 28 }}>
+        <section id="analyse" style={{ marginBottom: 28 }}>
           <SectionHead num="01" label="RECHERCHE & PARAMÈTRES" meta="REQUIS" color="#ff3b2f" />
           <SmartSearchHub />
         </section>

@@ -66,7 +66,7 @@ export function Header() {
       }}>
         {[
           { href: '/', label: 'ACCUEIL' },
-          { href: '/', label: 'ANALYSER' },
+          { href: '/#analyse', label: 'ANALYSER' },
           { href: '/pricing', label: 'TARIFS' },
           { href: '/status', label: 'STATUT' },
         ].map((item) => (
