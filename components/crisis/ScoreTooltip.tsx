@@ -22,14 +22,23 @@ export function ScoreTooltip({
 }: ScoreTooltipProps) {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handleOutside(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setVisible(false);
     }
-    if (visible) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (visible) {
+      document.addEventListener('mousedown', handleOutside);
+      document.addEventListener('touchstart', handleOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
   }, [visible]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const vals: Record<string, number | undefined> = { security, geopolitical, budget, practicality };
 
@@ -39,6 +48,14 @@ export function ScoreTooltip({
       style={{ position: 'relative', display: 'inline-block' }}
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
+      onTouchStart={(e) => {
+        e.preventDefault(); // prevent ghost click
+        if (timerRef.current) clearTimeout(timerRef.current);
+        setVisible((v) => {
+          if (!v) timerRef.current = setTimeout(() => setVisible(false), 2500);
+          return !v;
+        });
+      }}
     >
       <div style={{ cursor: 'help' }}>{children}</div>
 
