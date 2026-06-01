@@ -88,8 +88,7 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
           <span>{t.icon}</span>
-          <style>{`@media (max-width: 479px) { .tab-label { display: none } }`}</style>
-          <span className="tab-label">{t.label}</span>
+          <span className="ct-tab-label">{t.label}</span>
         </button>
       ))}
     </div>
@@ -599,7 +598,7 @@ export function SmartSearchHub() {
   }, [router, airport, dateDepart, dateRetour]);
 
   return (
-    <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20 }}>
+    <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20, overflowX: 'hidden' }}>
 
       {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
       <AirportSelector value={airport} onChange={handleAirportChange} />
@@ -614,8 +613,8 @@ export function SmartSearchHub() {
             <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
               DATES DU VOYAGE
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
                   Départ
                 </label>
@@ -634,7 +633,7 @@ export function SmartSearchHub() {
                   }}
                 />
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
                 <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
                   Retour
                 </label>

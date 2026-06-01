@@ -3,11 +3,13 @@ import { TickerBanner } from '@/components/crisis/TickerBanner';
 import { SmartSearchHub } from '@/components/crisis/SmartSearchHub';
 import { WorldMap } from '@/components/crisis/WorldMap';
 import { OpportunityCards } from '@/components/crisis/HomeClientSections';
+import { CrisisScoreExplainer } from '@/components/crisis/CrisisScoreExplainer';
 
 export default function HomePage() {
   return (
     <div style={{
       minHeight: '100vh',
+      overflowX: 'hidden',
       background: `
         radial-gradient(1200px 600px at 50% -200px, rgba(255,59,47,0.08), transparent 60%),
         radial-gradient(800px 400px at 100% 80%, rgba(74,158,255,0.04), transparent 60%),
@@ -45,12 +47,12 @@ export default function HomePage() {
           </div>
 
           {/* H1 */}
-          <h1 style={{
+          <h1 className="ct-hero-h1" style={{
             fontFamily: 'var(--font-space-mono), monospace',
             fontSize: 'clamp(36px, 10vw, 52px)',
             lineHeight: 0.92, letterSpacing: '-0.03em',
             margin: '0 0 18px', fontWeight: 700, position: 'relative',
-            color: '#f0f0f5',
+            color: '#f0f0f5', wordBreak: 'break-word',
           }}>
             VOYAGEZ<br/>
             <span style={{
@@ -74,7 +76,7 @@ export default function HomePage() {
           </p>
 
           {/* Stats 2×2 */}
-          <div style={{
+          <div className="ct-stats-grid" style={{
             marginTop: 22,
             display: 'grid', gridTemplateColumns: '1fr 1fr',
             border: '1px solid #1f1f30', borderRadius: 12, overflow: 'hidden',
@@ -117,6 +119,11 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* ── CRISIS SCORE EXPLAINER ─────────────────── */}
+        <section style={{ marginBottom: 28 }}>
+          <CrisisScoreExplainer />
         </section>
 
         {/* ── SEARCH HUB ─────────────────────────────── */}

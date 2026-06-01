@@ -57,10 +57,12 @@ export function Header() {
       </div>
 
       {/* Sub-nav */}
-      <div style={{
+      <div className="ct-subnav" style={{
         display: 'flex', gap: 0,
         borderTop: '1px solid #1f1f30',
         padding: '0 20px',
+        overflowX: 'auto',
+        scrollbarWidth: 'none',
       }}>
         {[
           { href: '/', label: 'ACCUEIL' },
@@ -75,9 +77,11 @@ export function Header() {
               fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
               fontSize: 9, letterSpacing: '0.14em',
               color: '#6b6b85', textDecoration: 'none',
-              padding: '8px 12px',
+              padding: '8px 10px',
               display: 'inline-block',
               transition: 'color 0.2s',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#f0f0f5')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#6b6b85')}

@@ -121,6 +121,10 @@
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
+@keyframes tscroll-reverse {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
 @keyframes ct-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.85); }
@@ -247,3 +251,26 @@
 .sc-mid  { color: #ffb224; }
 .sc-low  { color: #ff8c42; }
 .sc-bad  { color: #ff3b2f; }
+
+/* ── Responsive utilities ────────────────────────── */
+@media (max-width: 375px) {
+  /* Prevent horizontal overflow globally */
+  body { overflow-x: hidden; }
+
+  /* Hero H1 word-break on very narrow screens */
+  .ct-hero-h1 { word-break: break-word; }
+
+  /* Stats 2×2 grid: tighter padding on 320px */
+  .ct-stats-grid > div { padding: 9px 10px !important; }
+
+  /* Header sub-nav: smaller padding to avoid overflow */
+  .ct-subnav a { padding: 8px 8px !important; font-size: 8px !important; }
+
+  /* CountryCard chips: slightly tighter */
+  .ct-score-chips { gap: 4px !important; }
+}
+
+@media (max-width: 479px) {
+  /* SmartSearchHub tab labels: kept visible but truncated gracefully */
+  .ct-tab-label { font-size: 0.6rem; }
+}
