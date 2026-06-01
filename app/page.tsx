@@ -22,7 +22,7 @@ export default function HomePage() {
       <main style={{ maxWidth: 800, margin: '0 auto', padding: '0 20px 80px' }}>
 
         {/* ── HERO ───────────────────────────────────── */}
-        <section style={{ padding: '32px 0 28px', position: 'relative' }}>
+        <section style={{ padding: '28px 0 20px', position: 'relative' }}>
           {/* Background radials */}
           <div style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -49,35 +49,37 @@ export default function HomePage() {
           {/* H1 */}
           <h1 className="ct-hero-h1" style={{
             fontFamily: 'var(--font-space-mono), monospace',
-            fontSize: 'clamp(36px, 10vw, 52px)',
-            lineHeight: 0.92, letterSpacing: '-0.03em',
-            margin: '0 0 18px', fontWeight: 700, position: 'relative',
+            fontSize: 'clamp(30px, 8vw, 46px)',
+            lineHeight: 1.0, letterSpacing: '-0.02em',
+            margin: '0 0 16px', fontWeight: 700, position: 'relative',
             color: '#f0f0f5', wordBreak: 'break-word',
           }}>
-            VOYAGEZ<br/>
+            Le monde change.{' '}
             <span style={{
               color: '#ff3b2f', display: 'inline-block', position: 'relative',
             }}>
-              INTELLIGENT
+              Vos destinations aussi.
               <span style={{
                 position: 'absolute', left: 0, bottom: 2, right: 0,
                 height: 4, background: '#ff3b2f', opacity: 0.2, filter: 'blur(8px)',
               }} />
             </span>
-            <br/>
-            OÙ LE MONDE<br/>VACILLE.
           </h1>
 
           <p style={{
-            maxWidth: 320, color: '#9898b0', fontSize: 14.5, lineHeight: 1.5, margin: 0, position: 'relative',
+            maxWidth: 480, color: '#c8c8d8', fontSize: 15, lineHeight: 1.6, margin: '0 0 6px', position: 'relative',
           }}>
-            Intelligence géopolitique + économique temps réel.{' '}
-            <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>Analyse 196 pays</strong> en 3 secondes à partir de vos contraintes de sécurité, budget et dates.
+            Nous analysons la <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>sécurité</strong>,
+            la <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>géopolitique</strong>,
+            le <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>budget</strong> et
+            la <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>praticité</strong> pour identifier
+            les destinations les plus avantageuses du moment parmi{' '}
+            <strong style={{ color: '#f0f0f5', fontWeight: 600 }}>196 pays</strong>.
           </p>
 
           {/* Stats 2×2 */}
           <div className="ct-stats-grid" style={{
-            marginTop: 22,
+            marginTop: 16,
             display: 'grid', gridTemplateColumns: '1fr 1fr',
             border: '1px solid #1f1f30', borderRadius: 12, overflow: 'hidden',
             background: 'rgba(17,17,28,0.5)', backdropFilter: 'blur(12px)',
@@ -122,7 +124,7 @@ export default function HomePage() {
         </section>
 
         {/* ── CRISIS SCORE EXPLAINER ─────────────────── */}
-        <section style={{ marginBottom: 28 }}>
+        <section style={{ marginBottom: 24 }}>
           <CrisisScoreExplainer />
         </section>
 

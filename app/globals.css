@@ -273,4 +273,7 @@
 @media (max-width: 479px) {
   /* SmartSearchHub tab labels: kept visible but truncated gracefully */
   .ct-tab-label { font-size: 0.6rem; }
+
+  /* CrisisScoreExplainer: 4-col → 2×2 on narrow screens */
+  .ct-pillars-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
