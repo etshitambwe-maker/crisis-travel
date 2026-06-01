@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
@@ -34,6 +35,15 @@ export function CountryCard({ score }: Props) {
   const isJackpot = fxDelta > 15 && score.total >= 65;
   const isBunkerSafe = score.security.value >= 88;
 
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/photo/${score.countryCode}`)
+      .then((r) => r.json())
+      .then((d: { url?: string }) => { if (d.url) setPhotoUrl(d.url); })
+      .catch(() => {});
+  }, [score.countryCode]);
+
   return (
     <Link href={`/destination/${score.countryCode}`} style={{ textDecoration: 'none', display: 'block' }}>
       <div
@@ -54,27 +64,29 @@ export function CountryCard({ score }: Props) {
           e.currentTarget.style.boxShadow = 'none';
         }}
       >
-        {/* Hero : fond couleurs du pays + drapeau centré */}
+        {/* Hero : photo destination + overlay lisibilité */}
         <div style={{
-          position: 'relative', width: '100%', height: 120,
+          position: 'relative', width: '100%', height: 200,
           overflow: 'hidden', borderRadius: '14px 14px 0 0',
-          background: `linear-gradient(135deg, ${color1}55 0%, ${color2}33 100%), #0d0d18`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: photoUrl
+            ? `url(${photoUrl}) center/cover no-repeat, linear-gradient(135deg, ${color1}55 0%, ${color2}33 100%), #0d0d18`
+            : `linear-gradient(135deg, ${color1}55 0%, ${color2}33 100%), #0d0d18`,
         }}>
-          {/* Drapeau */}
-          <img
-            src={flagUrl}
-            alt={`Drapeau ${score.country}`}
-            loading="lazy"
-            style={{
-              height: 64, width: 'auto', maxWidth: 110,
-              objectFit: 'contain',
-              filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.6))',
-              borderRadius: 3,
-            }}
-          />
-          {/* Badge score en haut à droite */}
-          <div style={{ position: 'absolute', top: 10, right: 10 }}>
+          {/* Uniform dark overlay — improves legibility over any photo */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: photoUrl ? 'rgba(0,0,0,0.30)' : 'transparent',
+            transition: 'background 0.4s ease',
+          }} />
+
+          {/* Bottom gradient — ensures name + flag readable regardless of photo */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 90,
+            background: 'linear-gradient(0deg, rgba(7,7,12,0.92) 0%, rgba(7,7,12,0.4) 60%, transparent 100%)',
+          }} />
+
+          {/* Score badge — top right */}
+          <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }}>
             <ScoreTooltip
               security={score.security.value}
               geopolitical={score.geopolitical.value}
@@ -92,17 +104,42 @@ export function CountryCard({ score }: Props) {
               </div>
             </ScoreTooltip>
           </div>
-          {/* Nom du pays en bas à gauche */}
+
+          {/* Bottom row: flag badge (left) + country name + ISO code (right) */}
           <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '20px 12px 8px',
-            background: 'linear-gradient(0deg, rgba(7,7,12,0.9) 0%, transparent 100%)',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
+            position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 2,
+            padding: '0 12px 10px',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8,
           }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em', lineHeight: 1 }}>
-              {score.country}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, minWidth: 0 }}>
+              {/* Flag badge */}
+              <img
+                src={flagUrl}
+                alt=""
+                aria-hidden="true"
+                style={{
+                  height: 24, width: 'auto', maxWidth: 36,
+                  objectFit: 'contain', flexShrink: 0,
+                  filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.7))',
+                  borderRadius: 2,
+                }}
+              />
+              {/* Country name */}
+              <div style={{
+                fontSize: 18, fontWeight: 700, color: '#fff',
+                letterSpacing: '-0.01em', lineHeight: 1,
+                textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {score.country}
+              </div>
             </div>
-            <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.5)' }}>
+            {/* ISO code */}
+            <div style={{
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.5)',
+              flexShrink: 0,
+            }}>
               {score.countryCode}
             </div>
           </div>
@@ -111,26 +148,29 @@ export function CountryCard({ score }: Props) {
         {/* Body */}
         <div style={{ padding: '14px 16px 16px' }}>
           {/* Score chips */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 12 }}>
+          <div className="ct-score-chips" style={{
+            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 12,
+          }}>
             {[
-              { lbl: 'SÉC', val: score.security.value },
-              { lbl: 'GEO', val: score.geopolitical.value },
-              { lbl: 'BUD', val: score.budget.value },
+              { lbl: 'SÉC',  val: score.security.value },
+              { lbl: 'GEO',  val: score.geopolitical.value },
+              { lbl: 'BUD',  val: score.budget.value },
               { lbl: 'PRAT', val: score.practicality.value },
             ].map((chip) => (
               <div key={chip.lbl} style={{
-                padding: '7px 6px', background: 'rgba(10,10,18,0.6)',
+                padding: '9px 6px', background: 'rgba(10,10,18,0.6)',
                 border: '1px solid #1f1f30', borderRadius: 6, textAlign: 'center',
               }}>
                 <div style={{
                   fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                  fontSize: 8, letterSpacing: '0.14em', color: '#6b6b85', textTransform: 'uppercase', marginBottom: 2,
+                  fontSize: 10, letterSpacing: '0.12em', color: '#6b6b85',
+                  textTransform: 'uppercase', marginBottom: 2,
                 }}>
                   {chip.lbl}
                 </div>
                 <div className={scoreChipClass(chip.val)} style={{
                   fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                  fontSize: 13, fontWeight: 700, letterSpacing: '-0.02em',
+                  fontSize: 15, fontWeight: 700, letterSpacing: '-0.02em',
                 }}>
                   {chip.val}
                 </div>
