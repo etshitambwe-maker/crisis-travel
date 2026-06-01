@@ -53,6 +53,7 @@ export function ResultsContent() {
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorMeta, setErrorMeta] = useState<{ upgradeUrl?: string; retryAfter?: number } | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const continent = params.get('continent') ?? undefined;
@@ -84,15 +85,42 @@ export function ResultsContent() {
 
     setLoading(true);
     setElapsed(0);
+    setError(null);
+    setErrorMeta(null);
 
     fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile }),
     })
-      .then((r) => r.json())
-      .then((d: AnalyzeResponse) => { setData(d); setLoading(false); })
-      .catch(() => { setError("Erreur lors de l'analyse"); setLoading(false); });
+      .then(async (r) => {
+        const json = await r.json();
+        if (!r.ok) {
+          // Quota mensuel (402)
+          if (r.status === 402) {
+            setError(json.error ?? 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.');
+            setErrorMeta({ upgradeUrl: json.upgradeUrl ?? '/pricing' });
+          // Rate limit (429)
+          } else if (r.status === 429) {
+            const wait = json.retryAfter ? ` Réessayez dans ${Math.ceil(json.retryAfter / 60)} min.` : '';
+            setError((json.error ?? 'Limite de requêtes atteinte.') + wait);
+            setErrorMeta({ retryAfter: json.retryAfter });
+          // Erreur de validation (400)
+          } else if (r.status === 400) {
+            setError('Paramètres invalides. Retournez à l\'accueil et relancez une analyse.');
+          // Erreur serveur (500+)
+          } else {
+            setError(json.error ?? 'Erreur serveur. Réessayez dans quelques instants.');
+          }
+        } else {
+          setData(json as AnalyzeResponse);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Impossible de contacter le serveur. Vérifiez votre connexion.');
+        setLoading(false);
+      });
   }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const labels = PRIORITY_LABELS[priority] ?? PRIORITY_LABELS.tout;
@@ -227,8 +255,34 @@ export function ResultsContent() {
       )}
 
       {error && (
-        <div style={{ background: 'rgba(255,77,46,0.1)', border: '1px solid rgba(255,77,46,0.3)', borderRadius: 8, padding: 16, color: '#ff4d2e' }}>
-          {error}
+        <div style={{ background: 'rgba(255,77,46,0.08)', border: '1px solid rgba(255,77,46,0.3)', borderRadius: 10, padding: '20px 24px' }}>
+          <div style={{ color: '#ff4d2e', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 13, marginBottom: errorMeta ? 14 : 0 }}>
+            {error}
+          </div>
+          {errorMeta?.upgradeUrl && (
+            <a href={errorMeta.upgradeUrl} style={{
+              display: 'inline-block', marginTop: 4,
+              padding: '8px 18px', borderRadius: 6,
+              background: '#ff4d2e', color: '#fff',
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 11, letterSpacing: '0.12em', textDecoration: 'none',
+              textTransform: 'uppercase',
+            }}>
+              VOIR LES OFFRES PREMIUM →
+            </a>
+          )}
+          {!errorMeta?.upgradeUrl && (
+            <a href="/" style={{
+              display: 'inline-block', marginTop: 4,
+              padding: '8px 18px', borderRadius: 6,
+              border: '1px solid rgba(255,77,46,0.4)', color: '#ff4d2e',
+              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontSize: 11, letterSpacing: '0.12em', textDecoration: 'none',
+              textTransform: 'uppercase',
+            }}>
+              ← RETOUR ACCUEIL
+            </a>
+          )}
         </div>
       )}
 

@@ -66,9 +66,9 @@ export function Header() {
       }}>
         {[
           { href: '/', label: 'ACCUEIL' },
-          { href: '/results?mode=standard&budget=1500&duration=7&travelType=solo', label: 'ANALYSER' },
+          { href: '/', label: 'ANALYSER' },
           { href: '/pricing', label: 'TARIFS' },
-          { href: '/api/health', label: 'STATUT' },
+          { href: '/status', label: 'STATUT' },
         ].map((item) => (
           <Link
             key={item.href}
