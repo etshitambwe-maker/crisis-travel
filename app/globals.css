@@ -280,7 +280,3 @@
   /* CrisisScoreExplainer: 4-col → 2×2 on narrow screens */
   .ct-pillars-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
-
-@media (max-width: 360px) {
-  .ct-score-chips { grid-template-columns: repeat(2, 1fr) !important; }
-}
