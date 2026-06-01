@@ -5,6 +5,7 @@ import { CountrySearchBar } from './CountrySearchBar';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
 import { getFlagUrl, getCountryColors } from '@/lib/utils/countryPhoto';
 import { getHint } from '@/lib/utils/staticHints';
+import { acquireAnalyzeLock, releaseAnalyzeLock } from '@/lib/utils/analyzeGuard';
 import type { CrisisScore } from '@/types/crisis.types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -157,6 +158,7 @@ function AirportSelector({ value, onChange }: { value: string; onChange: (v: str
 function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, sort: SortKey) => void; airport: string }) {
   const [selected, setSelected] = useState<Continent | null>(null);
   const [sort, setSort] = useState<SortKey>('score');
+  const [pending, setPending] = useState(false);
   const router = useRouter();
 
   const countries = selected
@@ -252,17 +254,32 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
 
           {/* Analyze whole region button */}
           <button
-            onClick={() => onAnalyze(selected, sort)}
-            style={{
-              width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
-              background: 'rgba(255,77,46,0.08)', border: '1px solid rgba(255,77,46,0.3)',
-              color: '#ff4d2e', fontFamily: 'var(--font-space-mono)',
-              fontSize: '0.72rem', letterSpacing: '0.1em', transition: 'all 0.2s',
+            disabled={pending}
+            onClick={() => {
+              if (!acquireAnalyzeLock()) return;
+              setPending(true);
+              // Micro-delay lets React flush the disabled state before navigation
+              setTimeout(() => {
+                onAnalyze(selected, sort);
+                // Lock released by handleRegionAnalyze after router.push
+              }, 50);
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,77,46,0.15)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,77,46,0.08)'; }}
+            style={{
+              width: '100%', padding: '12px', borderRadius: 10,
+              cursor: pending ? 'not-allowed' : 'pointer',
+              background: pending ? 'rgba(255,77,46,0.04)' : 'rgba(255,77,46,0.08)',
+              border: '1px solid rgba(255,77,46,0.3)',
+              color: pending ? '#7a3a2e' : '#ff4d2e',
+              fontFamily: 'var(--font-space-mono)',
+              fontSize: '0.72rem', letterSpacing: '0.1em', transition: 'all 0.2s',
+              opacity: pending ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(255,77,46,0.15)'; }}
+            onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(255,77,46,0.08)'; }}
           >
-            ⚡ ANALYSER TOUTE LA RÉGION {CONTINENTS.find(c => c.id === selected)?.label.toUpperCase()} DEPUIS {airport} →
+            {pending
+              ? '⏳ LANCEMENT EN COURS...'
+              : `⚡ ANALYSER TOUTE LA RÉGION ${CONTINENTS.find(c => c.id === selected)?.label.toUpperCase()} DEPUIS ${airport} →`}
           </button>
         </>
       )}
@@ -440,6 +457,7 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
   const total = 4;
 
   async function handleGenerate() {
+    if (!acquireAnalyzeLock()) return;
     const b = BUDGET_MAP[state.budget ?? 'moyen'];
     const d = DURATION_MAP[state.duration ?? 'semaine'];
     const tt = state.travelType ?? 'solo';
@@ -492,8 +510,10 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
     } catch {
       // fallback : rediriger vers results
       router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+      setTimeout(releaseAnalyzeLock, 3000);
     } finally {
       setLoading(false);
+      releaseAnalyzeLock();
     }
   }
 
@@ -595,6 +615,8 @@ export function SmartSearchHub() {
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
     router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+    // Release after a frame — navigation is in flight, lock stays until /results mounts
+    setTimeout(releaseAnalyzeLock, 3000);
   }, [router, airport, dateDepart, dateRetour]);
 
   return (

@@ -214,8 +214,8 @@ export function ResultsContent() {
               </div>
             </div>
 
-            {/* Texte */}
-            <div style={{ textAlign: 'center' }}>
+            {/* Texte + barre de progression */}
+            <div style={{ textAlign: 'center', width: '100%', maxWidth: 320 }}>
               <div style={{
                 fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
                 fontSize: 13, letterSpacing: '0.2em', textTransform: 'uppercase',
@@ -223,30 +223,50 @@ export function ResultsContent() {
               }}>
                 ANALYSE EN COURS
               </div>
-              {/* Points clignotants */}
-              <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginBottom: 12 }}>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} style={{
-                    width: 5, height: 5, borderRadius: '50%', background: '#4a9eff',
-                    animation: `ct-dot-blink 1.4s ease-in-out ${i * 0.2}s infinite`,
-                  }} />
-                ))}
-              </div>
+
+              {/* Barre de progression déterministe */}
+              {(() => {
+                const progress =
+                  elapsed < 8  ? Math.round((elapsed / 8) * 30) :
+                  elapsed < 18 ? Math.round(30 + ((elapsed - 8) / 10) * 35) :
+                  elapsed < 28 ? Math.round(65 + ((elapsed - 18) / 10) * 23) :
+                  Math.min(95, Math.round(88 + ((elapsed - 28) / 15) * 7));
+                return (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{
+                      height: 3, background: '#1a1a2e', borderRadius: 999,
+                      overflow: 'hidden', width: '100%',
+                    }}>
+                      <div style={{
+                        height: '100%', borderRadius: 999,
+                        width: `${progress}%`,
+                        background: 'linear-gradient(90deg, #4a9eff, #3ddc97)',
+                        transition: 'width 0.9s ease',
+                      }} />
+                    </div>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between',
+                      marginTop: 5,
+                      fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                      fontSize: 9, color: '#3f3f5a', letterSpacing: '0.08em',
+                    }}>
+                      <span>{progress}%</span>
+                      <span>{elapsed}s · jusqu&apos;à 35s selon le cache</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Étape courante */}
               <div style={{
                 fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
                 fontSize: 10, letterSpacing: '0.12em', color: '#6b6b85',
+                minHeight: 16,
               }}>
-                {elapsed < 8 ? 'Consultation des sources officielles...' :
-                 elapsed < 18 ? 'Calcul des CrisisScores...' :
-                 elapsed < 28 ? 'Synthèse par intelligence artificielle...' :
-                 'Finalisation de l\'analyse...'}
-              </div>
-              <div style={{
-                marginTop: 8,
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                fontSize: 9, color: '#3f3f5a', letterSpacing: '0.1em',
-              }}>
-                {elapsed}s · jusqu&apos;à 45s selon le cache
+                {elapsed < 8  ? '⬡ Interrogation des sources officielles (MEAE, State Dept, ACLED)...' :
+                 elapsed < 18 ? '⬡ Calcul des CrisisScores — sécurité · géopolitique · budget...' :
+                 elapsed < 28 ? '⬡ Détection des opportunités par intelligence artificielle...' :
+                                '⬡ Finalisation et tri des destinations...'}
               </div>
             </div>
 
