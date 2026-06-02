@@ -1,11 +1,14 @@
 'use client';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { searchCountries } from '@/lib/utils/countries';
+import { searchCountries, getSearchState } from '@/lib/utils/countries';
 import { getFlagUrl } from '@/lib/utils/countryPhoto';
 import { getHint, hintToStatus } from '@/lib/utils/staticHints';
 
 type Country = ReturnType<typeof searchCountries>[number];
+
+// Suggestions de pays couverts montrées dans l'état « hors couverture » (GOAL-037).
+const COVERED_EXAMPLES = "l'Albanie, la Géorgie, le Maroc, la Turquie ou le Vietnam";
 
 const continentLabel: Record<string, string> = {
   Europe: '🌍 Europe',
@@ -84,16 +87,20 @@ export function CountrySearchBar() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Country[]>([]);
+  const [uncovered, setUncovered] = useState(false);
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Recherche en temps réel
+  // Recherche en temps réel. getSearchState (GOAL-037) distingue trois états :
+  // 'results' (on a des pays), 'uncovered' (≥2 car. mais hors périmètre Crisis Travel
+  // → message explicite au lieu d'un vide silencieux), 'idle' (rien à montrer).
   useEffect(() => {
-    const matches = searchCountries(query);
-    setResults(matches);
-    setOpen(matches.length > 0 && query.length >= 1);
+    const state = getSearchState(query);
+    setResults(state.kind === 'results' ? state.results : []);
+    setUncovered(state.kind === 'uncovered');
+    setOpen(state.kind === 'results' || state.kind === 'uncovered');
     setFocused(-1);
   }, [query]);
 
@@ -141,7 +148,7 @@ export function CountrySearchBar() {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
         background: '#0d0d14', border: `1px solid ${open ? '#ff4d2e' : '#2a2a3e'}`,
-        borderRadius: open && results.length > 0 ? '12px 12px 0 0' : 12,
+        borderRadius: open ? '12px 12px 0 0' : 12,
         padding: '12px 16px', transition: 'border-color 0.2s',
       }}>
         <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🔍</span>
@@ -151,7 +158,7 @@ export function CountrySearchBar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => query.length >= 1 && results.length > 0 && setOpen(true)}
+          onFocus={() => (results.length > 0 || uncovered) && setOpen(true)}
           placeholder="Rechercher un pays... (ex: Congo, Thaïlande, Dubai...)"
           style={{
             flex: 1, background: 'transparent', border: 'none', outline: 'none',
@@ -185,26 +192,50 @@ export function CountrySearchBar() {
           borderRadius: '0 0 12px 12px', overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         }}>
-          {results.map((country, i) => (
-            <CountryResultItem
-              key={country.code}
-              country={country}
-              focused={focused === i}
-              onClick={() => navigate(country)}
-              onHover={() => setFocused(i)}
-            />
-          ))}
+          {uncovered ? (
+            /* État « hors couverture » (GOAL-037) : transforme l'absence de résultat
+               en choix produit assumé plutôt qu'un dropdown vide qui paraît cassé. */
+            <div role="status" style={{ padding: '16px 18px' }}>
+              <div style={{
+                fontSize: '0.88rem', color: '#e8e8e8', fontWeight: 600, marginBottom: 6,
+              }}>
+                Destination non couverte pour le moment
+              </div>
+              <div style={{
+                fontSize: '0.78rem', color: '#9ca3af', lineHeight: 1.5, marginBottom: 8,
+              }}>
+                Crisis Travel analyse actuellement une sélection de pays opportunistes,
+                émergents ou sous-évalués. Cette destination n&apos;est pas encore dans
+                notre périmètre.
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#6b7280', lineHeight: 1.5 }}>
+                Essayez un pays déjà analysé comme {COVERED_EXAMPLES}.
+              </div>
+            </div>
+          ) : (
+            <>
+              {results.map((country, i) => (
+                <CountryResultItem
+                  key={country.code}
+                  country={country}
+                  focused={focused === i}
+                  onClick={() => navigate(country)}
+                  onHover={() => setFocused(i)}
+                />
+              ))}
 
-          {/* Hint clavier */}
-          <div style={{
-            padding: '6px 16px', background: '#080810',
-            fontSize: '0.65rem', color: '#3f3f5a', fontFamily: 'var(--font-space-mono)',
-            display: 'flex', gap: 12,
-          }}>
-            <span>↑↓ naviguer</span>
-            <span>↵ sélectionner</span>
-            <span>Esc fermer</span>
-          </div>
+              {/* Hint clavier */}
+              <div style={{
+                padding: '6px 16px', background: '#080810',
+                fontSize: '0.65rem', color: '#3f3f5a', fontFamily: 'var(--font-space-mono)',
+                display: 'flex', gap: 12,
+              }}>
+                <span>↑↓ naviguer</span>
+                <span>↵ sélectionner</span>
+                <span>Esc fermer</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

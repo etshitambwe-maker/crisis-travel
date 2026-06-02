@@ -98,3 +98,30 @@ export function searchCountries(query: string): typeof TARGET_COUNTRIES[number][
     return matchesName || matchesAlias;
   }).slice(0, 6);
 }
+
+// Seuil de caract\u00e8res \u00e0 partir duquel on affiche le message \u00ab hors couverture \u00bb
+// quand AUCUN pays ne matche. Sous ce seuil, une recherche sans r\u00e9sultat reste
+// silencieuse (\u00e9vite de faire clignoter le message d\u00e8s la 1re lettre). GOAL-037.
+const UNCOVERED_MIN_CHARS = 2;
+
+export type SearchState =
+  | { kind: 'idle'; results: [] }
+  | { kind: 'results'; results: typeof TARGET_COUNTRIES[number][] }
+  | { kind: 'uncovered'; results: [] };
+
+/**
+ * D\u00e9cide ce que la barre de recherche doit afficher pour une requ\u00eate donn\u00e9e.
+ * Logique pure (testable sans DOM) extraite pour GOAL-037 :
+ *   - des r\u00e9sultats existent  \u2192 'results'
+ *   - 0 r\u00e9sultat & query \u2265 2  \u2192 'uncovered' (destination hors p\u00e9rim\u00e8tre Crisis Travel)
+ *   - sinon                    \u2192 'idle' (rien affich\u00e9)
+ * Ne touche NI le dataset NI la fonction de recherche : c'est uniquement la
+ * couche d'affichage qui distingue \u00ab pas encore assez tap\u00e9 \u00bb de \u00ab hors couverture \u00bb.
+ */
+export function getSearchState(query: string): SearchState {
+  const results = searchCountries(query);
+  if (results.length > 0) return { kind: 'results', results };
+  const trimmed = query.trim();
+  if (trimmed.length >= UNCOVERED_MIN_CHARS) return { kind: 'uncovered', results: [] };
+  return { kind: 'idle', results: [] };
+}

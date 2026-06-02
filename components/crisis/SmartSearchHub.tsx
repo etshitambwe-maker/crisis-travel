@@ -519,6 +519,10 @@ export function SmartSearchHub() {
             <p style={{ fontSize: '0.65rem', color: '#3f3f5a', marginTop: 6, textAlign: 'center' }}>
               Tape un pays, une ville ou un code — ex : &quot;Congo&quot;, &quot;Bali&quot;, &quot;TH&quot;
             </p>
+            <p style={{ fontSize: '0.6rem', color: '#3f3f5a', marginTop: 4, textAlign: 'center', lineHeight: 1.5 }}>
+              Pays analysés uniquement — Crisis Travel se concentre sur les destinations où le
+              contexte actuel peut créer une opportunité de voyage.
+            </p>
           </div>
         </div>
       )}
