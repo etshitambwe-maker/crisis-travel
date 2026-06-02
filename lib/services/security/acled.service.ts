@@ -88,7 +88,8 @@ export async function getACLEDScore(
         );
         return { count: events.length, fatalities: totalFatalities };
       },
-      21600
+      21600,
+      'ucdp',
     );
 
     if (fromCache) logger.api('UCDP', countryCode, 0, true);

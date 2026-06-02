@@ -58,7 +58,8 @@ export async function getNumbeoScore(
         logger.api('Numbeo', countryCode, Date.now() - t0, false);
         return res.data as { costOfLivingIndex: number; mealCheap?: number; hotelAvg?: number };
       },
-      86400
+      86400,
+      'numbeo',
     );
     logger.api('Numbeo', countryCode, 0, fromCache);
     const index = data.costOfLivingIndex ?? fallback.index;

@@ -36,7 +36,8 @@ export async function getReliefWebScore(
         const count = (res.data?.totalCount as number) ?? (res.data?.data?.length ?? 0);
         return { count };
       },
-      7200 // 2h de cache
+      7200, // 2h de cache
+      'reliefweb',
     );
     if (fromCache) logger.api('ReliefWeb', countryCode, 0, true);
     return {

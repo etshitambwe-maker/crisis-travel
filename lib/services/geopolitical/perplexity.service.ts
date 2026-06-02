@@ -68,7 +68,8 @@ export async function getPerplexityGeoScore(
         // Validation Zod — garantit la structure avant utilisation
         return PerplexitySchema.parse(parsed) as PerplexityGeoAnalysis;
       },
-      1800
+      1800,
+      'perplexity',
     );
     if (fromCache) logger.api('Perplexity/OpenRouter', countryCode, 0, true);
     return { data, source: 'live' };

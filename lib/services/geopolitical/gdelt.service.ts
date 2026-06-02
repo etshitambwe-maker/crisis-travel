@@ -66,7 +66,8 @@ export async function getGdeltScore(
 
         return { tone: avgTone, articles: totalArts };
       },
-      3600 // 1h
+      3600, // 1h
+      'gdelt',
     );
     if (fromCache) logger.api('GDELT', countryCode, 0, true);
 

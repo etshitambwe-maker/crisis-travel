@@ -30,7 +30,8 @@ export async function getWorldBankScore(
         logger.api('WorldBank', countryCode, Date.now() - t0, false);
         return values.map((v) => normalizeWorldBankIndicator(v));
       },
-      86400
+      86400,
+      'worldbank',
     );
     logger.api('WorldBank', countryCode, 0, fromCache);
     const avg = Math.round(data.reduce((a, b) => a + b, 0) / data.length);

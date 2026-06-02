@@ -58,7 +58,8 @@ export async function getTeleportScore(
           healthcareScore: get('healthcare'),
         };
       },
-      86400 // 24h
+      86400, // 24h
+      'teleport',
     );
     if (fromCache) logger.api('Teleport', countryCode, 0, true);
 

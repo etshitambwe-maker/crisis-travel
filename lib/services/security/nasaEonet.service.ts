@@ -71,7 +71,8 @@ export async function getNasaEonetScore(
 
         return { riskScore: Math.min(riskScore, 80), activeEvents: events.length, categories };
       },
-      7200 // 2h
+      7200, // 2h
+      'eonet',
     );
     if (fromCache) logger.api('NASA EONET', countryCode, 0, true);
 

@@ -38,7 +38,8 @@ export async function getFrankfurterScore(
         const historical = hist.data.rates[currency] as number;
         return { current, historical, variation: ((current - historical) / historical) * 100 };
       },
-      3600
+      3600,
+      'frankfurter',
     );
     logger.api('Frankfurter', countryCode, 0, fromCache);
     return {
