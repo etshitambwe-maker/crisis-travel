@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
 import { detectOpportunities } from '@/lib/claude/claude.service';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
+import { selectCandidates, CANDIDATE_CAP, type SelectMode } from '@/lib/utils/selectCandidates';
 import { checkRateLimit, getClientIdentifier } from '@/lib/middleware/rateLimit';
 import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
 import { getUser } from '@/lib/auth/supabase-server';
@@ -130,17 +131,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       countries = countries.filter((c) => !profile.excludedContinents!.includes(c.continent));
     }
 
-    // Shuffle pour varier les destinations analysées à chaque requête (Fisher-Yates)
-    for (let i = countries.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [countries[i], countries[j]] = [countries[j], countries[i]];
-    }
+    // Pré-sélection des candidats AVANT le scoring (GOAL-031) — évite le timeout 60s.
+    // Mode continent : on garde tous les pays du continent (cap null). Sinon, on ne
+    // score que les CANDIDATE_CAP meilleurs d'après STATIC_HINTS (proxy statique, sans
+    // appel réseau), triés selon l'axe du mode. Le scoring réel reste inchangé.
+    const selectMode: SelectMode = profile.mode === 'bunker' ? 'bunker'
+      : profile.mode === 'budget_crisis' ? 'budget_crisis' : 'standard';
+    countries = selectCandidates(countries, selectMode, profile.continent ? null : CANDIDATE_CAP);
 
-    // Analyser tous les pays si continent filtré, sinon batch de 6 sur tous
-    const MAX = profile.continent ? countries.length : countries.length;
-    const BATCH = profile.continent ? countries.length : 6;
+    // Batch de 6 pour limiter la concurrence sur les APIs externes
+    const BATCH = 6;
     const results = [];
-    for (let i = 0; i < Math.min(countries.length, MAX); i += BATCH) {
+    for (let i = 0; i < countries.length; i += BATCH) {
       const batch = countries.slice(i, i + BATCH);
       const settled = await Promise.allSettled(
         batch.map((c) => calculateCrisisScore(c, profile))
