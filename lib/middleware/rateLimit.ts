@@ -5,9 +5,12 @@ function createRateLimiter() {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     return null;
   }
+  // retry: false — un Upstash injoignable doit échouer immédiatement (le fail-open
+  // GOAL-030 laisse alors passer), sans accumuler plusieurs secondes de retries DNS.
   const redis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    retry: false,
   });
   return {
     // 10 analyses par heure par IP (visiteurs anonymes)

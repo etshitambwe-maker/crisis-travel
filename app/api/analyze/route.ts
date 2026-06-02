@@ -7,6 +7,7 @@ import { selectCandidates, CANDIDATE_CAP, type SelectMode } from '@/lib/utils/se
 import { checkRateLimit, getClientIdentifier } from '@/lib/middleware/rateLimit';
 import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
 import { getUser } from '@/lib/auth/supabase-server';
+import { resetCacheStats, getCacheStats } from '@/lib/cache/redis';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
 // Plafond technique : l'analyse cold-cache de tous les pays peut dépasser les
@@ -123,6 +124,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const body = await request.json();
     const { profile } = Schema.parse(body);
 
+    // Réinitialise les compteurs de cache pour cette requête (GOAL-033).
+    resetCacheStats();
+
     let countries = [...TARGET_COUNTRIES];
     // Filtre par continent unique (mode région)
     if (profile.continent) {
@@ -155,9 +159,19 @@ export async function POST(request: Request): Promise<NextResponse> {
         break;
       }
       const batch = countries.slice(i, i + BATCH);
+      const batchIndex = i / BATCH;
+      const tBatch = Date.now();
+      // Mesure par pays (GOAL-033, temporaire) : isole le coût réel d'un pays pour
+      // confirmer que le batch est parallèle (msBatch ≈ max(msCountry), pas la somme).
       const settled = await Promise.allSettled(
-        batch.map((c) => calculateCrisisScore(c, profile))
+        batch.map(async (c) => {
+          const tC = Date.now();
+          const r = await calculateCrisisScore(c, profile);
+          console.log('[API/analyze] country', JSON.stringify({ batchIndex, code: c.code, msCountry: Date.now() - tC }));
+          return r;
+        })
       );
+      console.log('[API/analyze] batch', JSON.stringify({ batchIndex, size: batch.length, msBatch: Date.now() - tBatch }));
       for (const r of settled) {
         if (r.status === 'fulfilled') results.push(r.value);
       }
@@ -192,18 +206,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     }));
 
     const msTotal = Date.now() - t0;
-    // Logs timing structurés temporaires (GOAL-032 / option F) — à retirer une fois
-    // le goulot confirmé en prod. Permet de voir le vrai coût de chaque étape.
+    const cache = getCacheStats();
+    // Logs timing structurés temporaires (GOAL-032/033 / option E+F) — à retirer une
+    // fois le goulot confirmé en prod. `cache` révèle si Upstash sert vraiment (hits>0)
+    // ou s'il est injoignable (errors>0 → cold-cache permanent, racine de la lenteur).
     console.log('[API/analyze] timing', JSON.stringify({
       mode: profile.mode, selected: countries.length, scored: results.length,
       msScoring, msOpportunities, msTotal, partial,
+      cacheHits: cache.hits, cacheMisses: cache.misses, cacheErrors: cache.errors, cacheHitRate: cache.hitRate,
     }));
 
     const response: AnalyzeResponse = {
       results: sorted,
       topDestinations,
       opportunities,
-      meta: { analyzedCountries: results.length, duration: msTotal, cacheHitRate: 0, partial },
+      meta: { analyzedCountries: results.length, duration: msTotal, cacheHitRate: cache.hitRate, partial },
     };
     return NextResponse.json(response, {
       headers: {

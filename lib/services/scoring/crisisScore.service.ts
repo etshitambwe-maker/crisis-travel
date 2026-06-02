@@ -96,15 +96,22 @@ async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
   });
 }
 
-async function calcBudget(c: CountryInfo, _profile: UserProfile): Promise<SubScore> {
-  const [r_fx, r_numbeo, r_teleport] = await Promise.allSettled([
-    getFrankfurterScore(c.code),
-    getNumbeoScore(c.code),
-    getTeleportScore(c.code),
+type TeleportSR = ServiceResult<{ score: number; costIndex: number; safetyScore: number; healthcareScore: number }>;
+
+async function calcBudget(
+  c: CountryInfo,
+  _profile: UserProfile,
+  teleportPromise: Promise<TeleportSR>,
+): Promise<SubScore> {
+  // Teleport est récupéré UNE seule fois par pays (GOAL-033) et partagé entre budget
+  // et praticité via la même promesse — évite un second appel réseau identique.
+  const [r_fx, r_numbeo, teleport] = await Promise.all([
+    getFrankfurterScore(c.code).catch(() => ({ data: { score: 50, currency: '?', variation: 0 }, source: 'fallback' as const })),
+    getNumbeoScore(c.code).catch(() => ({ data: { score: 50, index: 55, mealCheap: 8, hotelAvg: 60 }, source: 'fallback' as const })),
+    teleportPromise,
   ]);
-  const fx       = resolveSettled(r_fx,       { score: 50, currency: '?', variation: 0 });
-  const numbeo   = resolveSettled(r_numbeo,   { score: 50, index: 55, mealCheap: 8, hotelAvg: 60 });
-  const teleport = resolveSettled(r_teleport, { score: 50, costIndex: 55, safetyScore: 50, healthcareScore: 50 });
+  const fx       = r_fx;
+  const numbeo   = r_numbeo;
 
   // Frankfurter 30% · Numbeo statique 20% · Teleport 30% · base 20%
   const costScore = teleport.source === 'live'
@@ -122,36 +129,44 @@ async function calcBudget(c: CountryInfo, _profile: UserProfile): Promise<SubSco
   });
 }
 
-async function calcPracticality(c: CountryInfo): Promise<SubScore> {
-  // Utilise visa + connexions aériennes en base, enrichi par Teleport si disponible
+async function calcPracticality(
+  c: CountryInfo,
+  teleportPromise: Promise<TeleportSR>,
+): Promise<SubScore> {
+  // Utilise visa + connexions aériennes en base, enrichi par Teleport si disponible.
+  // Teleport est partagé via la même promesse que calcBudget (récupéré une seule fois
+  // par pays — GOAL-033). La formule et la pondération sont inchangées.
   const baseScore = calculatePracticalityScore(c.code);
+  const teleportResult = await teleportPromise;
 
-  try {
-    const r_teleport = await getTeleportScore(c.code);
-    if (r_teleport.source === 'live') {
-      // Combine visa/vols (60%) + santé/sécurité Teleport (40%)
-      const teleportContrib = r_teleport.data.healthcareScore * 0.25 + r_teleport.data.safetyScore * 0.15;
-      const combined = baseScore.value * 0.60 + teleportContrib;
-      return buildSubScore(combined, ['live'], {
-        ...baseScore.details,
-        healthcareScore: r_teleport.data.healthcareScore,
-        safetyScore:     r_teleport.data.safetyScore,
-        teleportCost:    r_teleport.data.costIndex,
-      });
-    }
-  } catch {
-    // Teleport indisponible — on utilise uniquement visa + vols
+  if (teleportResult.source === 'live') {
+    // Combine visa/vols (60%) + santé/sécurité Teleport (40%)
+    const teleportContrib = teleportResult.data.healthcareScore * 0.25 + teleportResult.data.safetyScore * 0.15;
+    const combined = baseScore.value * 0.60 + teleportContrib;
+    return buildSubScore(combined, ['live'], {
+      ...baseScore.details,
+      healthcareScore: teleportResult.data.healthcareScore,
+      safetyScore:     teleportResult.data.safetyScore,
+      teleportCost:    teleportResult.data.costIndex,
+    });
   }
 
   return baseScore;
 }
 
 export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile): Promise<CrisisScore> {
+  // Teleport récupéré UNE fois par pays (GOAL-033) : la promesse est partagée entre
+  // calcBudget et calcPracticality (un seul appel réseau). Les 4 sous-scores restent
+  // calculés en parallèle — aucune sérialisation introduite.
+  const teleportPromise: Promise<TeleportSR> = getTeleportScore(c.code).catch(
+    () => ({ data: { score: 50, costIndex: 55, safetyScore: 50, healthcareScore: 50 }, source: 'fallback' as const }),
+  );
+
   const [security, geopolitical, budget, practicality] = await Promise.all([
     calcSecurity(c),
     calcGeopolitical(c),
-    calcBudget(c, profile),
-    calcPracticality(c),
+    calcBudget(c, profile, teleportPromise),
+    calcPracticality(c, teleportPromise),
   ]);
 
   const total = clamp(Math.round(
