@@ -3,7 +3,13 @@ import { withCache, buildCacheKey } from '@/lib/cache/redis';
 import { logger } from '@/lib/utils/logger';
 import type { CrisisScore, UserProfile } from '@/types/crisis.types';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// maxRetries: 0 — sans ça, le SDK Anthropic réessaie (jusqu'à 2x) sur timeout/erreur,
+// ce qui transformait le timeout de 8s en ~25s d'attente sur le chemin critique
+// /api/analyze (GOAL-034). Un échec doit être immédiat ; les fallbacks gèrent la suite.
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+
+/** Budget dur (ms) pour detectOpportunities — au-delà, on renvoie [] et on rend la main. */
+const OPPORTUNITIES_HARD_TIMEOUT_MS = 8000;
 
 function buildFallbackNarrative(score: CrisisScore): string {
   const status = score.status === 'ideal' ? 'idéale' :
@@ -77,41 +83,61 @@ Termine par : **Risques résiduels :** [3 risques concrets, une ligne chacun]`,
   }
 }
 
-export async function detectOpportunities(
-  scores: CrisisScore[],
-  budget: number
-): Promise<Array<{ countryCode: string; type: string; explanation: string; estimatedSaving: number }>> {
-  if (!process.env.ANTHROPIC_API_KEY) return [];
+type Opportunity = { countryCode: string; type: string; explanation: string; estimatedSaving: number };
 
-  try {
-    const candidates = scores.filter((s) => s.total >= 55).slice(0, 12);
-    const t0 = Date.now();
-    // Borne dure : Claude ne doit jamais faire déborder /api/analyze (GOAL-032).
-    // Au-delà de 8s, on abandonne les opportunités (fallback []) — les destinations
-    // restent affichées, seul le bloc « opportunités » est omis.
-    const msg = await client.messages.create(
-      {
-        model: 'claude-sonnet-4-6',
-        max_tokens: 500,
-        messages: [
-          {
-            role: 'user',
-            content: `Budget voyageur : ${budget}€. Pays avec bon CrisisScore :
+async function fetchOpportunities(scores: CrisisScore[], budget: number): Promise<Opportunity[]> {
+  const candidates = scores.filter((s) => s.total >= 55).slice(0, 12);
+  const t0 = Date.now();
+  const msg = await client.messages.create(
+    {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 500,
+      messages: [
+        {
+          role: 'user',
+          content: `Budget voyageur : ${budget}€. Pays avec bon CrisisScore :
 ${candidates.map((s) => `${s.country} (${s.countryCode}): score=${s.total}, budget=${s.budget.value}, change=${s.budget.details.currencyVariation ?? 0}%`).join('\n')}
 
 Identifie 3 pays avec une opportunité économique exceptionnelle pour un Européen.
 Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
 [{"countryCode":"XX","type":"currency|cheap_flights|jackpot","explanation":"<1 phrase max>","estimatedSaving":<euros entier>}]`,
-          },
-        ],
-      },
-      { timeout: 8000 }
-    );
-    logger.api('Claude-Opportunities', 'global', Date.now() - t0, false);
-    const text = (msg.content[0] as { text: string }).text.trim();
-    return JSON.parse(text);
-  } catch (error) {
-    logger.error('Claude-Opportunities', error);
-    return [];
+        },
+      ],
+    },
+    { timeout: OPPORTUNITIES_HARD_TIMEOUT_MS }
+  );
+  logger.api('Claude-Opportunities', 'global', Date.now() - t0, false);
+  const text = (msg.content[0] as { text: string }).text.trim();
+  return JSON.parse(text);
+}
+
+export async function detectOpportunities(
+  scores: CrisisScore[],
+  budget: number
+): Promise<Opportunity[]> {
+  if (!process.env.ANTHROPIC_API_KEY) return [];
+
+  // Double verrou (GOAL-034) : maxRetries:0 sur le client + Promise.race hard ici.
+  // Même si le SDK déborde son propre timeout, /api/analyze récupère la main au plus
+  // tard à OPPORTUNITIES_HARD_TIMEOUT_MS et renvoie [] — les destinations restent
+  // affichées, seul le bloc « opportunités » est omis.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const hardTimeout = new Promise<Opportunity[]>((resolve) => {
+    timer = setTimeout(() => {
+      logger.error('Claude-Opportunities', new Error(`hard timeout ${OPPORTUNITIES_HARD_TIMEOUT_MS}ms — fallback []`));
+      resolve([]);
+    }, OPPORTUNITIES_HARD_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      fetchOpportunities(scores, budget).catch((error) => {
+        logger.error('Claude-Opportunities', error);
+        return [] as Opportunity[];
+      }),
+      hardTimeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
