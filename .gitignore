@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.example ne contient que des placeholders (aucun secret) — versionné pour l'onboarding/déploiement
+!.env.example
 
 # vercel
 .vercel

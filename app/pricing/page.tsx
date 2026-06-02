@@ -293,7 +293,7 @@ export default function PricingPage() {
             },
             {
               q: 'Puis-je utiliser Crisis Travel pour mon entreprise ?',
-              a: 'Les plans individuels couvrent un usage personnel et professionnel limité. Pour un usage équipe (DRH, voyages d\'affaires, ONG), contactez-nous pour un plan B2B à 299€/mois.',
+              a: 'Les plans individuels couvrent un usage personnel et professionnel limité. Pour un usage équipe (DRH, voyages d\'affaires, ONG), une offre B2B / accès API est en préparation — contactez-nous pour en discuter.',
             },
           ].map((item, i) => (
             <div key={i} style={{

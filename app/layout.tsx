@@ -15,10 +15,28 @@ const dmSans = DM_Sans({
   variable: '--font-dm-sans',
 });
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crisis-travel.app';
+const APP_TITLE = 'Crisis Travel — Voyage intelligent en temps de crise';
+const APP_DESCRIPTION =
+  "Crisis Travel analyse une sélection de destinations opportunistes, émergentes ou sous-évaluées en tenant compte du contexte géopolitique, sécuritaire et économique mondial. Propulsé par l'IA.";
+
 export const metadata: Metadata = {
-  title: 'Crisis Travel — Voyage intelligent en temps de crise',
-  description:
-    "Trouvez les meilleures destinations de voyage en tenant compte du contexte géopolitique et économique mondial en temps réel. Propulsé par l'IA.",
+  metadataBase: new URL(APP_URL),
+  title: APP_TITLE,
+  description: APP_DESCRIPTION,
+  openGraph: {
+    type: 'website',
+    siteName: 'Crisis Travel',
+    title: APP_TITLE,
+    description: APP_DESCRIPTION,
+    url: APP_URL,
+    locale: 'fr_FR',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: APP_TITLE,
+    description: APP_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
