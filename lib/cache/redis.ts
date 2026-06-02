@@ -27,8 +27,34 @@ let _errors = 0;
 // à chaque requête via resetCacheStats().
 let _circuitOpen = false;
 
+// ── Instrumentation par provider (GOAL-036) ──────────────────────────────────
+// Registre par-requête keyé par tag. Sonde non-throwing : un bump ne fait
+// qu'incrémenter un compteur mémoire synchrone, ne peut pas casser une requête.
+interface TagStats {
+  getAttempts: number; getHits: number; getMisses: number; getErrors: number;
+  setAttempts: number; setSuccess: number; setErrors: number;
+  fetcherThrew: number; msRedisGet: number; msRedisSet: number;
+  sampleKey: string | null;
+}
+let _byTag: Record<string, TagStats> = {};
+
+function tagBucket(tag: string, key?: string): TagStats {
+  let b = _byTag[tag];
+  if (!b) {
+    b = {
+      getAttempts: 0, getHits: 0, getMisses: 0, getErrors: 0,
+      setAttempts: 0, setSuccess: 0, setErrors: 0,
+      fetcherThrew: 0, msRedisGet: 0, msRedisSet: 0, sampleKey: null,
+    };
+    _byTag[tag] = b;
+  }
+  if (b.sampleKey === null && key) b.sampleKey = key; // première clé vue
+  return b;
+}
+
 export function resetCacheStats(): void {
   _hits = 0; _misses = 0; _errors = 0; _circuitOpen = false;
+  _byTag = {};
 }
 
 export function getCacheStats(): { hits: number; misses: number; errors: number; hitRate: number } {
@@ -41,29 +67,45 @@ export function getCacheStats(): { hits: number; misses: number; errors: number;
   };
 }
 
-export async function getFromCache<T>(key: string): Promise<T | null> {
+export function getCacheStatsByTag(): Record<string, TagStats> {
+  return _byTag;
+}
+
+export async function getFromCache<T>(key: string, tag = 'unknown'): Promise<T | null> {
+  const b = tagBucket(tag, key);
+  b.getAttempts++;
   // Circuit ouvert : Redis a déjà échoué cette requête → ne pas retenter le réseau.
-  if (_circuitOpen) { _errors++; return null; }
+  if (_circuitOpen) { _errors++; b.getErrors++; return null; }
+  const t0 = Date.now();
   try {
     const v = await redis.get<T>(key);
-    if (v !== null) _hits++; else _misses++;
+    b.msRedisGet += Date.now() - t0;
+    if (v !== null) { _hits++; b.getHits++; } else { _misses++; b.getMisses++; }
     return v;
   } catch {
     // Redis injoignable — compté comme ERREUR (pas un miss), traité comme cache absent.
     // On ouvre le circuit : les lookups suivants de cette requête seront instantanés.
-    _errors++;
+    b.msRedisGet += Date.now() - t0;
+    _errors++; b.getErrors++;
     _circuitOpen = true;
     return null;
   }
 }
 
-export async function setInCache<T>(key: string, data: T, ttl: CacheTTL): Promise<void> {
+export async function setInCache<T>(key: string, data: T, ttl: CacheTTL, tag = 'unknown'): Promise<void> {
+  const b = tagBucket(tag, key);
   // Circuit ouvert : inutile (et coûteux) d'essayer d'écrire sur un Redis injoignable.
   if (_circuitOpen) return;
+  b.setAttempts++;
+  const t0 = Date.now();
   try {
     await redis.setex(key, ttl, JSON.stringify(data));
+    b.msRedisSet += Date.now() - t0;
+    b.setSuccess++;
   } catch {
     // Cache non critique — on continue sans, et on ouvre le circuit pour la suite.
+    b.msRedisSet += Date.now() - t0;
+    b.setErrors++;
     _circuitOpen = true;
   }
 }
@@ -75,11 +117,18 @@ export function buildCacheKey(service: string, ...parts: string[]): string {
 export async function withCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttl: CacheTTL
+  ttl: CacheTTL,
+  tag = 'unknown'
 ): Promise<{ data: T; fromCache: boolean }> {
-  const cached = await getFromCache<T>(key);
+  const cached = await getFromCache<T>(key, tag);
   if (cached !== null) return { data: cached, fromCache: true };
-  const data = await fetcher();
-  await setInCache(key, data, ttl);
+  let data: T;
+  try {
+    data = await fetcher();
+  } catch (e) {
+    tagBucket(tag, key).fetcherThrew++; // compteur synchrone, ne throw pas
+    throw e;                            // re-throw immédiat, même objet
+  }
+  await setInCache(key, data, ttl, tag);
   return { data, fromCache: false };
 }

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Pilote le comportement de redis.get() : valeur (hit), null (miss), ou throw (error).
+// Pilote redis.get() : valeur (hit), null (miss), ou throw (error).
 let getImpl: (key: string) => Promise<unknown>;
+// Pilote redis.setex() : résout (succès) ou throw (erreur d'écriture).
+let setexImpl: (key: string, ttl: number, val: string) => Promise<unknown> = () => Promise.resolve();
 
 vi.mock('@upstash/redis', () => ({
   Redis: class {
@@ -9,8 +11,8 @@ vi.mock('@upstash/redis', () => ({
     get(key: string) {
       return getImpl(key);
     }
-    setex() {
-      return Promise.resolve();
+    setex(key: string, ttl: number, val: string) {
+      return setexImpl(key, ttl, val);
     }
   },
 }));
@@ -19,6 +21,7 @@ beforeEach(() => {
   vi.resetModules();
   process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
   process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token';
+  setexImpl = () => Promise.resolve(); // reset par défaut
 });
 
 async function load() {
@@ -109,5 +112,96 @@ describe('cache stats (GOAL-033)', () => {
     await mod.getFromCache('x'); // ouvre le circuit
     // setInCache après circuit ouvert : retour immédiat, pas de throw
     await expect(mod.setInCache('x', { v: 1 }, 1800)).resolves.toBeUndefined();
+  });
+});
+
+describe('cache stats par provider (GOAL-036)', () => {
+  it('getCacheStatsByTag ségrège hits/misses par tag', async () => {
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve({ ok: true }); await getFromCache('ct:gdelt:PT', 'gdelt');
+    getImpl = () => Promise.resolve(null);         await getFromCache('ct:numbeo:PT', 'numbeo');
+    const byTag = getCacheStatsByTag();
+    expect(byTag.gdelt.getHits).toBe(1);
+    expect(byTag.gdelt.getMisses).toBe(0);
+    expect(byTag.numbeo.getMisses).toBe(1);
+    expect(byTag.numbeo.getHits).toBe(0);
+  });
+
+  it('un appel sans tag tombe dans le bucket "unknown"', async () => {
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve(null); await getFromCache('ct:x:1');
+    expect(getCacheStatsByTag().unknown.getMisses).toBe(1);
+  });
+
+  it('setInCache succès incrémente setAttempts ET setSuccess pour le tag', async () => {
+    const { setInCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    await setInCache('ct:gdelt:PT', { v: 1 }, 3600, 'gdelt');
+    const t = getCacheStatsByTag().gdelt;
+    expect(t.setAttempts).toBe(1);
+    expect(t.setSuccess).toBe(1);
+    expect(t.setErrors).toBe(0);
+  });
+
+  it('setInCache qui échoue incrémente setErrors et NE throw PAS (H1)', async () => {
+    setexImpl = () => Promise.reject(new Error('write failed'));
+    const { setInCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    await expect(setInCache('ct:gdelt:PT', { v: 1 }, 3600, 'gdelt')).resolves.toBeUndefined();
+    const t = getCacheStatsByTag().gdelt;
+    expect(t.setAttempts).toBe(1);
+    expect(t.setSuccess).toBe(0);
+    expect(t.setErrors).toBe(1);
+  });
+
+  it('withCache : fetcher qui throw incrémente fetcherThrew ET re-throw la MÊME erreur (H2)', async () => {
+    const { withCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve(null); // cache miss → on appelle le fetcher
+    const boom = new Error('provider timeout');
+    await expect(
+      withCache('ct:perplexity:PT', () => Promise.reject(boom), 1800, 'perplexity')
+    ).rejects.toBe(boom); // MÊME objet re-thrown
+    const t = getCacheStatsByTag().perplexity;
+    expect(t.fetcherThrew).toBe(1);
+    expect(t.setAttempts).toBe(0); // pas de set quand le fetcher throw
+  });
+
+  it('withCache : fetcher qui réussit ne touche pas fetcherThrew et fait un set', async () => {
+    const { withCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve(null);
+    const r = await withCache('ct:gdelt:PT', () => Promise.resolve({ score: 1 }), 3600, 'gdelt');
+    expect(r.fromCache).toBe(false);
+    const t = getCacheStatsByTag().gdelt;
+    expect(t.fetcherThrew).toBe(0);
+    expect(t.setSuccess).toBe(1);
+  });
+
+  it('resetCacheStats vide aussi le registre par tag', async () => {
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    getImpl = () => Promise.resolve({ ok: true }); await getFromCache('ct:gdelt:PT', 'gdelt');
+    resetCacheStats();
+    expect(getCacheStatsByTag()).toEqual({});
+  });
+
+  it('getCacheStats() global reste inchangé (non-régression)', async () => {
+    const { getFromCache, getCacheStats, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve({ ok: true }); await getFromCache('ct:gdelt:PT', 'gdelt');
+    const s = getCacheStats();
+    expect(s.hits).toBe(1);
+    expect(s.hitRate).toBe(1);
+  });
+
+  it('échantillon de clé : première clé vue conservée par tag', async () => {
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve(null);
+    await getFromCache('ct:gdelt:PT', 'gdelt');
+    await getFromCache('ct:gdelt:GE', 'gdelt');
+    expect(getCacheStatsByTag().gdelt.sampleKey).toBe('ct:gdelt:PT'); // la PREMIÈRE
   });
 });
