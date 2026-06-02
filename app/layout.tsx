@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Space_Mono, DM_Sans } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthTrigger } from '@/components/auth/AuthTrigger';
+import { TravelpayoutsDriveScript } from '@/components/TravelpayoutsDriveScript';
 import './globals.css';
 
 const spaceMono = Space_Mono({
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <AuthTrigger />
         </Suspense>
+        <TravelpayoutsDriveScript />
       </body>
     </html>
   );
