@@ -56,7 +56,7 @@ export async function getPerplexityGeoScore(
               'HTTP-Referer': 'https://crisis-travel.app',
               'X-Title': 'Crisis Travel',
             },
-            timeout: 8000,
+            timeout: 6000,
           }
         );
         logger.api('Perplexity/OpenRouter', countryCode, Date.now() - t0, false);

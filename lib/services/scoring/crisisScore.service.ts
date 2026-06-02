@@ -76,7 +76,7 @@ async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
     source: 'fallback',
   };
   const [r_perp, r_wb, r_gdelt] = await Promise.allSettled([
-    withTimeout(getPerplexityGeoScore(c.code, c.name), 9000, PERP_FALLBACK),
+    withTimeout(getPerplexityGeoScore(c.code, c.name), 6500, PERP_FALLBACK),
     getWorldBankScore(c.code, c.iso3),
     getGdeltScore(c.code),
   ]);

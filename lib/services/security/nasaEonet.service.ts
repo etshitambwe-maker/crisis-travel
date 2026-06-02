@@ -46,7 +46,7 @@ export async function getNasaEonetScore(
             bbox: bbox.join(','),
             limit: 20,
           },
-          timeout: 6000,
+          timeout: 5000,
         });
         logger.api('NASA EONET', countryCode, Date.now() - t0, false);
 

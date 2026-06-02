@@ -50,7 +50,7 @@ export async function getGdeltScore(
         );
         const res = await axios.get(
           `https://api.gdeltproject.org/api/v2/doc/doc?query=${query}&mode=tonechart&timespan=7d&format=json`,
-          { timeout: 8000 }
+          { timeout: 6000 }
         );
         logger.api('GDELT', countryCode, Date.now() - t0, false);
 

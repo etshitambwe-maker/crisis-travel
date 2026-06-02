@@ -3,10 +3,8 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { CountrySearchBar } from './CountrySearchBar';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
-import { getFlagUrl, getCountryColors } from '@/lib/utils/countryPhoto';
 import { getHint } from '@/lib/utils/staticHints';
 import { acquireAnalyzeLock, releaseAnalyzeLock } from '@/lib/utils/analyzeGuard';
-import type { CrisisScore } from '@/types/crisis.types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Tab = 'direct' | 'region' | 'discovery';
@@ -354,92 +352,6 @@ function OptionGrid<T extends string>({
   );
 }
 
-// ── Surprise Proposal Cards ───────────────────────────────────────────────────
-type Proposal = { score: CrisisScore; reason: string };
-
-function ProposalCard({ proposal, onReset: _onReset }: { proposal: Proposal; onReset: () => void }) {
-  const router = useRouter();
-  const { score, reason } = proposal;
-  const flagUrl = getFlagUrl(score.countryCode);
-  const [color1, color2] = getCountryColors(score.countryCode);
-  const scoreColor = score.total >= 80 ? '#3ddc97' : score.total >= 60 ? '#ffb224' : score.total >= 40 ? '#ff8c42' : '#ff3b2f';
-
-  return (
-    <div
-      onClick={() => router.push(`/destination/${score.countryCode}`)}
-      style={{
-        position: 'relative', borderRadius: 14, overflow: 'hidden',
-        border: '1px solid #1e1e2e', cursor: 'pointer',
-        transition: 'transform 0.2s, border-color 0.2s',
-        background: '#0d0d14',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = '#3f3f5a'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#1e1e2e'; }}
-    >
-      {/* Hero drapeau */}
-      <div style={{
-        position: 'relative', height: 100,
-        background: `linear-gradient(135deg, ${color1}50 0%, ${color2}30 100%), #0d0d18`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <img src={flagUrl} alt={score.country} loading="lazy" style={{ height: 52, width: 'auto', maxWidth: 90, objectFit: 'contain', filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))', borderRadius: 2 }} />
-        {/* Score badge */}
-        <div style={{
-          position: 'absolute', top: 8, right: 8,
-          background: scoreColor, color: '#07070c',
-          fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem', fontWeight: 700,
-          padding: '3px 7px', borderRadius: 4,
-        }}>
-          {score.total}/100
-        </div>
-        {/* Country name */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          padding: '16px 10px 6px',
-          background: 'linear-gradient(0deg, rgba(7,7,12,0.9) 0%, transparent 100%)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-        }}>
-          <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{score.country}</div>
-          <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.55rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em' }}>
-            {score.countryCode}
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: '10px 12px 12px' }}>
-        {/* Sub-scores */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4, marginBottom: 10 }}>
-          {[
-            { l: 'SÉC', v: score.security.value },
-            { l: 'GEO', v: score.geopolitical.value },
-            { l: 'BUD', v: score.budget.value },
-            { l: 'PRAT', v: score.practicality.value },
-          ].map((c) => {
-            const cc = c.v >= 80 ? '#3ddc97' : c.v >= 60 ? '#ffb224' : c.v >= 40 ? '#ff8c42' : '#ff3b2f';
-            return (
-              <div key={c.l} style={{ textAlign: 'center', background: 'rgba(10,10,18,0.6)', border: '1px solid #1e1e2e', borderRadius: 5, padding: '5px 4px' }}>
-                <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.5rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 2 }}>{c.l}</div>
-                <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.72rem', fontWeight: 700, color: cc }}>{c.v}</div>
-              </div>
-            );
-          })}
-        </div>
-        {/* Reason */}
-        <p style={{ fontSize: '0.75rem', color: '#9898b0', lineHeight: 1.45, margin: 0 }}>{reason}</p>
-        {/* CTA */}
-        <div style={{
-          marginTop: 10, paddingTop: 8, borderTop: '1px solid #1e1e2e',
-          fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem',
-          color: '#ff4d2e', letterSpacing: '0.1em', textAlign: 'right',
-        }}>
-          VOIR LA FICHE COMPLÈTE →
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DiscoveryTab({ airport, dateDepart, dateRetour }: {
   airport: string;
   dateDepart: string;
@@ -447,16 +359,18 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
 }) {
   const router = useRouter();
   const [state, setState] = useState<DiscoveryState>({ priority: null, duration: null, budget: null, travelType: null });
-  const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [loading, setLoading] = useState(false);
   const set = (key: ChoiceKey) => (val: string) => {
     setState((s) => ({ ...s, [key]: val as never }));
-    setProposals(null); // reset proposals on change
   };
   const completed = Object.values(state).filter(Boolean).length;
   const total = 4;
 
-  async function handleGenerate() {
+  // GOAL-032 : suppression du double appel /api/analyze. DiscoveryTab ne lance PLUS
+  // sa propre analyse (qui était ensuite refaite par /results). On navigue directement
+  // vers /results — la SEULE page qui exécute l'analyse complète. Le verrou + loading
+  // restent pour le feedback de clic et empêcher les doubles navigations.
+  function handleGenerate() {
     if (!acquireAnalyzeLock()) return;
     const b = BUDGET_MAP[state.budget ?? 'moyen'];
     const d = DURATION_MAP[state.duration ?? 'semaine'];
@@ -465,65 +379,9 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
     const priority = state.priority ?? 'tout';
 
     setLoading(true);
-    setProposals(null);
-
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: {
-          departureCountry: 'FR', budget: b, duration: d,
-          travelType: tt, mode, priority,
-          sortBy: mode === 'bunker' ? 'security' : mode === 'budget_crisis' ? 'budget' : 'score',
-          departureDate: dateDepart || undefined,
-          returnDate: dateRetour || undefined,
-        }}),
-      });
-      const data = await res.json();
-      const top3: CrisisScore[] = data.topDestinations?.slice(0, 3) ?? data.results?.slice(0, 3) ?? [];
-
-      const reasonMap: Record<string, string[]> = {
-        securite: [
-          `Score sécurité de ${top3[0]?.security.value ?? '—'}/100 — l'une des destinations les plus sûres selon le MEAE et le State Dept.`,
-          `Niveau d'alerte minimal, infrastructures stables, idéal pour voyager l'esprit tranquille.`,
-          `Signalée comme destination sûre par plusieurs sources officielles avec très peu d'incidents.`,
-        ],
-        budget: [
-          `Coût de vie très favorable pour les Européens, votre budget ira beaucoup plus loin ici.`,
-          `Excellent rapport qualité/prix : hébergement, repas et transports restent très accessibles.`,
-          `Devises locales favorables + prix bas = parfait pour voyager serré sans sacrifier le confort.`,
-        ],
-        decouverte: [
-          `Destination authentique, peu fréquentée par les touristes français, expériences uniques garanties.`,
-          `Hors des sentiers battus, culture riche et contacts locaux authentiques.`,
-          `Destination encore préservée du tourisme de masse, une vraie découverte.`,
-        ],
-        tout: [
-          `Meilleur équilibre sécurité/budget/expérience parmi les 24 destinations analysées.`,
-          `Score global solide sur tous les critères — le choix le plus polyvalent selon votre profil.`,
-          `Recommandée pour son équilibre optimal : sûre, abordable et riche en expériences.`,
-        ],
-      };
-      const reasons = reasonMap[priority] ?? reasonMap.tout;
-
-      setProposals(top3.map((s, i) => ({ score: s, reason: reasons[i] ?? reasons[0] })));
-    } catch {
-      // fallback : rediriger vers results
-      router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
-      setTimeout(releaseAnalyzeLock, 3000);
-    } finally {
-      setLoading(false);
-      releaseAnalyzeLock();
-    }
-  }
-
-  function handleSeeAll() {
-    const b = BUDGET_MAP[state.budget ?? 'moyen'];
-    const d = DURATION_MAP[state.duration ?? 'semaine'];
-    const tt = state.travelType ?? 'solo';
-    const mode = state.priority === 'securite' ? 'bunker' : state.priority === 'budget' ? 'budget_crisis' : 'standard';
-    const priority = state.priority ?? 'tout';
     router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+    // Navigation en cours ; le verrou est relâché après une fenêtre (le composant sera démonté).
+    setTimeout(releaseAnalyzeLock, 3000);
   }
 
   return (
@@ -562,38 +420,8 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
           boxShadow: completed >= 2 ? '0 4px 20px rgba(255,77,46,0.3)' : 'none',
         }}
       >
-        {loading ? '⏳ ANALYSE EN COURS...' : completed >= 4 ? '✨ SURPRENDS-MOI →' : completed >= 2 ? '⚡ VOIR MES PROPOSITIONS →' : 'Réponds à au moins 2 questions'}
+        {loading ? '⏳ ANALYSE EN COURS...' : completed >= 4 ? '✨ SURPRENDS-MOI →' : completed >= 2 ? '⚡ VOIR MES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
       </button>
-
-      {/* Proposals */}
-      {proposals && proposals.length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{
-            fontFamily: 'var(--font-space-mono)', fontSize: '0.62rem', color: '#3f3f5a',
-            letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <span style={{ width: 6, height: 6, background: '#3ddc97', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 6px #3ddc97' }} />
-            3 PROPOSITIONS POUR TOI
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {proposals.map((p) => (
-              <ProposalCard key={p.score.countryCode} proposal={p} onReset={() => setProposals(null)} />
-            ))}
-          </div>
-          <button
-            onClick={handleSeeAll}
-            style={{
-              width: '100%', marginTop: 12, padding: '10px', borderRadius: 8, cursor: 'pointer',
-              background: 'transparent', border: '1px solid #2e2e45',
-              color: '#6b7280', fontFamily: 'var(--font-space-mono)',
-              fontSize: '0.62rem', letterSpacing: '0.1em',
-            }}
-          >
-            VOIR TOUTES LES DESTINATIONS →
-          </button>
-        </div>
-      )}
     </div>
   );
 }

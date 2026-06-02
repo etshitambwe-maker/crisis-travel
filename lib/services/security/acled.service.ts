@@ -72,7 +72,7 @@ export async function getACLEDScore(
 
         const res = await axios.get('https://ucdpapi.pcr.uu.se/api/gedevents/23.1', {
           params: { pagesize: 200, Country: countryName, StartDate: `${year}-01-01`, EndDate: today },
-          timeout: 8000,
+          timeout: 6000,
         });
 
         logger.api('UCDP', countryCode, Date.now() - t0, false);

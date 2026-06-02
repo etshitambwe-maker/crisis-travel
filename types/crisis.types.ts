@@ -51,6 +51,8 @@ export interface AnalyzeResponse {
     analyzedCountries: number;
     duration: number;
     cacheHitRate: number;
+    /** true si le scoring a été interrompu par le budget de temps (GOAL-032) : résultats partiels mais exploitables. */
+    partial?: boolean;
   };
 }
 

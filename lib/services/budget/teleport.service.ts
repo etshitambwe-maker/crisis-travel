@@ -42,7 +42,7 @@ export async function getTeleportScore(
         const t0 = Date.now();
         const res = await axios.get(
           `https://api.teleport.org/api/urban_areas/slug:${slug}/scores/`,
-          { timeout: 6000, headers: { Accept: 'application/vnd.teleport.v1+json' } }
+          { timeout: 5000, headers: { Accept: 'application/vnd.teleport.v1+json' } }
         );
         logger.api('Teleport', countryCode, Date.now() - t0, false);
 

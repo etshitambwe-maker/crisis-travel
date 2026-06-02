@@ -9,7 +9,7 @@ const INDICATORS = ['PV.EST', 'RL.EST', 'GE.EST'] as const;
 async function fetchIndicator(code: string, indicator: string): Promise<number | null> {
   const res = await axios.get(
     `https://api.worldbank.org/v2/country/${code.toLowerCase()}/indicator/${indicator}`,
-    { params: { format: 'json', mrv: 1 }, timeout: 12000 }
+    { params: { format: 'json', mrv: 1 }, timeout: 5000 }
   );
   const rows = res.data as [unknown, Array<{ value: number | null }>];
   return rows[1]?.[0]?.value ?? null;

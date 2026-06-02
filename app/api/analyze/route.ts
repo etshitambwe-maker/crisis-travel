@@ -141,8 +141,19 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // Batch de 6 pour limiter la concurrence sur les APIs externes
     const BATCH = 6;
+    // Budget de temps global (GOAL-032) : on n'engage PAS un nouveau batch si on a
+    // dépassé ce seuil. Garantit qu'on garde ~15s pour trier/sérialiser/répondre sous
+    // le plafond Vercel 60s, et qu'on renvoie un résultat PARTIEL plutôt qu'un 504.
+    const TIME_BUDGET_MS = 45000;
+    const tScoringStart = Date.now();
     const results = [];
+    let partial = false;
     for (let i = 0; i < countries.length; i += BATCH) {
+      if (Date.now() - t0 > TIME_BUDGET_MS) {
+        partial = true;
+        console.warn(`[API/analyze] budget timeout — ${results.length}/${countries.length} pays scorés avant arrêt`);
+        break;
+      }
       const batch = countries.slice(i, i + BATCH);
       const settled = await Promise.allSettled(
         batch.map((c) => calculateCrisisScore(c, profile))
@@ -151,6 +162,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         if (r.status === 'fulfilled') results.push(r.value);
       }
     }
+    const msScoring = Date.now() - tScoringStart;
 
     // Tri selon sortBy ou mode
     let sorted = [...results];
@@ -164,7 +176,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (profile.mode === 'budget_crisis') sorted = sorted.filter((s) => s.budget.value >= 70 && s.security.value >= 60);
 
     const topDestinations = sorted.slice(0, 5);
-    const rawOpportunities = await detectOpportunities(sorted, profile.budget);
+
+    // detectOpportunities (Claude) ne s'exécute que s'il reste du budget — sinon on
+    // omet les opportunités plutôt que de risquer le 504 sur la dernière ligne droite.
+    const tOppStart = Date.now();
+    const rawOpportunities = Date.now() - t0 > TIME_BUDGET_MS
+      ? []
+      : await detectOpportunities(sorted, profile.budget);
+    const msOpportunities = Date.now() - tOppStart;
     const opportunities = rawOpportunities.map((op) => ({
       ...op,
       country: sorted.find((s) => s.countryCode === op.countryCode)?.country ?? op.countryCode,
@@ -172,11 +191,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       type: op.type as OpportunityWindow['type'],
     }));
 
+    const msTotal = Date.now() - t0;
+    // Logs timing structurés temporaires (GOAL-032 / option F) — à retirer une fois
+    // le goulot confirmé en prod. Permet de voir le vrai coût de chaque étape.
+    console.log('[API/analyze] timing', JSON.stringify({
+      mode: profile.mode, selected: countries.length, scored: results.length,
+      msScoring, msOpportunities, msTotal, partial,
+    }));
+
     const response: AnalyzeResponse = {
       results: sorted,
       topDestinations,
       opportunities,
-      meta: { analyzedCountries: results.length, duration: Date.now() - t0, cacheHitRate: 0 },
+      meta: { analyzedCountries: results.length, duration: msTotal, cacheHitRate: 0, partial },
     };
     return NextResponse.json(response, {
       headers: {

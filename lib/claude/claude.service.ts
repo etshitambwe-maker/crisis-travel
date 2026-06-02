@@ -86,21 +86,27 @@ export async function detectOpportunities(
   try {
     const candidates = scores.filter((s) => s.total >= 55).slice(0, 12);
     const t0 = Date.now();
-    const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 500,
-      messages: [
-        {
-          role: 'user',
-          content: `Budget voyageur : ${budget}€. Pays avec bon CrisisScore :
+    // Borne dure : Claude ne doit jamais faire déborder /api/analyze (GOAL-032).
+    // Au-delà de 8s, on abandonne les opportunités (fallback []) — les destinations
+    // restent affichées, seul le bloc « opportunités » est omis.
+    const msg = await client.messages.create(
+      {
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: `Budget voyageur : ${budget}€. Pays avec bon CrisisScore :
 ${candidates.map((s) => `${s.country} (${s.countryCode}): score=${s.total}, budget=${s.budget.value}, change=${s.budget.details.currencyVariation ?? 0}%`).join('\n')}
 
 Identifie 3 pays avec une opportunité économique exceptionnelle pour un Européen.
 Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
 [{"countryCode":"XX","type":"currency|cheap_flights|jackpot","explanation":"<1 phrase max>","estimatedSaving":<euros entier>}]`,
-        },
-      ],
-    });
+          },
+        ],
+      },
+      { timeout: 8000 }
+    );
     logger.api('Claude-Opportunities', 'global', Date.now() - t0, false);
     const text = (msg.content[0] as { text: string }).text.trim();
     return JSON.parse(text);
