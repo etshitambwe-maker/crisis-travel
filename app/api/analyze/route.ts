@@ -7,7 +7,7 @@ import { selectCandidates, CANDIDATE_CAP, type SelectMode } from '@/lib/utils/se
 import { checkRateLimit, getClientIdentifier } from '@/lib/middleware/rateLimit';
 import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
 import { getUser } from '@/lib/auth/supabase-server';
-import { resetCacheStats, getCacheStats } from '@/lib/cache/redis';
+import { resetCacheStats, getCacheStats, getCacheStatsByTag } from '@/lib/cache/redis';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
 // Plafond technique : l'analyse cold-cache de tous les pays peut dépasser les
@@ -215,6 +215,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       msScoring, msOpportunities, msTotal, partial,
       cacheHits: cache.hits, cacheMisses: cache.misses, cacheErrors: cache.errors, cacheHitRate: cache.hitRate,
     }));
+    // Détail par provider (GOAL-036, instrumentation temporaire) : permet de trancher
+    // H1 (writes échoués) vs H2 (fallbacks non cachés). À retirer une fois le verdict posé.
+    console.log('[API/analyze] cache-by-provider', JSON.stringify(getCacheStatsByTag()));
 
     const response: AnalyzeResponse = {
       results: sorted,
