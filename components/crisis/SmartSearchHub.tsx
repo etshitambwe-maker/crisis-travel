@@ -1,7 +1,8 @@
 'use client';
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { CountrySearchBar } from './CountrySearchBar';
+// GOAL-038 : CountrySearchBar n'est plus rendu en V1 (onglet « Destination précise »
+// retiré). Le composant reste dans le repo mais n'est plus importé ici.
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
 import { getHint } from '@/lib/utils/staticHints';
 import { acquireAnalyzeLock, releaseAnalyzeLock } from '@/lib/utils/analyzeGuard';
@@ -70,10 +71,13 @@ const DURATION_MAP: Record<NonNullable<DiscoveryState['duration']>, number> = {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  // V1 (GOAL-038) : l'onglet 'direct' (Destination précise) est retiré de l'interface.
+  // Crisis Travel n'est pas un moteur universel de destinations ; il analyse une sélection
+  // de pays opportunistes/émergents/sous-évalués. On ne garde donc que les deux parcours
+  // de découverte, dans l'ordre produit voulu : découverte guidée d'abord, puis région.
   const tabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'direct',    label: 'Destination précise', icon: '🎯' },
-    { id: 'region',    label: 'Explorer une région',  icon: '🌍' },
     { id: 'discovery', label: 'Surprends-moi',        icon: '✨' },
+    { id: 'region',    label: 'Explorer une région',  icon: '🌍' },
   ];
   return (
     <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0d0d14', borderRadius: 12, padding: 4 }}>
@@ -428,7 +432,9 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function SmartSearchHub() {
-  const [tab, setTab] = useState<Tab>('direct');
+  // GOAL-038 : la V1 ouvre sur la découverte guidée (« Surprends-moi »), cœur du
+  // positionnement produit. L'ancien onglet 'direct' n'est plus atteignable via l'UI.
+  const [tab, setTab] = useState<Tab>('discovery');
   const [airport, setAirport] = useState('CDG');
   const [dateDepart, setDateDepart] = useState('');
   const [dateRetour, setDateRetour] = useState('');
@@ -455,73 +461,18 @@ export function SmartSearchHub() {
 
       <TabBar active={tab} onChange={setTab} />
 
-      {tab === 'direct' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          {/* Étape 2 — Dates */}
-          <div>
-            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
-              DATES DU VOYAGE
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-                <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
-                  Départ
-                </label>
-                <input
-                  type="date"
-                  value={dateDepart}
-                  min={new Date().toISOString().split('T')[0]}
-                  onChange={e => {
-                    setDateDepart(e.target.value);
-                    if (dateRetour && e.target.value > dateRetour) setDateRetour('');
-                  }}
-                  style={{
-                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3e',
-                    borderRadius: 8, padding: '8px 12px', color: dateDepart ? '#ffffff' : '#4a4a6a',
-                    fontSize: '0.85rem', colorScheme: 'dark', boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-                <label style={{ display: 'block', fontSize: '0.68rem', color: '#6b7280', marginBottom: 4 }}>
-                  Retour
-                </label>
-                <input
-                  type="date"
-                  value={dateRetour}
-                  min={dateDepart || new Date().toISOString().split('T')[0]}
-                  onChange={e => setDateRetour(e.target.value)}
-                  style={{
-                    width: '100%', background: '#0a0a0f', border: '1px solid #2a2a3e',
-                    borderRadius: 8, padding: '8px 12px', color: dateRetour ? '#ffffff' : '#4a4a6a',
-                    fontSize: '0.85rem', colorScheme: 'dark', boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-            {!dateDepart && (
-              <div style={{ fontSize: '0.65rem', color: '#3f3f5a', marginTop: 4 }}>
-                Optionnel — laisse vide pour une analyse indépendante des dates
-              </div>
-            )}
-          </div>
-
-          {/* Séparateur */}
-          <div style={{ height: 1, background: '#1e1e2e' }} />
-
-          {/* Étape 3 — Destination */}
-          <div>
-            <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
-              DESTINATION
-            </div>
-            <CountrySearchBar />
-            <p style={{ fontSize: '0.65rem', color: '#3f3f5a', marginTop: 6, textAlign: 'center' }}>
-              Tape un pays, une ville ou un code — ex : &quot;Congo&quot;, &quot;Bali&quot;, &quot;TH&quot;
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Microcopy de positionnement (GOAL-038) — visible sur les deux parcours V1.
+          Clarifie que Crisis Travel n'est pas un moteur universel de destinations :
+          il détecte les pays où le contexte actuel crée une opportunité de voyage. */}
+      <p style={{
+        fontSize: '0.7rem', color: '#9ca3af', lineHeight: 1.55,
+        textAlign: 'center', margin: '0 0 18px',
+      }}>
+        Pas toutes les destinations. Les bonnes opportunités. Crisis Travel analyse une
+        sélection de pays <strong style={{ color: '#e8e8e8', fontWeight: 600 }}>opportunistes,
+        émergents ou sous-évalués</strong> et repère ceux où le contexte actuel peut rendre
+        le voyage plus avantageux.
+      </p>
 
       {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} />}
       {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} />}
