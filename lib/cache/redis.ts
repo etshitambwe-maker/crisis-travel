@@ -68,7 +68,7 @@ export function getCacheStats(): { hits: number; misses: number; errors: number;
 }
 
 export function getCacheStatsByTag(): Record<string, TagStats> {
-  return _byTag;
+  return Object.fromEntries(Object.entries(_byTag).map(([k, v]) => [k, { ...v }]));
 }
 
 export async function getFromCache<T>(key: string, tag = 'unknown'): Promise<T | null> {
@@ -85,6 +85,7 @@ export async function getFromCache<T>(key: string, tag = 'unknown'): Promise<T |
   } catch {
     // Redis injoignable — compté comme ERREUR (pas un miss), traité comme cache absent.
     // On ouvre le circuit : les lookups suivants de cette requête seront instantanés.
+    // on attribue aussi le temps des échecs réseau au tag (RTT réel consommé)
     b.msRedisGet += Date.now() - t0;
     _errors++; b.getErrors++;
     _circuitOpen = true;
@@ -104,6 +105,7 @@ export async function setInCache<T>(key: string, data: T, ttl: CacheTTL, tag = '
     b.setSuccess++;
   } catch {
     // Cache non critique — on continue sans, et on ouvre le circuit pour la suite.
+    // on attribue aussi le temps des échecs réseau au tag (RTT réel consommé)
     b.msRedisSet += Date.now() - t0;
     b.setErrors++;
     _circuitOpen = true;

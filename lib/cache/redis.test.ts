@@ -204,4 +204,39 @@ describe('cache stats par provider (GOAL-036)', () => {
     await getFromCache('ct:gdelt:GE', 'gdelt');
     expect(getCacheStatsByTag().gdelt.sampleKey).toBe('ct:gdelt:PT'); // la PREMIÈRE
   });
+
+  it('msRedisGet est renseigné (>=0) sur un hit et msRedisSet sur un set réussi', async () => {
+    const { getFromCache, setInCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    getImpl = () => Promise.resolve({ ok: true });
+    await getFromCache('ct:gdelt:PT', 'gdelt');
+    await setInCache('ct:gdelt:PT', { v: 1 }, 3600, 'gdelt');
+    const t = getCacheStatsByTag().gdelt;
+    expect(t.msRedisGet).toBeGreaterThanOrEqual(0);
+    expect(t.msRedisSet).toBeGreaterThanOrEqual(0);
+  });
+
+  it('msRedisGet est renseigné (>=0) même sur le chemin d\'erreur Redis', async () => {
+    getImpl = () => Promise.reject(new Error('down'));
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    await getFromCache('ct:gdelt:PT', 'gdelt');
+    const t = getCacheStatsByTag().gdelt;
+    expect(t.getErrors).toBe(1);
+    expect(t.msRedisGet).toBeGreaterThanOrEqual(0);
+  });
+
+  it('circuit ouvert : un getFromCache court-circuité bumpe getErrors/getAttempts du tag sans toucher le réseau', async () => {
+    let calls = 0;
+    getImpl = () => { calls++; return Promise.reject(new Error('ENOTFOUND')); };
+    const { getFromCache, getCacheStatsByTag, resetCacheStats } = await load();
+    resetCacheStats();
+    await getFromCache('ct:gdelt:PT', 'gdelt'); // ouvre le circuit (1 appel réseau)
+    await getFromCache('ct:numbeo:PT', 'numbeo'); // court-circuité, aucun appel réseau
+    expect(calls).toBe(1); // le réseau n'a été tenté qu'une fois
+    const numbeo = getCacheStatsByTag().numbeo;
+    expect(numbeo.getAttempts).toBe(1);
+    expect(numbeo.getErrors).toBe(1);
+    expect(numbeo.getAttempts).toBe(numbeo.getErrors);
+  });
 });
