@@ -6,7 +6,7 @@ import type { AffiliateCategory } from '@/types/affiliate.types';
 
 // Validation des query params du clic sortant.
 const ClickQuerySchema = z.object({
-  category: z.enum(['flight', 'hotel', 'insurance']),
+  category: z.enum(['flight', 'hotel', 'insurance', 'transfer', 'activity', 'esim']),
   partner: z.string().min(1).max(64).optional(),
   url: z.string().url().optional(),          // URL cible contextualisée fournie par le front
   country: z.string().length(2).optional(),
@@ -16,10 +16,16 @@ const ClickQuerySchema = z.object({
 
 // Repli public si aucun partenaire n'est résolu (table vide / env absent),
 // pour ne jamais laisser l'utilisateur sur une page d'erreur.
+// NOTE : repli PUBLIC neutre uniquement — jamais de lien d'affiliation (Travelpayouts) ici.
+// transfer/activity/esim n'ont pas encore de partenaire actif (activation = GOAL-047) :
+// ces catégories retombent donc sur une page publique générique, sans monétisation.
 const FALLBACK_URL: Record<AffiliateCategory, string> = {
   flight: 'https://www.skyscanner.fr/',
   hotel: 'https://www.booking.com/',
   insurance: 'https://www.chapkadirect.fr/',
+  transfer: 'https://www.welcomepickups.com/',
+  activity: 'https://www.tiqets.com/',
+  esim: 'https://www.airalo.com/',
 };
 
 // GET /api/affiliate/click?category=...&partner=...&url=...&country=...&total=...

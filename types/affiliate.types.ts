@@ -1,7 +1,15 @@
-// Types du socle affiliation voyage (vols / hôtels / assurances).
-// Reflètent les tables de la migration 003_affiliate.sql.
+// Types du socle affiliation voyage (vols / hôtels / assurances / transferts / activités / eSIM).
+// Reflètent les tables de la migration 003_affiliate.sql, étendues par 005_affiliate_categories_extend.sql.
 
-export type AffiliateCategory = 'flight' | 'hotel' | 'insurance';
+// Doit rester aligné avec le CHECK (category IN (...)) des tables affiliate_partners
+// et affiliate_clicks (migration 005) et avec le z.enum du handler /api/affiliate/click.
+export type AffiliateCategory =
+  | 'flight'
+  | 'hotel'
+  | 'insurance'
+  | 'transfer'
+  | 'activity'
+  | 'esim';
 
 export type ConversionStatus = 'pending' | 'confirmed' | 'cancelled' | 'paid';
 

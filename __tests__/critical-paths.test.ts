@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isHttpUrl, buildAffiliateUrl } from '../lib/services/affiliate/affiliate.service';
-import type { AffiliatePartner } from '../types/affiliate.types';
+import type { AffiliatePartner, AffiliateCategory } from '../types/affiliate.types';
 
 // ── Affiliate URL guard ───────────────────────────────────────────────────────
 
@@ -92,6 +92,47 @@ describe('buildAffiliateUrl', () => {
     const unsafe: AffiliatePartner = { ...partnerNoId, redirectUrl: '//evil.com/x' };
     const result = buildAffiliateUrl(unsafe, 'https://www.skyscanner.fr/');
     expect(result).toBe('https://www.skyscanner.fr/');
+  });
+});
+
+// ── Catégories étendues (GOAL-046) ───────────────────────────────────────────
+// Prouve que transfer/activity/esim sont des AffiliateCategory valides et se
+// comportent comme les catégories historiques dans buildAffiliateUrl. Aucune
+// donnée/partenaire n'est activé ici — c'est de la préparation de modèle.
+
+describe('extended affiliate categories (GOAL-046)', () => {
+  const NEW_CATEGORIES = ['transfer', 'activity', 'esim'] as const;
+  const ALL_CATEGORIES: AffiliateCategory[] = [
+    'flight', 'hotel', 'insurance', 'transfer', 'activity', 'esim',
+  ];
+
+  it('AffiliateCategory accepts the six expected values (compile-time + runtime)', () => {
+    // Si l'une de ces valeurs n'était pas dans l'union, tsc échouerait à la compilation.
+    expect(ALL_CATEGORIES).toHaveLength(6);
+    expect(new Set(ALL_CATEGORIES).size).toBe(6);
+  });
+
+  it('a transfer/activity/esim partner with no affiliate data returns the public baseUrl', () => {
+    for (const category of NEW_CATEGORIES) {
+      const partner: AffiliatePartner = {
+        id: `new-${category}`, slug: category, name: category, category,
+        baseUrl: `https://example-${category}.com/`,
+        redirectUrl: null, affiliateId: null, urlParam: null,
+        commissionRate: null, active: true,
+      };
+      // pas de redirect_url, pas d'affiliateId → lien public inchangé (comportement étape 3)
+      expect(buildAffiliateUrl(partner)).toBe(`https://example-${category}.com/`);
+    }
+  });
+
+  it('a future redirect_url on a new category still takes precedence (GOAL-044 behavior preserved)', () => {
+    const transfer: AffiliatePartner = {
+      id: 'wp', slug: 'welcome-pickups', name: 'Welcome Pickups', category: 'transfer',
+      baseUrl: 'https://www.welcomepickups.com/',
+      redirectUrl: 'https://tpo.mx/TCPlpV7c',
+      affiliateId: null, urlParam: null, commissionRate: null, active: true,
+    };
+    expect(buildAffiliateUrl(transfer, 'https://www.welcomepickups.com/search')).toBe('https://tpo.mx/TCPlpV7c');
   });
 });
 
