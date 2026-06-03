@@ -26,6 +26,8 @@ interface PartnerRow {
   name: string;
   category: AffiliateCategory;
   base_url: string;
+  // Optionnel : absent du résultat si la migration 004 n'est pas encore appliquée.
+  redirect_url?: string | null;
   affiliate_id: string | null;
   url_param: string | null;
   commission_rate: number | null;
@@ -39,6 +41,8 @@ function mapPartner(row: PartnerRow): AffiliatePartner {
     name: row.name,
     category: row.category,
     baseUrl: row.base_url,
+    // `?? null` : reste null si la colonne n'existe pas encore en base (migration 004 non appliquée).
+    redirectUrl: row.redirect_url ?? null,
     affiliateId: row.affiliate_id,
     urlParam: row.url_param,
     commissionRate: row.commission_rate,
@@ -77,13 +81,19 @@ export async function resolvePartner(
 }
 
 /**
- * Construit l'URL de destination finale.
- * - Repart d'une `targetUrl` fournie par le front (déjà contextualisée : pays, aéroport…)
- *   ou, à défaut, de la `base_url` du partenaire.
- * - Injecte l'ID d'affiliation UNIQUEMENT si le partenaire en a un (sinon URL nue).
- *   Tant qu'aucun programme n'est connecté, affiliateId est NULL → lien public inchangé.
+ * Construit l'URL de destination finale. Ordre de résolution :
+ *   1. `redirect_url` valide (http/https) → renvoyée TELLE QUELLE, prioritaire.
+ *      C'est un deep-link réseau autonome (Travelpayouts) : on n'y injecte rien et on
+ *      ignore `targetUrl`. Une redirect_url invalide est ignorée → on passe à l'étape 2.
+ *   2. sinon, si `url_param` + `affiliate_id` → injecte le param dans `targetUrl`/`base_url`.
+ *   3. sinon → renvoie `targetUrl`/`base_url` inchangée (lien public).
  */
 export function buildAffiliateUrl(partner: AffiliatePartner, targetUrl?: string): string {
+  // 1. URL de redirection complète prioritaire (validée http/https — sinon ignorée).
+  if (partner.redirectUrl && isHttpUrl(partner.redirectUrl)) {
+    return partner.redirectUrl;
+  }
+
   const raw = targetUrl && isHttpUrl(targetUrl) ? targetUrl : partner.baseUrl;
 
   if (!partner.affiliateId || !partner.urlParam) {

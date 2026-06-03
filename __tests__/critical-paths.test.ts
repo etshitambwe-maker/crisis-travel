@@ -18,6 +18,7 @@ describe('isHttpUrl', () => {
 const partnerNoId: AffiliatePartner = {
   id: '1', slug: 'skyscanner', name: 'Skyscanner', category: 'flight',
   baseUrl: 'https://www.skyscanner.fr/',
+  redirectUrl: null,
   affiliateId: null, urlParam: null,
   commissionRate: null, active: true,
 };
@@ -25,8 +26,18 @@ const partnerNoId: AffiliatePartner = {
 const partnerWithId: AffiliatePartner = {
   id: '2', slug: 'booking', name: 'Booking', category: 'hotel',
   baseUrl: 'https://www.booking.com/',
+  redirectUrl: null,
   affiliateId: 'aff123', urlParam: 'aid',
   commissionRate: 0.04, active: true,
+};
+
+// Partenaire activé via URL de redirection complète (deep-link réseau, ex: Travelpayouts).
+const partnerWithRedirect: AffiliatePartner = {
+  id: '3', slug: 'kiwi', name: 'Kiwi.com', category: 'flight',
+  baseUrl: 'https://www.kiwi.com/',
+  redirectUrl: 'https://kiwi.tpo.mx/7NkQdf4N',
+  affiliateId: null, urlParam: null,
+  commissionRate: null, active: true,
 };
 
 describe('buildAffiliateUrl', () => {
@@ -48,6 +59,38 @@ describe('buildAffiliateUrl', () => {
 
   it('falls back to baseUrl when targetUrl is not HTTPS', () => {
     const result = buildAffiliateUrl(partnerNoId, 'not-a-url');
+    expect(result).toBe('https://www.skyscanner.fr/');
+  });
+
+  // ── redirect_url (GOAL-044) ──────────────────────────────────────────────
+  it('returns redirect_url as-is, taking precedence over targetUrl', () => {
+    const result = buildAffiliateUrl(partnerWithRedirect, 'https://www.kiwi.com/search?from=PAR');
+    expect(result).toBe('https://kiwi.tpo.mx/7NkQdf4N');
+  });
+
+  it('redirect_url takes precedence even over url_param + affiliate_id', () => {
+    const partner: AffiliatePartner = {
+      ...partnerWithId,
+      redirectUrl: 'https://tiqets.tpo.mx/byHaQ9qu',
+    };
+    const result = buildAffiliateUrl(partner, 'https://www.booking.com/search?ss=Japon');
+    expect(result).toBe('https://tiqets.tpo.mx/byHaQ9qu');
+    // l'ancien param n'est PAS injecté quand redirect_url est présent
+    expect(result).not.toContain('aid=');
+  });
+
+  it('ignores an invalid (unsafe) redirect_url and falls back to param/public behavior', () => {
+    const unsafe: AffiliatePartner = { ...partnerWithId, redirectUrl: 'javascript:alert(1)' };
+    const result = buildAffiliateUrl(unsafe, 'https://www.booking.com/search?ss=Japon');
+    // redirect_url ignorée → comportement étape 2 : injection du param
+    const url = new URL(result);
+    expect(url.searchParams.get('aid')).toBe('aff123');
+    expect(result.startsWith('https://')).toBe(true);
+  });
+
+  it('ignores a protocol-relative redirect_url and falls back to public targetUrl', () => {
+    const unsafe: AffiliatePartner = { ...partnerNoId, redirectUrl: '//evil.com/x' };
+    const result = buildAffiliateUrl(unsafe, 'https://www.skyscanner.fr/');
     expect(result).toBe('https://www.skyscanner.fr/');
   });
 });

@@ -12,6 +12,12 @@ export interface AffiliatePartner {
   name: string;
   category: AffiliateCategory;
   baseUrl: string;
+  /**
+   * URL de redirection d'affiliation complète, fournie par le réseau (ex: Travelpayouts
+   * 'https://kiwi.tpo.mx/...'). Utilisée TELLE QUELLE et prioritaire sur baseUrl+affiliateId :
+   * c'est un deep-link autonome dans lequel on n'injecte rien. NULL si non configuré.
+   */
+  redirectUrl: string | null;
   /** ID d'affiliation réel — NULL tant qu'aucun programme n'est connecté. */
   affiliateId: string | null;
   /** Nom du query param où injecter affiliateId (ex: 'aid'). NULL si non applicable. */
