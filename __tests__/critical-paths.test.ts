@@ -220,3 +220,50 @@ describe('affiliate click URL construction', () => {
     expect(url).toContain('category=flight');
   });
 });
+
+// ── Secondary affiliate CTAs (GOAL-048, TravelPackBlock) ─────────────────────
+// Replique le helper trackUrl du TravelPackBlock pour vérifier que les CTA
+// secondaires pointent vers /api/affiliate/click avec les bons couples
+// category/partner et SANS aucun lien d'affiliation (tpo.mx) en dur.
+
+describe('secondary affiliate CTAs (GOAL-048)', () => {
+  type Category = 'flight' | 'hotel' | 'insurance' | 'transfer' | 'activity' | 'esim';
+  function trackUrl(category: Category, partner: string, target: string,
+                    countryCode = 'JP', countryName = 'Japon', total = 1200): string {
+    return `/api/affiliate/click?category=${category}&partner=${partner}` +
+      `&url=${encodeURIComponent(target)}` +
+      `&country=${encodeURIComponent(countryCode)}` +
+      `&countryName=${encodeURIComponent(countryName)}` +
+      `&total=${total}`;
+  }
+
+  const transferHref = trackUrl('transfer', 'welcome-pickups', 'https://www.welcomepickups.com/');
+  const activityHref = trackUrl('activity', 'tiqets', 'https://www.tiqets.com/');
+  const esimHref     = trackUrl('esim', 'airalo', 'https://www.airalo.com/');
+
+  it('transfer CTA targets welcome-pickups via /api/affiliate/click', () => {
+    expect(transferHref).toContain('/api/affiliate/click?');
+    expect(transferHref).toContain('category=transfer');
+    expect(transferHref).toContain('partner=welcome-pickups');
+    expect(transferHref).toContain('url=https%3A%2F%2Fwww.welcomepickups.com%2F');
+  });
+
+  it('activity CTA targets tiqets via /api/affiliate/click', () => {
+    expect(activityHref).toContain('category=activity');
+    expect(activityHref).toContain('partner=tiqets');
+    expect(activityHref).toContain('url=https%3A%2F%2Fwww.tiqets.com%2F');
+  });
+
+  it('esim CTA targets airalo via /api/affiliate/click', () => {
+    expect(esimHref).toContain('category=esim');
+    expect(esimHref).toContain('partner=airalo');
+    expect(esimHref).toContain('url=https%3A%2F%2Fwww.airalo.com%2F');
+  });
+
+  it('no secondary CTA embeds a Travelpayouts (tpo.mx) link in the frontend', () => {
+    for (const href of [transferHref, activityHref, esimHref]) {
+      expect(href).not.toContain('tpo.mx');
+      expect(href).not.toContain('gettransfer'); // gettransfer reste en DB, jamais exposé en UI
+    }
+  });
+});

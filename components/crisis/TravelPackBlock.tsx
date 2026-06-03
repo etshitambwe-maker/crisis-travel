@@ -76,11 +76,21 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
     return `https://www.booking.com/searchresults.fr.html?${p.toString()}`;
   })();
   const chapkaUrl     = `https://www.chapkadirect.fr/`;
+  // Cibles publiques des partenaires secondaires (transfert / activités / eSIM).
+  // Ce sont des pages PUBLIQUES : aucun lien d'affiliation (tpo.mx) côté front.
+  // Le deep-link Travelpayouts est résolu côté serveur via redirect_url en base.
+  const transferUrl   = 'https://www.welcomepickups.com/';
+  const activityUrl    = 'https://www.tiqets.com/';
+  const esimUrl        = 'https://www.airalo.com/';
 
   // Tous les CTA passent par /api/affiliate/click : le clic est tracé côté serveur
   // PUIS l'utilisateur est redirigé (302) vers le partenaire. L'ID d'affiliation réel
   // sera injecté en base plus tard sans toucher au front.
-  const trackUrl = (category: 'flight' | 'hotel' | 'insurance', partner: string, target: string) =>
+  const trackUrl = (
+    category: 'flight' | 'hotel' | 'insurance' | 'transfer' | 'activity' | 'esim',
+    partner: string,
+    target: string,
+  ) =>
     `/api/affiliate/click?category=${category}&partner=${partner}` +
     `&url=${encodeURIComponent(target)}` +
     `&country=${encodeURIComponent(countryCode)}` +
@@ -90,6 +100,10 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
   const flightHref    = trackUrl('flight', 'skyscanner', skyscannerUrl);
   const hotelHref     = trackUrl('hotel', 'booking', bookingUrl);
   const insuranceHref = trackUrl('insurance', 'chapka', chapkaUrl);
+  // Partenaires secondaires (GOAL-048) — slugs activés en base au GOAL-047.
+  const transferHref  = trackUrl('transfer', 'welcome-pickups', transferUrl);
+  const activityHref  = trackUrl('activity', 'tiqets', activityUrl);
+  const esimHref      = trackUrl('esim', 'airalo', esimUrl);
 
   const durationOptions = [
     { v: 5, label: '5 jours' }, { v: 7, label: '1 semaine' },
@@ -221,6 +235,28 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
         </a>
       </div>
 
+      {/* CTAs secondaires — préparation voyage (GOAL-048). Restreints : pills compactes,
+          fond neutre, distincts des 3 CTA principaux pour éviter la surcharge visuelle. */}
+      <div style={{ marginTop: 14 }}>
+        <div style={{
+          fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280',
+          letterSpacing: '0.1em', marginBottom: 8, textTransform: 'uppercase',
+        }}>
+          🧳 Préparer le voyage
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+          <a href={transferHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <SecondaryCta icon="🚕" label="Transfert aéroport" />
+          </a>
+          <a href={activityHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <SecondaryCta icon="🎟️" label="Activités" />
+          </a>
+          <a href={esimHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <SecondaryCta icon="📶" label="eSIM" />
+          </a>
+        </div>
+      </div>
+
       {/* Disclaimer */}
       <p style={{ fontSize: '0.6rem', color: '#3f3f5a', marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
         Les prix affichés sont des estimations indicatives. Les tarifs réels dépendent de la date,
@@ -276,6 +312,35 @@ function CtaButton({ icon, label, sub, bgColor, hoverColor }: {
         <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>{sub}</div>
       </div>
       <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>↗</span>
+    </div>
+  );
+}
+
+// Pill compacte pour les CTA secondaires (transfert / activités / eSIM).
+// Volontairement plus discrète que CtaButton : fond neutre, pas de couleur d'accent forte.
+function SecondaryCta({ icon, label }: { icon: string; label: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        background: hovered ? '#26263a' : '#1e1e2e',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 8, padding: '8px 10px',
+        transition: 'background 0.15s, transform 0.15s',
+        transform: hovered ? 'translateY(-1px)' : 'none',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: '0.85rem' }}>{icon}</span>
+      <span style={{
+        fontFamily: 'var(--font-space-mono)', fontSize: '0.62rem', color: '#c0c0c0',
+        letterSpacing: '0.04em', fontWeight: 600,
+      }}>
+        {label} →
+      </span>
     </div>
   );
 }
