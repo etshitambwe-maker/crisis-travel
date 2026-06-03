@@ -280,3 +280,76 @@
   /* CrisisScoreExplainer: 4-col → 2×2 on narrow screens */
   .ct-pillars-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   FRONT-001 — Design foundation v3 (ADDITIVE, namespaced --ctv3-*)
+   These tokens are the new travel/editorial design system. They do NOT
+   replace the legacy --ct-* / shadcn tokens above; both coexist during
+   the transition. Only components under components/design/** and the
+   isolated /_design-preview route consume them. Font families bind to
+   the next/font CSS variables declared in app/layout.tsx.
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Ink scale (backgrounds) */
+  --ctv3-ink-950: #06060a;
+  --ctv3-ink-900: #09090b;
+  --ctv3-ink-870: #0c0c10;
+  --ctv3-ink-850: #0e0e12;
+  --ctv3-ink-800: #141418;
+  --ctv3-ink-750: #191920;
+  --ctv3-ink-700: #1f1f27;
+
+  /* Lines */
+  --ctv3-line: #26262e;
+  --ctv3-line-soft: #1c1c22;
+  --ctv3-line-bright: #34343f;
+
+  /* Text */
+  --ctv3-paper: #f5f5f7;
+  --ctv3-muted: #a1a1aa;
+  --ctv3-faint: #6b6b76;
+  --ctv3-dim: #4a4a55;
+
+  /* Brand red */
+  --ctv3-red: #e4332b;
+  --ctv3-red-2: #ff5147;
+  --ctv3-red-deep: #a51e18;
+  --ctv3-red-soft: rgba(228, 51, 43, 0.12);
+
+  /* Tier / verdict colors */
+  --ctv3-ideal: #46b888;
+  --ctv3-reco: #d8a83e;
+  --ctv3-poss: #d9742e;
+  --ctv3-deco: #e4332b;
+  --ctv3-blue: #5b8def;
+
+  /* Type families — bound to next/font variables (layout.tsx) with fallbacks */
+  --ctv3-display: var(--font-archivo), "Archivo", sans-serif;
+  --ctv3-serif: var(--font-newsreader), "Newsreader", Georgia, serif;
+  --ctv3-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Scoped chrome for the v3 system. Applied via the .ctv3 class on a
+   wrapping element so global element styles are never affected. */
+.ctv3 {
+  font-family: var(--ctv3-display);
+  background: var(--ctv3-ink-900);
+  color: var(--ctv3-paper);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+  line-height: 1.55;
+}
+.ctv3 *,
+.ctv3 *::before,
+.ctv3 *::after { box-sizing: border-box; }
+.ctv3 ::selection { background: var(--ctv3-red); color: #fff; }
+.ctv3 img { display: block; max-width: 100%; }
+
+.ctv3 .ctv3-mono { font-family: var(--ctv3-mono); font-feature-settings: "tnum", "zero"; }
+.ctv3 .ctv3-serif { font-family: var(--ctv3-serif); font-weight: 400; }
+.ctv3 h1, .ctv3 h2, .ctv3 h3, .ctv3 h4 {
+  font-family: var(--ctv3-display); font-weight: 800;
+  letter-spacing: -0.025em; line-height: 1.02; margin: 0;
+}
+.ctv3 h1 { letter-spacing: -0.035em; font-weight: 900; }
+.ctv3 p { margin: 0; }

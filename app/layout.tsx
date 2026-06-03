@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Space_Mono, DM_Sans } from 'next/font/google';
+import { Space_Mono, DM_Sans, Archivo, Newsreader, JetBrains_Mono } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthTrigger } from '@/components/auth/AuthTrigger';
 import { TravelpayoutsDriveScript } from '@/components/TravelpayoutsDriveScript';
@@ -14,6 +14,25 @@ const spaceMono = Space_Mono({
 const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-dm-sans',
+});
+
+// FRONT-001 — v3 design foundation fonts (additive, alongside the legacy
+// Space Mono / DM Sans above). Consumed via the --ctv3-* CSS variables in
+// globals.css by components/design/** and the /_design-preview route.
+const archivo = Archivo({
+  subsets: ['latin'],
+  variable: '--font-archivo',
+});
+
+const newsreader = Newsreader({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  variable: '--font-newsreader',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
 });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crisis-travel.app';
@@ -42,7 +61,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`dark ${spaceMono.variable} ${dmSans.variable}`}>
+    <html lang="fr" className={`dark ${spaceMono.variable} ${dmSans.variable} ${archivo.variable} ${newsreader.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen antialiased" style={{ backgroundColor: '#0a0a0f', color: '#e8e8e8', fontFamily: 'var(--font-dm-sans), sans-serif' }}>
         {children}
         <Suspense fallback={null}>
