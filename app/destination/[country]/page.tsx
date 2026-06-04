@@ -6,13 +6,16 @@ import { TravelPackBlock } from '@/components/crisis/TravelPackBlock';
 import { AlertButton } from '@/components/crisis/AlertButton';
 import { ScoreHistory } from '@/components/crisis/ScoreHistory';
 import { PremiumGate } from '@/components/auth/PremiumGate';
-import { getScoreColor } from '@/types/crisis.types';
 import type { CrisisScore } from '@/types/crisis.types';
 import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
 import { generateDestinationNarrative } from '@/lib/claude/claude.service';
 import { findCountry } from '@/lib/utils/countries';
 import { getFlagUrlLarge, getCountryColors } from '@/lib/utils/countryPhoto';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
+import { DestinationImage } from '@/components/design/DestinationImage';
+import { CountryFlag } from '@/components/design/CountryFlag';
+import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/design/atoms';
+import { getDestinationImagery } from '@/lib/design/destinationImagery';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
 // dépasser les 10s par défaut de Vercel sur cold cache. 60s évite le timeout.
@@ -52,17 +55,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 
 const MEAE_DATA: Record<number, { title: string; desc: string; ic: string }> = {
-  1: { title: 'SURVEILLANCE NORMALE',           desc: "Aucune précaution particulière au-delà de la vigilance usuelle.", ic: '✓' },
-  2: { title: 'VIGILANCE RENFORCÉE',            desc: 'Prendre des précautions supplémentaires dans certaines zones.',    ic: '!' },
-  3: { title: 'DÉCONSEILLÉ SAUF IMPÉRATIF',    desc: "Ne s'y rendre que si un motif professionnel ou familial impératif l'exige.", ic: '⚠' },
-  4: { title: 'FORMELLEMENT DÉCONSEILLÉ',      desc: 'Toute présence est fortement déconseillée, quel que soit le motif.', ic: '✕' },
+  1: { title: 'Surveillance normale',           desc: "Aucune précaution particulière au-delà de la vigilance usuelle.", ic: '✓' },
+  2: { title: 'Vigilance renforcée',            desc: 'Prendre des précautions supplémentaires dans certaines zones.',    ic: '!' },
+  3: { title: 'Déconseillé sauf impératif',     desc: "Ne s'y rendre que si un motif professionnel ou familial impératif l'exige.", ic: '⚠' },
+  4: { title: 'Formellement déconseillé',       desc: 'Toute présence est fortement déconseillée, quel que soit le motif.', ic: '✕' },
 };
 
-const MEAE_STYLES: Record<number, { border: string; bg: string; icBg: string; icColor: string; titleColor: string }> = {
-  1: { border: 'rgba(61,220,151,0.25)',  bg: 'linear-gradient(135deg, rgba(61,220,151,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(61,220,151,0.15)',  icColor: '#3ddc97', titleColor: '#3ddc97' },
-  2: { border: 'rgba(255,178,36,0.25)',  bg: 'linear-gradient(135deg, rgba(255,178,36,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(255,178,36,0.15)',  icColor: '#ffb224', titleColor: '#ffb224' },
-  3: { border: 'rgba(255,140,66,0.25)',  bg: 'linear-gradient(135deg, rgba(255,140,66,0.06), rgba(17,17,28,0.5))',  icBg: 'rgba(255,140,66,0.15)',  icColor: '#ff8c42', titleColor: '#ff8c42' },
-  4: { border: 'rgba(255,59,47,0.25)',   bg: 'linear-gradient(135deg, rgba(255,59,47,0.06), rgba(17,17,28,0.5))',   icBg: 'rgba(255,59,47,0.15)',   icColor: '#ff3b2f', titleColor: '#ff3b2f' },
+// MEAE tier → ctv3 verdict color (legible, namespaced).
+const MEAE_COLOR: Record<number, string> = {
+  1: 'var(--ctv3-ideal)',
+  2: 'var(--ctv3-reco)',
+  3: 'var(--ctv3-poss)',
+  4: 'var(--ctv3-deco)',
 };
 
 interface Props {
@@ -90,13 +94,6 @@ async function getData(code: string): Promise<DestinationResult> {
   }
 }
 
-function scoreColor(v: number) {
-  if (v >= 80) return '#3ddc97';
-  if (v >= 60) return '#ffb224';
-  if (v >= 40) return '#ff8c42';
-  return '#ff3b2f';
-}
-
 export default async function DestinationPage({ params }: Props) {
   const { country } = await params;
   const [result, { user, isPremium }] = await Promise.all([
@@ -108,262 +105,218 @@ export default async function DestinationPage({ params }: Props) {
     // Deux messages distincts : pays inconnu de notre référentiel vs panne technique.
     const isNotFound = result.kind === 'not_found';
     return (
-      <div style={{ minHeight: '100vh', background: '#07070c' }}>
+      <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
         <Header />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16, padding: '0 24px', textAlign: 'center' }}>
-          <div style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-            fontSize: 32, fontWeight: 700, color: isNotFound ? '#6b6b85' : '#ff4d2e', letterSpacing: '-0.02em',
+          <Eyebrow red={!isNotFound}>{isNotFound ? 'Hors couverture' : 'Analyse indisponible'}</Eyebrow>
+          <h1 style={{
+            fontFamily: 'var(--ctv3-display)', fontWeight: 900,
+            fontSize: 'clamp(28px, 6vw, 40px)', letterSpacing: '-0.03em',
+            color: isNotFound ? 'var(--ctv3-muted)' : 'var(--ctv3-red-2)',
           }}>
-            {isNotFound ? 'DESTINATION INCONNUE' : 'ANALYSE INDISPONIBLE'}
-          </div>
-          <p style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', color: '#6b6b85', letterSpacing: '0.1em', fontSize: 12, maxWidth: 360, lineHeight: 1.6 }}>
+            {isNotFound ? 'Destination inconnue' : 'Analyse indisponible'}
+          </h1>
+          <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 15, maxWidth: 380, lineHeight: 1.55 }}>
             {isNotFound
               ? 'Ce pays ne fait pas partie des destinations analysées par Crisis Travel.'
               : 'L\'analyse n\'a pas pu aboutir — les sources de données sont momentanément indisponibles. Réessayez dans quelques instants.'}
           </p>
-          <a href="/" style={{
-            padding: '10px 20px', borderRadius: 8, textDecoration: 'none',
-            border: '1px solid #1f1f30', color: '#9898b0',
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-            fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+          <a href="/" className="ctv3-mono" style={{
+            padding: '10px 20px', textDecoration: 'none',
+            border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-paper)',
+            fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
           }}>
-            ← RETOUR ACCUEIL
+            ← Retour à l’accueil
           </a>
         </div>
       </div>
     );
   }
 
-  const { score, narrative, flagUrl, colors } = result.data;
+  const { score, narrative } = result.data;
+  const ident = getDestinationImagery(score.countryCode);
+  const tier = tierFromScore(score.total);
+  const tierInfo = TIER[tier];
   const meaeLevel = Math.min(4, Math.max(1, Number(score.security.details.meaeLevel ?? 2)));
   const meae = MEAE_DATA[meaeLevel];
-  const meaeStyle = MEAE_STYLES[meaeLevel];
-  const statusLabel = score.status === 'ideal' ? 'IDÉALE'
-    : score.status === 'recommended' ? 'RECOMMANDÉE'
-    : score.status === 'possible' ? 'POSSIBLE' : 'DÉCONSEILLÉE';
+  const meaeColor = MEAE_COLOR[meaeLevel];
+  const majDate = new Date(score.calculatedAt).toLocaleDateString('fr-FR');
 
   const subScores = [
-    { lbl: 'SÉCURITÉ',    val: score.security.value,     ic: '🛡', weight: '40%' },
-    { lbl: 'GÉOPOLITIQUE', val: score.geopolitical.value, ic: '🌐', weight: '30%' },
-    { lbl: 'BUDGET',      val: score.budget.value,        ic: '€',  weight: '20%' },
-    { lbl: 'PRATICITÉ',   val: score.practicality.value,  ic: '☀',  weight: '10%' },
+    { lbl: 'Sécurité',     key: 'security' as const,     weight: 40 },
+    { lbl: 'Géopolitique', key: 'geopolitical' as const, weight: 30 },
+    { lbl: 'Budget',       key: 'budget' as const,        weight: 20 },
+    { lbl: 'Praticité',    key: 'practicality' as const,  weight: 10 },
   ];
 
+  // Real budget rows — only rendered when the payload actually carries the value.
+  const fx = score.budget.details.currencyVariation;
+  const budgetRows = [
+    score.budget.details.mealCheap && {
+      label: 'Repas bon marché', sub: '~3 repas / jour',
+      val: `${score.budget.details.mealCheap}€`,
+    },
+    score.budget.details.hotelAvg && {
+      label: 'Hôtel moyen × 14', sub: 'Médiane hôtel 3★',
+      val: `${(Number(score.budget.details.hotelAvg) * 14).toLocaleString('fr-FR')}€`,
+    },
+    fx !== undefined && {
+      label: `Impact FX · ${score.countryCode}`,
+      sub: Number(fx) > 5 ? 'Avantageux vs EUR' : 'Neutre',
+      val: `${Number(fx) > 0 ? '+' : ''}${fx}%`,
+    },
+  ].filter(Boolean) as { label: string; sub: string; val: string }[];
+
   return (
-    <div style={{ minHeight: '100vh', background: '#07070c' }}>
+    <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
       <Header />
 
-      {/* ── Hero : fond couleurs du pays + drapeau ─── */}
-      <div style={{
-        position: 'relative', width: '100%', minHeight: 220,
-        background: `linear-gradient(135deg, ${colors[0]}40 0%, ${colors[1]}25 60%, #07070c 100%), #07070c`,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '32px 20px 24px', gap: 16,
-        borderBottom: '1px solid #1f1f30',
-      }}>
-        {/* Drapeau */}
-        <img
-          src={flagUrl}
-          alt={`Drapeau ${score.country}`}
-          style={{
-            height: 90, width: 'auto', maxWidth: 160,
-            objectFit: 'contain',
-            filter: 'drop-shadow(0 6px 20px rgba(0,0,0,0.7))',
-            borderRadius: 4,
-          }}
-        />
-        {/* Nom + meta */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.2em', color: '#9898b0', textTransform: 'uppercase', marginBottom: 6 }}>
-            {country.toUpperCase()} · FICHE DESTINATION
+      {/* ── Hero — editorial destination identity (FRONT-001 imagery + flag) ── */}
+      <DestinationImage
+        code={score.countryCode}
+        slot="hero"
+        height={300}
+        showLabel={false}
+        scrim="strong"
+      >
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 3,
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+          maxWidth: 820, margin: '0 auto', padding: '0 20px 26px', width: '100%',
+        }}>
+          <Eyebrow style={{ color: 'rgba(245,245,247,0.7)' }}>
+            {score.countryCode} · {ident.region || 'Fiche destination'}
+          </Eyebrow>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '12px 0 10px' }}>
+            <CountryFlag code={score.countryCode} width={48} />
+            <h1 style={{
+              fontFamily: 'var(--ctv3-display)', fontWeight: 900,
+              fontSize: 'clamp(32px, 7vw, 52px)', letterSpacing: '-0.04em',
+              color: '#fff', lineHeight: 0.98, textShadow: '0 2px 12px rgba(0,0,0,0.6)',
+            }}>
+              {score.country}
+            </h1>
           </div>
-          <h1 style={{ margin: 0, fontFamily: 'var(--font-space-mono), monospace', fontSize: 'clamp(28px, 6vw, 42px)', fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1 }}>
-            {score.country}
-          </h1>
-        </div>
-        {/* Badges */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{
-            background: 'rgba(7,7,12,0.7)', backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.1)', padding: '5px 10px', borderRadius: 6,
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.14em',
-            color: '#9898b0', textTransform: 'uppercase',
-          }}>
-            MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')}
-          </div>
-          <div style={{
-            background: scoreColor(score.total), color: '#07070c',
-            padding: '5px 10px', borderRadius: 6,
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10, letterSpacing: '0.14em',
-            fontWeight: 700, textTransform: 'uppercase', boxShadow: `0 0 12px ${scoreColor(score.total)}66`,
-          }}>
-            {statusLabel}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Chip tier={tier} solid>{tierInfo.label}</Chip>
+            <span className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(245,245,247,0.7)' }}>
+              Mise à jour {majDate}
+            </span>
           </div>
         </div>
-      </div>
+      </DestinationImage>
 
-      <main style={{ maxWidth: 800, margin: '0 auto', padding: '0 20px 60px' }}>
+      <main style={{ maxWidth: 820, margin: '0 auto', padding: '32px 20px 72px' }}>
 
-        {/* Source badges + meta */}
-        <div style={{ borderTop: '1px solid #1f1f30', padding: '16px 0 20px', borderBottom: '1px solid #1f1f30', marginBottom: 0 }}>
+        {/* Verdict line + source honesty (real `source` field, kept) */}
+        <section style={{ marginBottom: 32 }}>
+          <p className="ctv3-serif" style={{ fontSize: 18, color: 'var(--ctv3-paper)', lineHeight: 1.45, marginBottom: 14 }}>
+            {tierInfo.verdict}.
+          </p>
           {score.confidence === 'low' && (
-            <div style={{ marginBottom: 10, fontSize: '0.75rem', color: '#ffb224', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)' }}>
-              ⚠ DONNÉES PARTIELLES — certaines sources étaient indisponibles
-            </div>
+            <p className="ctv3-mono" style={{ fontSize: 11, color: 'var(--ctv3-reco)', letterSpacing: '0.04em', marginBottom: 12 }}>
+              ⚠ Données partielles — certaines sources étaient indisponibles au calcul.
+            </p>
           )}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            {(['security', 'geopolitical', 'budget'] as const).map((key) => (
-              <span key={key} style={{
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                fontSize: 8.5, letterSpacing: '0.16em',
-                padding: '3px 7px', borderRadius: 3,
-                textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 5,
-                border: '1px solid #1f1f30', color: '#9898b0', fontWeight: 700,
-                background: 'rgba(10,10,18,0.5)',
-              }}>
-                <span style={{
-                  width: 5, height: 5, borderRadius: '50%', display: 'inline-block',
-                  background: score[key].source === 'live' ? '#3ddc97' : '#ffb224',
-                  boxShadow: score[key].source === 'live' ? '0 0 5px #3ddc97' : 'none',
-                }} />
-                {key.toUpperCase()} {score[key].source === 'live' ? 'LIVE' : 'PARTIEL'}
-              </span>
-            ))}
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {(['security', 'geopolitical', 'budget'] as const).map((key) => {
+              const live = score[key].source === 'live';
+              return (
+                <span key={key} className="ctv3-mono" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase',
+                  padding: '4px 9px', border: '1px solid var(--ctv3-line)',
+                  color: 'var(--ctv3-muted)', fontWeight: 500,
+                }}>
+                  <span style={{
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: live ? 'var(--ctv3-ideal)' : 'var(--ctv3-reco)',
+                  }} />
+                  {key === 'geopolitical' ? 'Géo' : key === 'security' ? 'Sécurité' : 'Budget'} · {live ? 'à jour' : 'partiel'}
+                </span>
+              );
+            })}
           </div>
-        </div>
+        </section>
 
-        {/* Gauge */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '28px 20px 20px', position: 'relative' }}>
-          <div style={{
-            position: 'absolute', top: 30, left: '50%', transform: 'translateX(-50%)',
-            width: 200, height: 200,
-            background: `radial-gradient(circle, ${scoreColor(score.total)}20, transparent 70%)`,
-            pointerEvents: 'none',
-          }} />
+        {/* Gauge — existing component, unchanged, framed editorially */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
           <GaugeWithTooltip score={score} />
         </div>
 
-        {/* Sous-scores */}
-        <div style={{ marginBottom: 4 }}>
-          <SectionHead num="01" label="SOUS-SCORES" meta="PONDÉRÉ" />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 20 }}>
-          {subScores.map((s) => (
-            <div key={s.lbl} style={{
-              background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
-              borderRadius: 12, padding: 14, position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                  fontSize: 9, letterSpacing: '0.16em', color: '#6b6b85',
-                  textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}>
-                  <span style={{ fontSize: 12 }}>{s.ic}</span> {s.lbl}
+        {/* 01 — Sous-scores */}
+        <SectionLabel num="01" label="Sous-scores" meta="Pondéré" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 36 }}>
+          {subScores.map((s) => {
+            const v = score[s.key].value;
+            const c = TIER[tierFromScore(v)].color;
+            return (
+              <div key={s.key} style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+                    {s.lbl}
+                  </span>
+                  <span className="ctv3-mono" style={{ fontSize: 9, color: 'var(--ctv3-dim)', letterSpacing: '0.08em' }}>×{s.weight}%</span>
                 </div>
-                <span style={{
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                  fontSize: 8, color: '#6b6b85', letterSpacing: '0.08em',
-                }}>
-                  ×{s.weight}
-                </span>
+                <div className="ctv3-mono" style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, color: c }}>
+                  {v}<span style={{ color: 'var(--ctv3-faint)', fontSize: 15, marginLeft: 2, fontWeight: 500 }}>/100</span>
+                </div>
+                <div style={{ marginTop: 12, height: 4, background: 'var(--ctv3-ink-750)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', background: c, width: `${Math.max(0, Math.min(100, v))}%` }} />
+                </div>
               </div>
-              <div style={{
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1,
-                color: scoreColor(s.val),
-              }}>
-                {s.val}<span style={{ color: '#6b6b85', fontSize: 16, marginLeft: 2, fontWeight: 500 }}>/100</span>
-              </div>
-              <div style={{ marginTop: 12, height: 3, background: '#1f1f30', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 2, background: scoreColor(s.val), width: `${s.val}%`, transition: 'width 1s cubic-bezier(0.2,0.8,0.2,1)' }} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* MEAE alert */}
-        <SectionHead num="02" label="ALERTE MEAE" meta="OFFICIEL" />
+        {/* 02 — Alerte MEAE */}
+        <SectionLabel num="02" label="Alerte MEAE" meta="Officiel" />
         <div style={{
-          margin: '0 0 20px',
-          borderRadius: 12, padding: '14px 16px',
           display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'flex-start',
-          border: `1px solid ${meaeStyle.border}`, background: meaeStyle.bg,
+          border: '1px solid var(--ctv3-line)', borderLeft: `2px solid ${meaeColor}`,
+          background: 'var(--ctv3-ink-850)', padding: '16px 18px', marginBottom: 20,
         }}>
-          <div style={{
+          <div className="ctv3-mono" style={{
             width: 38, height: 38, display: 'grid', placeItems: 'center',
-            borderRadius: 8, background: meaeStyle.icBg, color: meaeStyle.icColor,
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 18, fontWeight: 700,
-            flexShrink: 0,
+            border: `1px solid ${meaeColor}`, color: meaeColor, fontSize: 18, fontWeight: 700, flexShrink: 0,
           }}>
             {meae.ic}
           </div>
           <div>
-            <div style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-              fontSize: 9, letterSpacing: '0.16em', color: '#6b6b85',
-              textTransform: 'uppercase', marginBottom: 4,
-              display: 'flex', justifyContent: 'space-between', gap: 8,
+            <div className="ctv3-mono" style={{
+              fontSize: 9.5, letterSpacing: '0.14em', color: 'var(--ctv3-faint)',
+              textTransform: 'uppercase', marginBottom: 5, display: 'flex', justifyContent: 'space-between', gap: 8,
             }}>
-              <span>MEAE · NIVEAU {meaeLevel}/4</span>
-              <span>MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')}</span>
+              <span>MEAE · Niveau {meaeLevel}/4</span>
+              <span>Maj {majDate}</span>
             </div>
-            <div style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-              fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
-              fontWeight: 700, marginBottom: 4, lineHeight: 1.3, color: meaeStyle.titleColor,
-            }}>
+            <div style={{ fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 15, marginBottom: 5, color: meaeColor }}>
               {meae.title}
             </div>
-            <div style={{ color: '#9898b0', fontSize: 12, lineHeight: 1.45 }}>{meae.desc}</div>
+            <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 14, lineHeight: 1.45 }}>{meae.desc}</p>
           </div>
         </div>
-
-        {/* SecurityAlert legacy */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 36 }}>
           <SecurityAlert level={meaeLevel} country={score.country} />
         </div>
 
-        {/* Budget sur place */}
-        {(score.budget.details.mealCheap || score.budget.details.hotelAvg) && (
+        {/* 03 — Budget réel (conditional, real values only) */}
+        {budgetRows.length > 0 && (
           <>
-            <SectionHead num="03" label="BUDGET RÉEL" meta="ESTIMÉ 14J" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-              {[
-                score.budget.details.mealCheap && {
-                  ic: '🍽', label: 'REPAS BON MARCHÉ', sub: '~3 repas / jour',
-                  val: `${score.budget.details.mealCheap}€`, icBg: 'rgba(255,178,36,0.1)', icColor: '#ffb224',
-                },
-                score.budget.details.hotelAvg && {
-                  ic: '🛏', label: 'HÔTEL MOYEN × 14', sub: 'Médiane hôtel 3★',
-                  val: `${(Number(score.budget.details.hotelAvg) * 14).toLocaleString('fr-FR')}€`, icBg: 'rgba(61,220,151,0.1)', icColor: '#3ddc97',
-                },
-                score.budget.details.currencyVariation !== undefined && {
-                  ic: '↯', label: `IMPACT FX · ${score.countryCode}`,
-                  sub: Number(score.budget.details.currencyVariation) > 5 ? 'AVANTAGEUX VS EUR' : 'NEUTRE',
-                  val: `${Number(score.budget.details.currencyVariation) > 0 ? '+' : ''}${score.budget.details.currencyVariation}%`,
-                  icBg: Number(score.budget.details.currencyVariation) > 5 ? 'rgba(61,220,151,0.15)' : 'rgba(107,107,133,0.15)',
-                  icColor: Number(score.budget.details.currencyVariation) > 5 ? '#3ddc97' : '#9898b0',
-                },
-              ].filter(Boolean).map((row, i) => row && (
+            <SectionLabel num="03" label="Budget réel" meta="Estimé · 14 j" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 36 }}>
+              {budgetRows.map((row, i) => (
                 <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px',
-                  background: 'rgba(17,17,28,0.6)', border: '1px solid #1f1f30', borderRadius: 10,
+                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                  border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)',
                 }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center',
-                    background: row.icBg, color: row.icColor, flexShrink: 0, fontSize: 14,
-                  }}>{row.ic}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.15em', color: '#6b6b85', textTransform: 'uppercase', marginBottom: 2 }}>
+                    <div className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--ctv3-faint)', textTransform: 'uppercase', marginBottom: 3 }}>
                       {row.label}
                     </div>
-                    <div style={{ color: '#9898b0', fontSize: 11, fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', letterSpacing: '0.02em' }}>
-                      {row.sub}
-                    </div>
+                    <div className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 13 }}>{row.sub}</div>
                   </div>
-                  <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: '#f0f0f5', textAlign: 'right' }}>
+                  <div className="ctv3-mono" style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ctv3-paper)', textAlign: 'right' }}>
                     {row.val}
                   </div>
                 </div>
@@ -372,66 +325,43 @@ export default async function DestinationPage({ params }: Props) {
           </>
         )}
 
-        {/* AI synthesis */}
-        <SectionHead num="04" label="SYNTHÈSE IA" meta="CLAUDE SONNET" />
+        {/* 04 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
+        <SectionLabel num="04" label="Synthèse IA" meta="Analyse éditoriale" />
         <PremiumGate
           feature="Synthèse IA complète"
           description="Accédez à l'analyse narrative approfondie de Claude AI : contexte géopolitique, risques résiduels, recommandations personnalisées."
           isPremium={isPremium}
           isLoggedIn={!!user}
         >
-          <div style={{
-            background: 'rgba(17,17,28,0.7)', border: '1px solid #1f1f30',
-            borderRadius: 14, padding: '16px 18px', marginBottom: 20,
-            position: 'relative', overflow: 'hidden',
-          }}>
-            {/* Top accent line */}
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              background: 'linear-gradient(90deg, transparent 0%, #ff3b2f 30%, #ff8c42 70%, transparent 100%)',
-            }} />
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #1f1f30' }}>
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                background: 'conic-gradient(from 45deg, #ff3b2f, #ff8c42, #ffb224, #ff3b2f)',
-                display: 'grid', placeItems: 'center', position: 'relative',
+          <div style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 36 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
+              <span className="ctv3-mono" style={{
+                fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ctv3-paper)',
               }}>
-                <div style={{ position: 'absolute', inset: 3, background: '#0b0b14', borderRadius: '50%', display: 'grid', placeItems: 'center', zIndex: 1 }}>
-                  <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 8, fontWeight: 700, color: '#f0f0f5', letterSpacing: '-0.02em', position: 'relative', zIndex: 2 }}>AI</span>
-                </div>
-              </div>
-              <div style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: '#f0f0f5' }}>
-                SYNTHÈSE CLAUDE <span style={{ color: '#6b6b85', fontWeight: 500 }}>· SONNET 4.6</span>
-              </div>
-              <div style={{ marginLeft: 'auto', fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9, letterSpacing: '0.14em', color: '#3ddc97', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#3ddc97', boxShadow: '0 0 5px #3ddc97', display: 'inline-block' }} />
-                TEMPS RÉEL
-              </div>
+                Synthèse IA
+              </span>
+              <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+                Générée à partir des signaux disponibles
+              </span>
             </div>
-            {/* Body — la synthèse réelle ne quitte le serveur que pour les Premium.
-                Pour les non-Premium, le PremiumGate floute déjà ; on n'envoie qu'un
-                aperçu générique afin de ne pas exposer le contenu payant dans le HTML. */}
-            <div style={{ fontSize: 13.5, lineHeight: 1.6, color: '#f0f0f5', whiteSpace: 'pre-wrap' }}>
+            <div className="ctv3-serif" style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--ctv3-paper)', whiteSpace: 'pre-wrap' }}>
               {isPremium
                 ? narrative
-                : 'Analyse narrative approfondie de Claude AI : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées. Réservé aux abonnés Premium.'}
+                : 'Analyse narrative approfondie : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées. Réservé aux abonnés Premium.'}
             </div>
           </div>
         </PremiumGate>
 
-        {/* Actions utilisateur */}
+        {/* Actions utilisateur (behavior unchanged) */}
         <div style={{
           display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-          padding: '16px 0', marginBottom: 8,
-          borderTop: '1px solid #1f1f30',
+          padding: '4px 0 32px',
         }}>
           <AlertButton
             countryCode={score.countryCode}
             countryName={score.country}
             isLoggedIn={!!user}
           />
-
           <PremiumGate
             feature="Export PDF"
             description="Téléchargez le rapport complet au format PDF."
@@ -441,29 +371,27 @@ export default async function DestinationPage({ params }: Props) {
             <a
               href={`/api/export-pdf/${score.countryCode}`}
               download
+              className="ctv3-mono"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '9px 16px', borderRadius: 8,
-                background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.3)',
-                color: '#4a9eff',
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-                fontSize: '0.6rem', letterSpacing: '0.12em', fontWeight: 700,
-                textDecoration: 'none', transition: 'all 0.2s',
+                padding: '11px 16px', border: '1px solid var(--ctv3-blue)', color: 'var(--ctv3-blue)',
+                fontSize: 10.5, letterSpacing: '0.12em', fontWeight: 700,
+                textDecoration: 'none', textTransform: 'uppercase',
               }}
             >
-              ↓ EXPORTER PDF
+              ↓ Exporter en PDF
             </a>
           </PremiumGate>
         </div>
 
-        {/* Historique scores */}
-        <SectionHead num="05" label="HISTORIQUE" meta="6 MOIS" />
-        <div style={{ marginBottom: 20 }}>
+        {/* 05 — Historique */}
+        <SectionLabel num="05" label="Historique" meta="6 mois" />
+        <div style={{ marginBottom: 36 }}>
           <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
         </div>
 
-        {/* Pack Voyage */}
-        <SectionHead num="06" label="PACK VOYAGE" meta="AFFILIÉS" />
+        {/* 06 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
+        <SectionLabel num="06" label="Pack voyage" meta="Affiliés" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}
@@ -472,28 +400,6 @@ export default async function DestinationPage({ params }: Props) {
         />
 
       </main>
-    </div>
-  );
-}
-
-function SectionHead({ num, label, meta }: { num: string; label: string; meta: string }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #1f1f30',
-    }}>
-      <div style={{
-        fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-        fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase',
-        fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8, color: '#f0f0f5',
-      }}>
-        <span style={{ width: 8, height: 8, background: '#ff3b2f', transform: 'rotate(45deg)', display: 'inline-block' }} />
-        <span style={{ color: '#6b6b85', fontWeight: 500 }}>{num} /</span>
-        {label}
-      </div>
-      <span style={{ fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', fontSize: 9.5, letterSpacing: '0.12em', color: '#6b6b85', textTransform: 'uppercase' }}>
-        {meta}
-      </span>
     </div>
   );
 }
