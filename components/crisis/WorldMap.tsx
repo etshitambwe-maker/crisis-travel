@@ -33,7 +33,13 @@ function project(lon: number, lat: number) {
   return { x, y };
 }
 
-export function WorldMap({ markers = MARKERS }: { markers?: Marker[] }) {
+/**
+ * `showScores` (FRONT-002): the per-marker score numbers in MARKERS are
+ * illustrative, not live scoring output. On the homepage we render the map as
+ * an ambient editorial visual with `showScores={false}` so no non-live number
+ * is shown. Real scoring lives in /api/analyze → /results (untouched here).
+ */
+export function WorldMap({ markers = MARKERS, showScores = true }: { markers?: Marker[]; showScores?: boolean }) {
   return (
     <div style={{
       position: 'relative', width: '100%', aspectRatio: '2/1',
@@ -86,9 +92,11 @@ export function WorldMap({ markers = MARKERS }: { markers?: Marker[] }) {
                 <animate attributeName="r" values="20;32;20" dur="3s" repeatCount="indefinite" begin={`${i * 0.4}s`}/>
               </circle>
               <circle cx={x} cy={y} r="5" fill={color} stroke="#07070c" strokeWidth="1.5"/>
-              <text x={x} y={y - 12} fill={color} fontSize="9" fontFamily="monospace" textAnchor="middle" fontWeight="700" letterSpacing="1">
-                {m.score}
-              </text>
+              {showScores && (
+                <text x={x} y={y - 12} fill={color} fontSize="9" fontFamily="monospace" textAnchor="middle" fontWeight="700" letterSpacing="1">
+                  {m.score}
+                </text>
+              )}
             </g>
           );
         })}
