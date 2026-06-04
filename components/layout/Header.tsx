@@ -8,18 +8,17 @@ export function Header() {
       position: 'sticky', top: 0, zIndex: 50,
       backdropFilter: 'blur(24px) saturate(1.5)',
       WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
-      background: 'rgba(7,7,12,0.80)',
-      borderBottom: '1px solid #1f1f30',
+      background: 'rgba(9,9,11,0.80)',
+      borderBottom: '1px solid var(--ctv3-line)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 10px' }}>
         {/* Logo */}
         <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
             width: 22, height: 22,
-            background: '#ff3b2f',
-            borderRadius: 5,
+            background: 'var(--ctv3-red)',
             display: 'grid', placeItems: 'center',
-            boxShadow: '0 0 12px rgba(255,59,47,0.4)',
+            boxShadow: '0 0 12px rgba(228,51,43,0.4)',
             flexShrink: 0,
           }}>
             <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12, color: '#fff' }}>
@@ -27,10 +26,10 @@ export function Header() {
             </svg>
           </span>
           <span style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontFamily: 'var(--ctv3-mono)',
             fontWeight: 700, fontSize: 11,
             letterSpacing: '0.18em',
-            color: '#f0f0f5',
+            color: 'var(--ctv3-paper)',
             textTransform: 'uppercase',
           }}>
             CRISIS TRAVEL
@@ -48,7 +47,7 @@ export function Header() {
       {/* Sub-nav */}
       <div className="ct-subnav" style={{
         display: 'flex', gap: 0,
-        borderTop: '1px solid #1f1f30',
+        borderTop: '1px solid var(--ctv3-line)',
         padding: '0 20px',
         overflowX: 'auto',
         scrollbarWidth: 'none',
@@ -63,17 +62,17 @@ export function Header() {
             key={item.href}
             href={item.href}
             style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: 9, letterSpacing: '0.14em',
-              color: '#6b6b85', textDecoration: 'none',
+              color: 'var(--ctv3-faint)', textDecoration: 'none',
               padding: '8px 10px',
               display: 'inline-block',
               transition: 'color 0.2s',
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#f0f0f5')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b6b85')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ctv3-paper)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ctv3-faint)')}
           >
             {item.label}
           </Link>
