@@ -1,6 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 
+// FRONT-005 : refonte visuelle uniquement (système ctv3, direction éditoriale
+// premium). La logique d'estimation, les paramètres préremplis, l'aéroport
+// (localStorage), le sélecteur de durée et TOUS les CTA passant par
+// /api/affiliate/click sont préservés à l'identique. Aucun lien partenaire
+// direct, aucun affiliate_id côté front : le tracking + la redirection (302)
+// sont résolus côté serveur.
+
 // ── Prix de vol approximatifs depuis CDG (EUR aller-retour) ──────────────────
 // Source : données historiques Skyscanner/Google Flights, mis à jour trimestriellement
 const FLIGHT_PRICES_CDG: Record<string, number> = {
@@ -106,161 +113,129 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
   const esimHref      = trackUrl('esim', 'airalo', esimUrl);
 
   const durationOptions = [
-    { v: 5, label: '5 jours' }, { v: 7, label: '1 semaine' },
-    { v: 10, label: '10 jours' }, { v: 14, label: '2 semaines' }, { v: 21, label: '3 semaines' },
+    { v: 5, label: '5 j' }, { v: 7, label: '1 sem.' },
+    { v: 10, label: '10 j' }, { v: 14, label: '2 sem.' }, { v: 21, label: '3 sem.' },
   ];
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #13131a 0%, #0f0f1a 100%)',
-      border: '1px solid rgba(255,77,46,0.25)',
-      borderRadius: 14, padding: '22px', marginTop: 20,
-      boxShadow: '0 0 40px rgba(255,77,46,0.05) inset',
+      border: '1px solid var(--ctv3-line)',
+      borderTop: '2px solid var(--ctv3-red)',
+      background: 'var(--ctv3-ink-850)',
+      padding: '22px',
+      marginTop: 20,
     }}>
-      {/* Titre */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <div>
-          <h2 style={{
-            fontFamily: 'var(--font-space-mono)', fontSize: '0.85rem',
-            color: '#ff4d2e', letterSpacing: '0.1em', margin: 0,
+      {/* En-tête éditorial + sélecteur durée */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <span className="ctv3-mono" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--ctv3-red)',
           }}>
-            ✈️ TON PACK VOYAGE ESTIMÉ
+            <span style={{ width: 14, height: 1, background: 'currentColor', opacity: 0.6 }} />
+            Préparer le voyage
+          </span>
+          <h2 style={{
+            fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 19,
+            letterSpacing: '-0.02em', color: 'var(--ctv3-paper)', margin: '8px 0 4px',
+          }}>
+            Votre pack voyage estimé
           </h2>
-          <p style={{ fontSize: '0.68rem', color: '#3f3f5a', margin: '3px 0 0', fontFamily: 'var(--font-space-mono)' }}>
-            {airport} → {countryName.toUpperCase()} · Prix indicatifs en EUR
+          <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            {airport} → {countryName} · estimation indicative · hors disponibilité temps réel
           </p>
         </div>
         {/* Sélecteur durée */}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {durationOptions.map((d) => (
-            <button
-              key={d.v}
-              onClick={() => setDuration(d.v)}
-              style={{
-                padding: '3px 8px', borderRadius: 5, cursor: 'pointer', border: 'none',
-                background: duration === d.v ? '#ff4d2e' : '#1e1e2e',
-                color: duration === d.v ? '#fff' : '#6b7280',
-                fontFamily: 'var(--font-space-mono)', fontSize: '0.58rem', letterSpacing: '0.04em',
-                transition: 'all 0.15s',
-              }}
-            >
-              {d.label}
-            </button>
-          ))}
+          {durationOptions.map((d) => {
+            const active = duration === d.v;
+            return (
+              <button
+                key={d.v}
+                onClick={() => setDuration(d.v)}
+                className="ctv3-mono"
+                style={{
+                  padding: '5px 9px', cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--ctv3-red)' : 'var(--ctv3-line)'}`,
+                  background: active ? 'var(--ctv3-red)' : 'transparent',
+                  color: active ? '#fff' : 'var(--ctv3-muted)',
+                  fontSize: 10, letterSpacing: '0.06em', fontWeight: 700,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {d.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Lignes de coût */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
-        {/* Vol */}
-        <CostLine
-          icon="🛫" label={`Vol A/R depuis ${airport}`}
-          value={`~${flightCost.toLocaleString('fr-FR')}€`}
-          note="estimation basse saison"
-          color="#6b7280"
-        />
-        {/* Hôtel */}
-        {hotelCost !== null ? (
-          <CostLine
-            icon="🏨" label={`Hôtel ${duration} nuits`}
-            value={`~${hotelCost.toLocaleString('fr-FR')}€`}
-            note="hôtel moyen de gamme"
-            color="#6b7280"
-          />
-        ) : (
-          <CostLine icon="🏨" label={`Hôtel ${duration} nuits`} value="données insuffisantes" color="#3f3f5a" />
-        )}
-        {/* Vie quotidienne */}
-        {dailyBudget !== null ? (
-          <CostLine
-            icon="🍽️" label={`Budget vie ${duration} jours`}
-            value={`~${dailyBudget.toLocaleString('fr-FR')}€`}
-            note="repas + transports locaux"
-            color="#6b7280"
-          />
-        ) : (
-          <CostLine icon="🍽️" label={`Budget vie ${duration} jours`} value="données insuffisantes" color="#3f3f5a" />
-        )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 18 }}>
+        <CostLine label={`Vol A/R depuis ${airport}`} value={`~${flightCost.toLocaleString('fr-FR')}€`} note="estimation basse saison" />
+        {hotelCost !== null
+          ? <CostLine label={`Hôtel ${duration} nuits`} value={`~${hotelCost.toLocaleString('fr-FR')}€`} note="hôtel moyen de gamme" />
+          : <CostLine label={`Hôtel ${duration} nuits`} value="données insuffisantes" muted />}
+        {dailyBudget !== null
+          ? <CostLine label={`Budget vie ${duration} jours`} value={`~${dailyBudget.toLocaleString('fr-FR')}€`} note="repas + transports locaux" />
+          : <CostLine label={`Budget vie ${duration} jours`} value="données insuffisantes" muted />}
 
         {/* Séparateur */}
-        <div style={{ height: 1, background: '#1e1e2e', margin: '4px 0' }} />
+        <div style={{ height: 1, background: 'var(--ctv3-line-soft)', margin: '8px 0' }} />
 
         {/* Total */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.75rem', color: '#e8e8e8', letterSpacing: '0.06em' }}>
-            TOTAL ESTIMÉ
+          <span className="ctv3-mono" style={{ fontSize: 11, color: 'var(--ctv3-paper)', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+            Total estimé
           </span>
           <div style={{ textAlign: 'right' }}>
-            <span style={{
-              fontFamily: 'var(--font-space-mono)', fontSize: '1.6rem',
-              fontWeight: 700, color: '#ff4d2e',
-            }}>
+            <span className="ctv3-mono" style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--ctv3-red-2)' }}>
               ~{total.toLocaleString('fr-FR')}€
             </span>
-            <div style={{ fontSize: '0.6rem', color: '#3f3f5a', marginTop: 1 }}>
-              par personne · estimation indicative
+            <div className="ctv3-mono" style={{ fontSize: 9, color: 'var(--ctv3-dim)', marginTop: 1, letterSpacing: '0.04em' }}>
+              par personne · prix indicatifs
             </div>
           </div>
         </div>
       </div>
 
-      {/* CTAs affiliés */}
+      {/* CTA primaires → /api/affiliate/click */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <a href={flightHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-          <CtaButton
-            icon="🛫"
-            label="TROUVER MON VOL"
-            sub={`Depuis ${airport} — meilleur prix garanti`}
-            bgColor="#dc2626"
-            hoverColor="#ef4444"
-          />
+          <CtaButton icon="✈" label="Trouver mon vol" sub={`Depuis ${airport} · comparateur`} primary />
         </a>
         <a href={hotelHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-          <CtaButton
-            icon="🏨"
-            label="RÉSERVER MON HÔTEL"
-            sub={`${countryName} — Annulation gratuite disponible`}
-            bgColor="#1d4ed8"
-            hoverColor="#2563eb"
-          />
+          <CtaButton icon="⌂" label="Réserver mon hôtel" sub={`${countryName} · annulation gratuite possible`} />
         </a>
         <a href={insuranceHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-          <CtaButton
-            icon="🛡️"
-            label="ASSURANCE VOYAGE"
-            sub="Chapka Direct — rapatriement, annulation, santé"
-            bgColor="#065f46"
-            hoverColor="#047857"
-          />
+          <CtaButton icon="⛨" label="Assurance voyage" sub="Rapatriement · annulation · santé" />
         </a>
       </div>
 
-      {/* CTAs secondaires — préparation voyage (GOAL-048). Restreints : pills compactes,
-          fond neutre, distincts des 3 CTA principaux pour éviter la surcharge visuelle. */}
+      {/* CTA secondaires — préparation voyage (transfert / activités / eSIM) : pills discrètes */}
       <div style={{ marginTop: 14 }}>
-        <div style={{
-          fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280',
-          letterSpacing: '0.1em', marginBottom: 8, textTransform: 'uppercase',
+        <div className="ctv3-mono" style={{
+          fontSize: 9.5, color: 'var(--ctv3-faint)', letterSpacing: '0.16em', marginBottom: 8, textTransform: 'uppercase',
         }}>
-          🧳 Préparer le voyage
+          Aussi utile sur place
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
           <a href={transferHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <SecondaryCta icon="🚕" label="Transfert aéroport" />
+            <SecondaryCta icon="⇄" label="Transfert" />
           </a>
           <a href={activityHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <SecondaryCta icon="🎟️" label="Activités" />
+            <SecondaryCta icon="◷" label="Activités" />
           </a>
           <a href={esimHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <SecondaryCta icon="📶" label="eSIM" />
+            <SecondaryCta icon="≡" label="eSIM" />
           </a>
         </div>
       </div>
 
-      {/* Disclaimer */}
-      <p style={{ fontSize: '0.6rem', color: '#3f3f5a', marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>
-        Les prix affichés sont des estimations indicatives. Les tarifs réels dépendent de la date,
-        disponibilité et aéroport. Crisis Travel peut percevoir une commission si vous réservez via ces liens.
+      {/* Disclaimer — honnête, ton sobre */}
+      <p className="ctv3-mono" style={{ fontSize: 9.5, color: 'var(--ctv3-dim)', marginTop: 14, lineHeight: 1.55, letterSpacing: '0.02em' }}>
+        Estimation indicative, hors disponibilité en temps réel. Les tarifs peuvent varier selon les dates,
+        la disponibilité et les partenaires. Crisis Travel peut percevoir une commission si vous réservez via ces liens.
       </p>
     </div>
   );
@@ -268,27 +243,26 @@ export function TravelPackBlock({ countryCode, countryName, mealCheapEur, hotelA
 
 // ── Sous-composants ───────────────────────────────────────────────────────────
 
-function CostLine({ icon, label, value, note, color }: {
-  icon: string; label: string; value: string; note?: string; color: string;
+function CostLine({ label, value, note, muted }: {
+  label: string; value: string; note?: string; muted?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: '0.9rem' }}>{icon}</span>
-        <div>
-          <span style={{ fontSize: '0.82rem', color: '#c0c0c0' }}>{label}</span>
-          {note && <span style={{ fontSize: '0.65rem', color: '#3f3f5a', marginLeft: 6 }}>{note}</span>}
-        </div>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '6px 0' }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 14, color: 'var(--ctv3-paper)' }}>{label}</span>
+        {note && <span className="ctv3-mono" style={{ fontSize: 9.5, color: 'var(--ctv3-faint)', marginLeft: 8, letterSpacing: '0.04em' }}>{note}</span>}
       </div>
-      <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.85rem', color, fontWeight: 600, flexShrink: 0 }}>
+      <span className="ctv3-mono" style={{
+        fontSize: 14, color: muted ? 'var(--ctv3-dim)' : 'var(--ctv3-paper)', fontWeight: 600, flexShrink: 0,
+      }}>
         {value}
       </span>
     </div>
   );
 }
 
-function CtaButton({ icon, label, sub, bgColor, hoverColor }: {
-  icon: string; label: string; sub: string; bgColor: string; hoverColor: string;
+function CtaButton({ icon, label, sub, primary }: {
+  icon: string; label: string; sub: string; primary?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -297,27 +271,30 @@ function CtaButton({ icon, label, sub, bgColor, hoverColor }: {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        background: hovered ? hoverColor : bgColor,
-        borderRadius: 9, padding: '11px 16px', transition: 'background 0.15s, transform 0.15s',
+        background: primary
+          ? (hovered ? 'var(--ctv3-red-2)' : 'var(--ctv3-red)')
+          : (hovered ? 'var(--ctv3-ink-700)' : 'var(--ctv3-ink-800)'),
+        border: primary ? '1px solid transparent' : '1px solid var(--ctv3-line)',
+        padding: '13px 16px',
+        transition: 'background 0.15s, transform 0.15s',
         transform: hovered ? 'translateY(-1px)' : 'none',
-        boxShadow: hovered ? `0 4px 16px ${bgColor}60` : 'none',
         cursor: 'pointer',
       }}
     >
-      <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.72rem', color: '#fff', letterSpacing: '0.08em', fontWeight: 700 }}>
+      <span aria-hidden="true" style={{ fontSize: '1.05rem', color: primary ? '#fff' : 'var(--ctv3-muted)' }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="ctv3-mono" style={{ fontSize: 12, color: primary ? '#fff' : 'var(--ctv3-paper)', letterSpacing: '0.04em', fontWeight: 700 }}>
           {label} →
         </div>
-        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>{sub}</div>
+        <div style={{ fontSize: 11.5, color: primary ? 'rgba(255,255,255,0.7)' : 'var(--ctv3-muted)', marginTop: 1 }}>{sub}</div>
       </div>
-      <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>↗</span>
+      <span aria-hidden="true" style={{ fontSize: '0.8rem', color: primary ? 'rgba(255,255,255,0.5)' : 'var(--ctv3-faint)' }}>↗</span>
     </div>
   );
 }
 
 // Pill compacte pour les CTA secondaires (transfert / activités / eSIM).
-// Volontairement plus discrète que CtaButton : fond neutre, pas de couleur d'accent forte.
+// Volontairement plus discrète que CtaButton : fond neutre, pas d'accent fort.
 function SecondaryCta({ icon, label }: { icon: string; label: string }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -325,20 +302,17 @@ function SecondaryCta({ icon, label }: { icon: string; label: string }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-        background: hovered ? '#26263a' : '#1e1e2e',
-        border: '1px solid rgba(255,255,255,0.06)',
-        borderRadius: 8, padding: '8px 10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+        background: hovered ? 'var(--ctv3-ink-700)' : 'var(--ctv3-ink-800)',
+        border: '1px solid var(--ctv3-line)',
+        padding: '9px 10px',
         transition: 'background 0.15s, transform 0.15s',
         transform: hovered ? 'translateY(-1px)' : 'none',
         cursor: 'pointer',
       }}
     >
-      <span style={{ fontSize: '0.85rem' }}>{icon}</span>
-      <span style={{
-        fontFamily: 'var(--font-space-mono)', fontSize: '0.62rem', color: '#c0c0c0',
-        letterSpacing: '0.04em', fontWeight: 600,
-      }}>
+      <span aria-hidden="true" style={{ fontSize: '0.9rem', color: 'var(--ctv3-faint)' }}>{icon}</span>
+      <span className="ctv3-mono" style={{ fontSize: 10.5, color: 'var(--ctv3-paper)', letterSpacing: '0.04em', fontWeight: 600 }}>
         {label} →
       </span>
     </div>

@@ -1,10 +1,14 @@
 'use client';
 import { useState } from 'react';
 
-// Bloc compact « Préparer ce voyage » affiché sur /results (parcours principal).
+// Bloc compact « Préparer votre voyage » affiché sur /results (parcours principal).
 // Ne contient AUCUNE logique d'affiliation : les 3 CTA pointent simplement vers
 // la route serveur /api/affiliate/click, qui trace le clic puis redirige (302)
 // vers le partenaire. Aucun lien partenaire direct ici, aucun affiliate_id.
+//
+// FRONT-005 : refonte visuelle uniquement (système ctv3, direction éditoriale
+// premium). Le comportement d'affiliation, les paramètres préremplis (Booking),
+// et les exports testés (buildBookingUrl / ADULTS_BY_TYPE) sont inchangés.
 
 type TravelType = 'solo' | 'couple' | 'family' | 'nomad';
 type Category = 'flight' | 'hotel' | 'insurance';
@@ -82,44 +86,49 @@ function buildClickUrl(
   return `/api/affiliate/click?${params.toString()}`;
 }
 
-const CTAS: { category: Category; icon: string; generic: string; prefix: string; bg: string; hover: string }[] = [
-  { category: 'flight',    icon: '✈',  generic: 'Trouver un vol',    prefix: 'Vol',       bg: '#dc2626', hover: '#ef4444' },
-  { category: 'hotel',     icon: '🏨', generic: 'Réserver un hôtel', prefix: 'Hôtel',     bg: '#1d4ed8', hover: '#2563eb' },
-  { category: 'insurance', icon: '🛡', generic: 'Assurance voyage',  prefix: 'Assurance', bg: '#065f46', hover: '#047857' },
+const CTAS: { category: Category; icon: string; generic: string; prefix: string }[] = [
+  { category: 'flight',    icon: '✈', generic: 'Trouver un vol',    prefix: 'Vol' },
+  { category: 'hotel',     icon: '⌂', generic: 'Réserver un hôtel', prefix: 'Hôtel' },
+  { category: 'insurance', icon: '⛨', generic: 'Assurance voyage',  prefix: 'Assurance' },
 ];
 
 export function TravelPackMiniBlock({ countryCode, countryName, travelType, checkin, checkout }: TravelPackMiniBlockProps) {
   const title = countryName ? `Préparer votre voyage : ${countryName}` : 'Préparer ce voyage';
-  const ctaLabel = (c: (typeof CTAS)[number]) => (countryName ? `${c.prefix} ${countryName}` : c.generic);
+  const ctaLabel = (c: (typeof CTAS)[number]) => (countryName ? `${c.prefix} · ${countryName}` : c.generic);
   const bookingOpts = { checkin, checkout, travelType };
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #13131a 0%, #0f0f1a 100%)',
-      border: '1px solid rgba(255,77,46,0.25)',
-      borderRadius: 14, padding: '18px 18px 16px', marginTop: 24,
-      boxShadow: '0 0 40px rgba(255,77,46,0.05) inset',
+      border: '1px solid var(--ctv3-line)',
+      borderTop: '2px solid var(--ctv3-red)',
+      background: 'var(--ctv3-ink-850)',
+      padding: '20px 20px 18px',
+      marginTop: 24,
     }}>
-      {/* Titre + sous-texte */}
-      <div style={{ marginBottom: 14 }}>
+      {/* Eyebrow + titre éditorial */}
+      <div style={{ marginBottom: 16 }}>
+        <span className="ctv3-mono" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+          color: 'var(--ctv3-red)',
+        }}>
+          <span style={{ width: 14, height: 1, background: 'currentColor', opacity: 0.6 }} />
+          Préparer le voyage
+        </span>
         <h2 style={{
-          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-          fontSize: '0.85rem', color: '#ff4d2e', letterSpacing: '0.1em',
-          margin: 0, textTransform: 'uppercase', fontWeight: 700,
+          fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 19,
+          letterSpacing: '-0.02em', color: 'var(--ctv3-paper)', margin: '8px 0 4px',
         }}>
-          ✈️ {title}
+          {title}
         </h2>
-        <p style={{
-          fontSize: '0.72rem', color: '#9898b0', margin: '4px 0 0',
-          lineHeight: 1.4,
-        }}>
+        <p className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-muted)', lineHeight: 1.45 }}>
           Comparez vols, hôtels et assurance avant de réserver.
         </p>
       </div>
 
-      {/* 3 CTA → /api/affiliate/click */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        {CTAS.map((c) => (
+      {/* 3 CTA → /api/affiliate/click (hiérarchie : vol en primaire, hôtel/assurance en appui) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+        {CTAS.map((c, i) => (
           <a
             key={c.category}
             href={buildClickUrl(c.category, countryCode, countryName, bookingOpts)}
@@ -127,22 +136,24 @@ export function TravelPackMiniBlock({ countryCode, countryName, travelType, chec
             rel="noopener noreferrer"
             style={{ textDecoration: 'none' }}
           >
-            <MiniCta icon={c.icon} label={ctaLabel(c)} bgColor={c.bg} hoverColor={c.hover} />
+            <MiniCta icon={c.icon} label={ctaLabel(c)} primary={i === 0} />
           </a>
         ))}
       </div>
 
-      {/* Disclaimer */}
-      <p style={{ fontSize: '0.58rem', color: '#3f3f5a', marginTop: 12, textAlign: 'center', lineHeight: 1.5 }}>
-        Crisis Travel peut percevoir une commission si vous réservez via ces liens.
+      {/* Disclaimer — honnête, ton sobre */}
+      <p className="ctv3-mono" style={{
+        fontSize: 9.5, color: 'var(--ctv3-dim)', marginTop: 14, lineHeight: 1.5,
+        letterSpacing: '0.02em',
+      }}>
+        Liens partenaires. Crisis Travel peut percevoir une commission si vous réservez via ces liens.
+        Les tarifs peuvent varier selon dates, disponibilité et partenaires.
       </p>
     </div>
   );
 }
 
-function MiniCta({ icon, label, bgColor, hoverColor }: {
-  icon: string; label: string; bgColor: string; hoverColor: string;
-}) {
+function MiniCta({ icon, label, primary }: { icon: string; label: string; primary: boolean }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
@@ -150,18 +161,20 @@ function MiniCta({ icon, label, bgColor, hoverColor }: {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        background: hovered ? hoverColor : bgColor,
-        borderRadius: 9, padding: '11px 12px',
+        background: primary
+          ? (hovered ? 'var(--ctv3-red-2)' : 'var(--ctv3-red)')
+          : (hovered ? 'var(--ctv3-ink-700)' : 'var(--ctv3-ink-800)'),
+        border: primary ? '1px solid transparent' : '1px solid var(--ctv3-line)',
+        padding: '12px 14px',
         transition: 'background 0.15s, transform 0.15s',
         transform: hovered ? 'translateY(-1px)' : 'none',
-        boxShadow: hovered ? `0 4px 16px ${bgColor}60` : 'none',
         cursor: 'pointer',
       }}
     >
-      <span style={{ fontSize: '1rem' }}>{icon}</span>
-      <span style={{
-        fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-        fontSize: '0.68rem', color: '#fff', letterSpacing: '0.06em', fontWeight: 700,
+      <span aria-hidden="true" style={{ fontSize: '0.95rem', color: primary ? '#fff' : 'var(--ctv3-muted)' }}>{icon}</span>
+      <span className="ctv3-mono" style={{
+        fontSize: 11, letterSpacing: '0.06em', fontWeight: 700,
+        color: primary ? '#fff' : 'var(--ctv3-paper)',
       }}>
         {label} →
       </span>
