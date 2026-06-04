@@ -80,13 +80,17 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
     { id: 'region',    label: 'Explorer une région',  icon: '🌍' },
   ];
   return (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: '#0d0d14', borderRadius: 12, padding: 4 }}>
+    <div style={{
+      display: 'flex', gap: 4, marginBottom: 20,
+      background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
+      padding: 4,
+    }}>
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)} style={{
-          flex: 1, padding: '9px 8px', border: 'none', borderRadius: 9, cursor: 'pointer',
-          background: active === t.id ? '#ff4d2e' : 'transparent',
-          color: active === t.id ? '#fff' : '#6b7280',
-          fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem',
+          flex: 1, padding: '9px 8px', border: 'none', cursor: 'pointer',
+          background: active === t.id ? 'var(--ctv3-red)' : 'transparent',
+          color: active === t.id ? '#fff' : 'var(--ctv3-faint)',
+          fontFamily: 'var(--ctv3-mono)', fontSize: '0.65rem',
           letterSpacing: '0.06em', transition: 'all 0.2s',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
@@ -107,26 +111,26 @@ function AirportSelector({ value, onChange }: { value: string; onChange: (v: str
     <div style={{ position: 'relative', marginBottom: 16 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        background: '#080810', border: '1px solid #1e1e2e', borderRadius: 8,
+        background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
         padding: '7px 12px', cursor: 'pointer',
       }} onClick={() => setOpen((o) => !o)}>
         <span style={{ fontSize: '0.8rem' }}>✈️</span>
-        <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.1em', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.6rem', color: 'var(--ctv3-dim)', letterSpacing: '0.1em', flexShrink: 0 }}>
           DÉPART DEPUIS
         </span>
-        <span style={{ fontSize: '0.82rem', color: '#e8e8e8', fontWeight: 600, flex: 1 }}>
+        <span style={{ fontSize: '0.82rem', color: 'var(--ctv3-paper)', fontWeight: 600, flex: 1 }}>
           {airport.city}
         </span>
-        <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', background: '#1e1e2e', padding: '2px 6px', borderRadius: 4 }}>
+        <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.6rem', color: 'var(--ctv3-faint)', background: 'var(--ctv3-ink-700)', padding: '2px 6px' }}>
           {airport.code}
         </span>
-        <span style={{ color: '#3f3f5a', fontSize: '0.65rem' }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--ctv3-dim)', fontSize: '0.65rem' }}>{open ? '▲' : '▼'}</span>
       </div>
 
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 2,
-          background: '#0d0d14', border: '1px solid #1e1e2e', borderRadius: 8,
+          background: 'var(--ctv3-ink-850)', border: '1px solid var(--ctv3-line)',
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxHeight: 280, overflowY: 'auto',
         }}>
           {FRENCH_AIRPORTS.map((ap) => (
@@ -135,17 +139,18 @@ function AirportSelector({ value, onChange }: { value: string; onChange: (v: str
               onClick={() => { onChange(ap.code); setOpen(false); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '8px 12px', background: ap.code === value ? 'rgba(255,77,46,0.08)' : 'transparent',
-                border: 'none', borderBottom: '1px solid #1a1a28', cursor: 'pointer', textAlign: 'left',
+                padding: '8px 12px',
+                background: ap.code === value ? 'rgba(228,51,43,0.08)' : 'transparent',
+                border: 'none', borderBottom: '1px solid var(--ctv3-line-soft)', cursor: 'pointer', textAlign: 'left',
               }}
             >
-              <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#6b7280', background: '#1e1e2e', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.6rem', color: 'var(--ctv3-faint)', background: 'var(--ctv3-ink-700)', padding: '1px 5px', flexShrink: 0 }}>
                 {ap.code}
               </span>
-              <span style={{ fontSize: '0.82rem', color: ap.code === value ? '#ff4d2e' : '#e8e8e8' }}>
+              <span style={{ fontSize: '0.82rem', color: ap.code === value ? 'var(--ctv3-red-2)' : 'var(--ctv3-paper)' }}>
                 {ap.city}
               </span>
-              <span style={{ fontSize: '0.7rem', color: '#3f3f5a', marginLeft: 'auto' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--ctv3-dim)', marginLeft: 'auto' }}>
                 {ap.name}
               </span>
             </button>
@@ -184,11 +189,11 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
             key={c.id}
             onClick={() => setSelected(selected === c.id ? null : c.id)}
             style={{
-              padding: '7px 14px', borderRadius: 20, cursor: 'pointer',
-              border: selected === c.id ? `1.5px solid ${c.color}` : '1.5px solid #1e1e2e',
-              background: selected === c.id ? `${c.color}18` : '#0d0d14',
-              color: selected === c.id ? c.color : '#6b7280',
-              fontFamily: 'var(--font-dm-sans)', fontSize: '0.82rem', fontWeight: 600,
+              padding: '7px 14px', cursor: 'pointer',
+              border: selected === c.id ? `1.5px solid ${c.color}` : '1.5px solid var(--ctv3-line)',
+              background: selected === c.id ? `${c.color}18` : 'var(--ctv3-ink-850)',
+              color: selected === c.id ? c.color : 'var(--ctv3-faint)',
+              fontFamily: 'var(--ctv3-display)', fontSize: '0.82rem', fontWeight: 600,
               transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 5,
             }}
           >
@@ -206,11 +211,11 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
                 key={s.key}
                 onClick={() => setSort(s.key)}
                 style={{
-                  padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
-                  border: sort === s.key ? '1px solid #ff4d2e' : '1px solid #1e1e2e',
-                  background: sort === s.key ? 'rgba(255,77,46,0.1)' : 'transparent',
-                  color: sort === s.key ? '#ff4d2e' : '#6b7280',
-                  fontFamily: 'var(--font-space-mono)', fontSize: '0.58rem', letterSpacing: '0.06em',
+                  padding: '4px 10px', cursor: 'pointer',
+                  border: sort === s.key ? '1px solid var(--ctv3-red)' : '1px solid var(--ctv3-line)',
+                  background: sort === s.key ? 'rgba(228,51,43,0.1)' : 'transparent',
+                  color: sort === s.key ? 'var(--ctv3-red)' : 'var(--ctv3-faint)',
+                  fontFamily: 'var(--ctv3-mono)', fontSize: '0.58rem', letterSpacing: '0.06em',
                   transition: 'all 0.15s',
                 }}
               >
@@ -223,31 +228,31 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginBottom: 16 }}>
             {countries.map((c) => {
               const sortValue = sort === 'security' ? c.hint.security : sort === 'budget' ? c.hint.budget : c.hint.score;
-              const barColor = sortValue >= 70 ? '#00e5a0' : sortValue >= 55 ? '#ffd23f' : '#ff8c42';
+              const barColor = sortValue >= 70 ? 'var(--ctv3-ideal)' : sortValue >= 55 ? 'var(--ctv3-reco)' : 'var(--ctv3-poss)';
               return (
                 <button
                   key={c.code}
                   onClick={() => router.push(`/destination/${c.code}`)}
                   style={{
-                    background: '#0d0d14', border: '1px solid #1e1e2e', borderRadius: 10,
+                    background: 'var(--ctv3-ink-850)', border: '1px solid var(--ctv3-line)',
                     padding: '10px 12px', cursor: 'pointer', textAlign: 'left',
                     transition: 'border-color 0.15s', display: 'flex', flexDirection: 'column', gap: 6,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#3f3f5a')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1e1e2e')}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--ctv3-line-bright)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--ctv3-line)')}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.55rem', fontFamily: 'var(--font-space-mono)', color: '#3f3f5a', letterSpacing: '0.06em' }}>
+                    <span style={{ fontSize: '0.55rem', fontFamily: 'var(--ctv3-mono)', color: 'var(--ctv3-dim)', letterSpacing: '0.06em' }}>
                       {c.code}
                     </span>
-                    <span style={{ fontSize: '0.7rem', color: barColor, fontFamily: 'var(--font-space-mono)', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.7rem', color: barColor, fontFamily: 'var(--ctv3-mono)', fontWeight: 700 }}>
                       {sortValue}
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.82rem', color: '#e8e8e8', fontWeight: 600 }}>{c.name}</span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--ctv3-paper)', fontWeight: 600 }}>{c.name}</span>
                   {/* Mini bar */}
-                  <div style={{ height: 2, background: '#1e1e2e', borderRadius: 1 }}>
-                    <div style={{ height: '100%', width: `${sortValue}%`, background: barColor, borderRadius: 1, transition: 'width 0.4s ease' }} />
+                  <div style={{ height: 2, background: 'var(--ctv3-line)', }}>
+                    <div style={{ height: '100%', width: `${sortValue}%`, background: barColor, transition: 'width 0.4s ease' }} />
                   </div>
                 </button>
               );
@@ -267,17 +272,17 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
               }, 50);
             }}
             style={{
-              width: '100%', padding: '12px', borderRadius: 10,
+              width: '100%', padding: '12px',
               cursor: pending ? 'not-allowed' : 'pointer',
-              background: pending ? 'rgba(255,77,46,0.04)' : 'rgba(255,77,46,0.08)',
-              border: '1px solid rgba(255,77,46,0.3)',
-              color: pending ? '#7a3a2e' : '#ff4d2e',
-              fontFamily: 'var(--font-space-mono)',
+              background: pending ? 'rgba(228,51,43,0.04)' : 'rgba(228,51,43,0.08)',
+              border: '1px solid rgba(228,51,43,0.3)',
+              color: pending ? 'var(--ctv3-dim)' : 'var(--ctv3-red)',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: '0.72rem', letterSpacing: '0.1em', transition: 'all 0.2s',
               opacity: pending ? 0.6 : 1,
             }}
-            onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(255,77,46,0.15)'; }}
-            onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(255,77,46,0.08)'; }}
+            onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(228,51,43,0.15)'; }}
+            onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(228,51,43,0.08)'; }}
           >
             {pending
               ? '⏳ LANCEMENT EN COURS...'
@@ -287,7 +292,7 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
       )}
 
       {!selected && (
-        <div style={{ textAlign: 'center', padding: '28px 0', color: '#3f3f5a', fontSize: '0.82rem' }}>
+        <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--ctv3-dim)', fontSize: '0.82rem' }}>
           Sélectionne une région pour explorer ses destinations
         </div>
       )}
@@ -331,7 +336,7 @@ function OptionGrid<T extends string>({
 }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.62rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 8 }}>
+      <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.62rem', color: 'var(--ctv3-dim)', letterSpacing: '0.1em', marginBottom: 8 }}>
         {label}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(options.length, 2)}, 1fr)`, gap: 8 }}>
@@ -340,15 +345,15 @@ function OptionGrid<T extends string>({
             key={opt.id}
             onClick={() => onChange(opt.id)}
             style={{
-              padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
-              border: value === opt.id ? '1.5px solid #ff4d2e' : '1.5px solid #1e1e2e',
-              background: value === opt.id ? 'rgba(255,77,46,0.08)' : '#0d0d14',
+              padding: '10px 12px', cursor: 'pointer', textAlign: 'left',
+              border: value === opt.id ? '1.5px solid var(--ctv3-red)' : '1.5px solid var(--ctv3-line)',
+              background: value === opt.id ? 'rgba(228,51,43,0.08)' : 'var(--ctv3-ink-850)',
               transition: 'all 0.15s',
             }}
           >
             <div style={{ fontSize: '1.2rem', marginBottom: 2 }}>{opt.icon}</div>
-            <div style={{ fontSize: '0.82rem', color: value === opt.id ? '#ff4d2e' : '#e8e8e8', fontWeight: 600 }}>{opt.label}</div>
-            {opt.desc && <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: 2 }}>{opt.desc}</div>}
+            <div style={{ fontSize: '0.82rem', color: value === opt.id ? 'var(--ctv3-red-2)' : 'var(--ctv3-paper)', fontWeight: 600 }}>{opt.label}</div>
+            {opt.desc && <div style={{ fontSize: '0.68rem', color: 'var(--ctv3-faint)', marginTop: 2 }}>{opt.desc}</div>}
           </button>
         ))}
       </div>
@@ -393,15 +398,15 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
       {/* Progress */}
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: '#3f3f5a', letterSpacing: '0.08em' }}>
+          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.6rem', color: 'var(--ctv3-dim)', letterSpacing: '0.08em' }}>
             PROFIL EN COURS
           </span>
-          <span style={{ fontFamily: 'var(--font-space-mono)', fontSize: '0.6rem', color: completed === total ? '#00e5a0' : '#6b7280' }}>
+          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.6rem', color: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-faint)' }}>
             {completed}/{total}
           </span>
         </div>
-        <div style={{ height: 2, background: '#1e1e2e', borderRadius: 1 }}>
-          <div style={{ height: '100%', width: `${(completed / total) * 100}%`, background: completed === total ? '#00e5a0' : '#ff4d2e', borderRadius: 1, transition: 'width 0.3s ease' }} />
+        <div style={{ height: 2, background: 'var(--ctv3-line)' }}>
+          <div style={{ height: '100%', width: `${(completed / total) * 100}%`, background: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-red)', transition: 'width 0.3s ease' }} />
         </div>
       </div>
 
@@ -414,14 +419,14 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
         onClick={handleGenerate}
         disabled={completed < 2 || loading}
         style={{
-          width: '100%', padding: '13px', borderRadius: 10,
+          width: '100%', padding: '13px',
           cursor: completed < 2 || loading ? 'not-allowed' : 'pointer',
-          background: completed >= 2 ? '#ff4d2e' : '#1e1e2e',
-          border: 'none',
-          color: completed >= 2 ? '#fff' : '#3f3f5a',
-          fontFamily: 'var(--font-space-mono)', fontSize: '0.75rem', letterSpacing: '0.1em',
+          background: completed >= 2 ? 'var(--ctv3-red)' : 'var(--ctv3-ink-700)',
+          border: completed >= 2 ? '1px solid transparent' : '1px solid var(--ctv3-line)',
+          color: completed >= 2 ? '#fff' : 'var(--ctv3-dim)',
+          fontFamily: 'var(--ctv3-mono)', fontSize: '0.75rem', letterSpacing: '0.1em',
           transition: 'all 0.2s', marginTop: 4,
-          boxShadow: completed >= 2 ? '0 4px 20px rgba(255,77,46,0.3)' : 'none',
+          boxShadow: completed >= 2 ? '0 4px 20px rgba(228,51,43,0.3)' : 'none',
         }}
       >
         {loading ? '⏳ ANALYSE EN COURS...' : completed >= 4 ? '✨ SURPRENDS-MOI →' : completed >= 2 ? '⚡ VOIR MES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
@@ -454,7 +459,13 @@ export function SmartSearchHub() {
   }, [router, airport, dateDepart, dateRetour]);
 
   return (
-    <div style={{ background: '#13131a', border: '1px solid #1e1e2e', borderRadius: 16, padding: 20, overflowX: 'hidden' }}>
+    <div style={{
+      background: 'var(--ctv3-ink-850)',
+      border: '1px solid var(--ctv3-line)',
+      borderTop: '2px solid var(--ctv3-red)',
+      padding: 20,
+      overflowX: 'hidden',
+    }}>
 
       {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
       <AirportSelector value={airport} onChange={handleAirportChange} />
@@ -465,11 +476,11 @@ export function SmartSearchHub() {
           Clarifie que Crisis Travel n'est pas un moteur universel de destinations :
           il détecte les pays où le contexte actuel crée une opportunité de voyage. */}
       <p style={{
-        fontSize: '0.7rem', color: '#9ca3af', lineHeight: 1.55,
+        fontSize: '0.7rem', color: 'var(--ctv3-muted)', lineHeight: 1.55,
         textAlign: 'center', margin: '0 0 18px',
       }}>
         Pas toutes les destinations. Les bonnes opportunités. Crisis Travel analyse une
-        sélection de pays <strong style={{ color: '#e8e8e8', fontWeight: 600 }}>opportunistes,
+        sélection de pays <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>opportunistes,
         émergents ou sous-évalués</strong> et repère ceux où le contexte actuel peut rendre
         le voyage plus avantageux.
       </p>
