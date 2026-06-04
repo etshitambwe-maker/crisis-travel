@@ -1,28 +1,38 @@
 'use client';
 import { useRouter } from 'next/navigation';
+import { CountryFlag } from '@/components/design/CountryFlag';
+import { DestinationImage } from '@/components/design/DestinationImage';
+import { getDestinationImagery } from '@/lib/design/destinationImagery';
 
-// Budget and duration extracted from the meta strings so clicking navigates to /results
-// with pre-filled parameters matching the opportunity window.
-const OPPORTUNITIES = [
+/**
+ * FRONT-002 — Editorial destination entry points (formerly "Fenêtres optimales").
+ *
+ * HONESTY: all fabricated metrics removed — no invented dates, prices, FX deltas,
+ * or safety scores. Each card now carries only real product data: a covered
+ * destination (FRONT-001 imagery + flag), its region, an honest positioning line,
+ * and a CTA that navigates to /results with the SAME real pre-filled params as
+ * before (mode / budget / duration / continent). Route behavior is unchanged.
+ *
+ * `code` keys into the FRONT-001 destination imagery registry (TARGET_COUNTRIES).
+ */
+const ENTRIES: {
+  code: string;
+  positioning: string;
+  href: string;
+}[] = [
   {
-    dates: '28 AVR → 12 MAI',
-    title: 'Shoulder season Méditerranée',
-    desc: 'Portugal + Grèce : −18% hébergement, météo optimale, affluence faible.',
-    tag: 'OPTIMAL', meta: ['DURÉE 15J', 'BUDGET 1800€', 'SÉCURITÉ 92'],
+    code: 'PT',
+    positioning: 'Méditerranée hors-saison : climat clément, affluence basse.',
     href: '/results?mode=standard&budget=1800&duration=15&travelType=solo&continent=Europe',
   },
   {
-    dates: '05 MAI → 19 MAI',
-    title: 'Yen historiquement bas — Japon',
-    desc: 'JPY à −22% vs EUR, vols LCC en promo, hanami tardif Hokkaidō.',
-    tag: 'FX PLAY', meta: ['DURÉE 14J', 'BUDGET 2400€', 'FX −22%'],
+    code: 'JP',
+    positioning: 'Yen favorable à l’euro : un classique redevenu accessible.',
     href: '/results?mode=standard&budget=2400&duration=14&travelType=solo&continent=Asia',
   },
   {
-    dates: '19 MAI → 02 JUN',
-    title: 'Maroc pré-été Atlantique',
-    desc: '22°C côte, MAD favorable, Paris-Marrakech 119€ A/R.',
-    tag: 'BUDGET', meta: ['DURÉE 14J', 'BUDGET 1200€', 'FX +12%'],
+    code: 'MA',
+    positioning: 'Côte atlantique avant l’été : douceur et budget contenu.',
     href: '/results?mode=budget_crisis&budget=1200&duration=14&travelType=solo&continent=Africa',
   },
 ];
@@ -31,60 +41,99 @@ export function OpportunityCards() {
   const router = useRouter();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {OPPORTUNITIES.map((o, i) => (
-        <div key={i}
-          role="button"
-          tabIndex={0}
-          onClick={() => router.push(o.href)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(o.href); }}
-          style={{
-            position: 'relative',
-            background: 'linear-gradient(135deg, rgba(61,220,151,0.06), rgba(61,220,151,0.02))',
-            border: '1px solid rgba(61,220,151,0.2)',
-            borderRadius: 12, padding: '14px 16px',
-            display: 'flex', flexDirection: 'column', gap: 8,
-            cursor: 'pointer', transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(61,220,151,0.4)';
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateX(2px)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(61,220,151,0.2)';
-            (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)';
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: '#3ddc97', textTransform: 'uppercase',
-            }}>
-              {o.dates}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+        gap: 16,
+      }}
+    >
+      {ENTRIES.map((e) => {
+        const ident = getDestinationImagery(e.code);
+        return (
+          <article
+            key={e.code}
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push(e.href)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' || ev.key === ' ') router.push(e.href);
+            }}
+            style={{
+              cursor: 'pointer',
+              border: '1px solid var(--ctv3-line)',
+              background: 'var(--ctv3-ink-850)',
+              overflow: 'hidden',
+              transition: 'border-color .2s, transform .2s',
+            }}
+            onMouseEnter={(ev) => {
+              ev.currentTarget.style.borderColor = 'var(--ctv3-line-bright)';
+              ev.currentTarget.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(ev) => {
+              ev.currentTarget.style.borderColor = 'var(--ctv3-line)';
+              ev.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            {/* Photo-led: real photo when curated, else premium duotone (FRONT-001) */}
+            <DestinationImage code={e.code} slot="card" aspect="16/10" showLabel={false} scrim="soft" />
+
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <CountryFlag code={e.code} width={24} />
+                <span
+                  style={{
+                    fontFamily: 'var(--ctv3-display)',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    letterSpacing: '-0.01em',
+                    color: 'var(--ctv3-paper)',
+                  }}
+                >
+                  {ident.name}
+                </span>
+                <span
+                  className="ctv3-mono"
+                  style={{
+                    marginLeft: 'auto',
+                    fontSize: 9,
+                    letterSpacing: '0.14em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ctv3-faint)',
+                  }}
+                >
+                  {ident.region}
+                </span>
+              </div>
+
+              <p
+                className="ctv3-serif"
+                style={{ fontSize: 13.5, lineHeight: 1.5, color: 'var(--ctv3-muted)', margin: 0 }}
+              >
+                {e.positioning}
+              </p>
+
+              <span
+                className="ctv3-mono"
+                style={{
+                  marginTop: 2,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 10,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  color: 'var(--ctv3-red)',
+                  fontWeight: 500,
+                }}
+              >
+                Analyser cette destination
+                <span aria-hidden="true">→</span>
+              </span>
             </div>
-            <span style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-              fontSize: 8.5, letterSpacing: '0.15em', color: '#3ddc97',
-              padding: '3px 7px', border: '1px solid rgba(61,220,151,0.35)', borderRadius: 3,
-              textTransform: 'uppercase', fontWeight: 700, background: 'rgba(61,220,151,0.08)',
-            }}>
-              {o.tag}
-            </span>
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#f0f0f5', letterSpacing: '-0.01em' }}>{o.title}</div>
-          <div style={{ color: '#9898b0', fontSize: 12.5, lineHeight: 1.45 }}>{o.desc}</div>
-          <div style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-            fontSize: 9.5, color: '#6b6b85', letterSpacing: '0.1em', textTransform: 'uppercase',
-            paddingTop: 8, borderTop: '1px dashed rgba(61,220,151,0.2)',
-            display: 'flex', gap: 10,
-          }}>
-            {o.meta.map((m, j) => (
-              <span key={j}>{j > 0 ? '· ' : ''}{m}</span>
-            ))}
-          </div>
-        </div>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }
