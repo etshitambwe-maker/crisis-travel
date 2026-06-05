@@ -48,13 +48,13 @@ export function AuthModal({ isOpen, onClose }: Props) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500,
-      background: 'rgba(7,7,12,0.88)', backdropFilter: 'blur(16px)',
+      background: 'rgba(6,6,10,0.88)', backdropFilter: 'blur(16px)',
       display: 'grid', placeItems: 'center', padding: 20,
     }} onClick={onClose}>
       <div
         style={{
           width: '100%', maxWidth: 380,
-          background: '#11111c', border: '1px solid #2e2e45',
+          background: 'var(--ctv3-ink-870)', border: '1px solid var(--ctv3-line-bright)',
           borderRadius: 16, padding: 28,
           boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
         }}
@@ -63,19 +63,19 @@ export function AuthModal({ isOpen, onClose }: Props) {
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <div style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-            fontSize: '0.6rem', letterSpacing: '0.18em', color: '#ff3b2f',
+            fontFamily: 'var(--ctv3-mono)',
+            fontSize: '0.6rem', letterSpacing: '0.18em', color: 'var(--ctv3-red)',
             textTransform: 'uppercase', marginBottom: 8,
           }}>
             CRISIS TRAVEL
           </div>
           <h2 style={{
-            margin: 0, fontSize: 22, fontWeight: 700, color: '#f0f0f5',
-            fontFamily: 'var(--font-space-mono), monospace', letterSpacing: '-0.02em',
+            margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ctv3-paper)',
+            fontFamily: 'var(--ctv3-mono)', letterSpacing: '-0.02em',
           }}>
             Connexion
           </h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: '#6b6b85', lineHeight: 1.4 }}>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ctv3-faint)', lineHeight: 1.4 }}>
             Accédez à vos analyses illimitées et alertes pays.
           </p>
         </div>
@@ -83,13 +83,13 @@ export function AuthModal({ isOpen, onClose }: Props) {
         {sent ? (
           <div style={{
             padding: '16px', borderRadius: 10,
-            background: 'rgba(61,220,151,0.1)', border: '1px solid rgba(61,220,151,0.3)',
+            background: 'rgba(70,184,136,0.1)', border: '1px solid rgba(70,184,136,0.3)',
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 28, marginBottom: 8 }}>✉️</div>
-            <div style={{ color: '#3ddc97', fontWeight: 600, marginBottom: 4 }}>Lien envoyé !</div>
-            <div style={{ color: '#9898b0', fontSize: 13 }}>
-              Vérifiez votre boîte mail <strong style={{ color: '#f0f0f5' }}>{email}</strong>
+            <div style={{ color: 'var(--ctv3-ideal)', fontWeight: 600, marginBottom: 4 }}>Lien envoyé !</div>
+            <div style={{ color: 'var(--ctv3-muted)', fontSize: 13 }}>
+              Vérifiez votre boîte mail <strong style={{ color: 'var(--ctv3-paper)' }}>{email}</strong>
             </div>
           </div>
         ) : (
@@ -100,13 +100,13 @@ export function AuthModal({ isOpen, onClose }: Props) {
               disabled={loading}
               style={{
                 width: '100%', padding: '11px', borderRadius: 10, cursor: 'pointer',
-                background: '#1e1e2e', border: '1px solid #2e2e45',
-                color: '#f0f0f5', fontSize: 14, fontWeight: 600,
+                background: 'var(--ctv3-ink-800)', border: '1px solid var(--ctv3-line-bright)',
+                color: 'var(--ctv3-paper)', fontSize: 14, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 marginBottom: 12, transition: 'background 0.15s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#252535'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#1e1e2e'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ctv3-ink-700)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ctv3-ink-800)'; }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -119,12 +119,12 @@ export function AuthModal({ isOpen, onClose }: Props) {
 
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12,
-              color: '#3f3f5a', fontSize: 11,
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', letterSpacing: '0.1em',
+              color: 'var(--ctv3-dim)', fontSize: 11,
+              fontFamily: 'var(--ctv3-mono)', letterSpacing: '0.1em',
             }}>
-              <div style={{ flex: 1, height: 1, background: '#1f1f30' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--ctv3-line-soft)' }} />
               OU
-              <div style={{ flex: 1, height: 1, background: '#1f1f30' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--ctv3-line-soft)' }} />
             </div>
 
             {/* Email magic link */}
@@ -136,15 +136,15 @@ export function AuthModal({ isOpen, onClose }: Props) {
               onKeyDown={(e) => e.key === 'Enter' && handleMagicLink()}
               style={{
                 width: '100%', padding: '10px 12px', borderRadius: 8,
-                background: '#0a0a14', border: `1px solid ${error ? '#ff3b2f' : '#2a2a3e'}`,
-                color: '#f0f0f5', fontSize: 14,
+                background: 'var(--ctv3-ink-950)', border: `1px solid ${error ? 'var(--ctv3-red)' : 'var(--ctv3-line)'}`,
+                color: 'var(--ctv3-paper)', fontSize: 14,
                 outline: 'none', boxSizing: 'border-box',
                 marginBottom: 8,
               }}
             />
 
             {error && (
-              <div style={{ color: '#ff3b2f', fontSize: 12, marginBottom: 8 }}>{error}</div>
+              <div style={{ color: 'var(--ctv3-red)', fontSize: 12, marginBottom: 8 }}>{error}</div>
             )}
 
             <button
@@ -152,12 +152,12 @@ export function AuthModal({ isOpen, onClose }: Props) {
               disabled={loading || !email}
               style={{
                 width: '100%', padding: '11px', borderRadius: 10, cursor: 'pointer',
-                background: email ? '#ff3b2f' : '#1e1e2e',
-                border: 'none', color: email ? '#fff' : '#3f3f5a',
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                background: email ? 'var(--ctv3-red)' : 'var(--ctv3-ink-800)',
+                border: 'none', color: email ? '#fff' : 'var(--ctv3-dim)',
+                fontFamily: 'var(--ctv3-mono)',
                 fontSize: '0.72rem', letterSpacing: '0.12em', fontWeight: 700,
                 transition: 'all 0.2s',
-                boxShadow: email ? '0 4px 16px rgba(255,59,47,0.3)' : 'none',
+                boxShadow: email ? '0 4px 16px rgba(228,51,43,0.3)' : 'none',
               }}
             >
               {loading ? '⏳ ENVOI...' : '✉ ENVOYER LE LIEN MAGIQUE →'}
@@ -165,7 +165,7 @@ export function AuthModal({ isOpen, onClose }: Props) {
           </>
         )}
 
-        <p style={{ marginTop: 16, fontSize: 11, color: '#3f3f5a', textAlign: 'center', lineHeight: 1.5 }}>
+        <p style={{ marginTop: 16, fontSize: 11, color: 'var(--ctv3-dim)', textAlign: 'center', lineHeight: 1.5 }}>
           En vous connectant, vous acceptez les CGU de Crisis Travel.
           Aucun mot de passe requis.
         </p>
