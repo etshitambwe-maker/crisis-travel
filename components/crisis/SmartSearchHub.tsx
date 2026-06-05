@@ -70,6 +70,36 @@ const DURATION_MAP: Record<NonNullable<DiscoveryState['duration']>, number> = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+// ── Section header (FRONT-014) — sober numbered heading, .ctv3, no emoji/SVG ───
+function SectionHeader({ index, label, hint }: { index: string; label: string; hint?: string }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <span style={{
+          fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', fontWeight: 700,
+          letterSpacing: '0.08em', color: 'var(--ctv3-red-2)', flexShrink: 0,
+        }}>
+          {index}
+        </span>
+        <span style={{
+          fontFamily: 'var(--ctv3-mono)', fontSize: '0.78rem', fontWeight: 700,
+          letterSpacing: '0.1em', color: 'var(--ctv3-paper)', textTransform: 'uppercase',
+        }}>
+          {label}
+        </span>
+      </div>
+      {hint && (
+        <p style={{
+          fontSize: '0.8rem', color: 'var(--ctv3-muted)', lineHeight: 1.5,
+          margin: '6px 0 0', paddingLeft: 22,
+        }}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   // V1 (GOAL-038) : l'onglet 'direct' (Destination précise) est retiré de l'interface.
   // Crisis Travel n'est pas un moteur universel de destinations ; il analyse une sélection
@@ -183,8 +213,17 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
         })
     : [];
 
+  const selectedLabel = selected ? CONTINENTS.find((c) => c.id === selected)?.label : null;
+
   return (
     <div>
+      {/* FRONT-014 — Section 2 : Région (étape dédiée + aide) */}
+      <SectionHeader
+        index="02"
+        label="Région"
+        hint="Choisis une région : l’analyse se concentre sur ses destinations."
+      />
+
       {/* Continent pills */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
         {CONTINENTS.map((c) => (
@@ -264,6 +303,28 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
             })}
           </div>
 
+          {/* FRONT-014 — Résumé « Votre analyse » (lecture seule, dérivé de l'état région existant) */}
+          <div style={{
+            marginBottom: 14, padding: '14px 16px',
+            background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
+          }}>
+            <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase', marginBottom: 10 }}>
+              Votre analyse
+            </div>
+            {[
+              { k: 'Départ', v: airport },
+              { k: 'Mode', v: 'Explorer une région' },
+              { k: 'Région', v: selectedLabel ?? '—' },
+            ].map((row) => (
+              <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+                <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-faint)', letterSpacing: '0.04em' }}>{row.k}</span>
+                <span style={{ fontSize: '0.84rem', color: 'var(--ctv3-paper)', fontWeight: 600 }}>{row.v}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* FRONT-014 — Section : Lancer l'analyse (région) */}
+          <SectionHeader index="03" label="Lancer l'analyse" />
           {/* Analyze whole region button */}
           <button
             disabled={pending}
@@ -406,28 +467,62 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
     setTimeout(releaseAnalyzeLock, 3000);
   }
 
+  const remaining = Math.max(0, 2 - completed);
+
   return (
     <div>
-      {/* Progress */}
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', color: 'var(--ctv3-muted)', letterSpacing: '0.08em' }}>
-            PROFIL EN COURS
-          </span>
-          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', fontWeight: 700, color: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-muted)' }}>
-            {completed}/{total}
-          </span>
-        </div>
-        <div style={{ height: 4, background: 'var(--ctv3-line)', borderRadius: 2 }}>
-          <div style={{ height: '100%', width: `${(completed / total) * 100}%`, background: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-red)', borderRadius: 2, transition: 'width 0.3s ease' }} />
-        </div>
-      </div>
+      {/* FRONT-014 — Section 2 : Profil de voyage */}
+      <SectionHeader
+        index="02"
+        label="Profil de voyage"
+        hint="Réponds à au moins 2 critères. Plus tu en renseignes, plus l’analyse est précise."
+      />
 
       <OptionGrid label="CE QUI COMPTE LE PLUS POUR TOI" options={PRIORITY_OPTIONS as never} value={state.priority} onChange={set('priority') as never} />
       <OptionGrid label="DURÉE DU VOYAGE" options={DURATION_OPTIONS as never} value={state.duration} onChange={set('duration') as never} />
       <OptionGrid label="BUDGET TOTAL" options={BUDGET_OPTIONS as never} value={state.budget} onChange={set('budget') as never} />
       <OptionGrid label="TU VOYAGES" options={TRAVEL_TYPE_OPTIONS as never} value={state.travelType} onChange={set('travelType') as never} />
 
+      {/* FRONT-014 — Section 3 : Progression (compteur explicite + jalon du seuil minimum) */}
+      <div style={{ marginBottom: 22 }}>
+        <SectionHeader index="03" label="Progression" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.78rem', fontWeight: 700, color: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-paper)' }}>
+            {completed} critère{completed > 1 ? 's' : ''} sur {total}
+          </span>
+          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', color: 'var(--ctv3-muted)' }}>
+            minimum 2 pour lancer
+          </span>
+        </div>
+        <div style={{ position: 'relative', height: 4, background: 'var(--ctv3-line)', borderRadius: 2 }}>
+          <div style={{ height: '100%', width: `${(completed / total) * 100}%`, background: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-red)', borderRadius: 2, transition: 'width 0.3s ease' }} />
+          {/* Jalon visuel du seuil minimum (2/4 = 50%) — repère d'affichage, ne change aucun seuil */}
+          <div aria-hidden style={{ position: 'absolute', top: -2, left: '50%', width: 2, height: 8, background: 'var(--ctv3-paper)', opacity: 0.5 }} />
+        </div>
+      </div>
+
+      {/* FRONT-014 — Résumé « Votre analyse » (lecture seule, dérivé de l'état existant) */}
+      <div style={{
+        marginBottom: 22, padding: '14px 16px',
+        background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
+      }}>
+        <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase', marginBottom: 10 }}>
+          Votre analyse
+        </div>
+        {[
+          { k: 'Départ', v: airport },
+          { k: 'Mode', v: 'Surprends-moi' },
+          { k: 'Critères', v: `${completed} sur ${total}` },
+        ].map((row) => (
+          <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
+            <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-faint)', letterSpacing: '0.04em' }}>{row.k}</span>
+            <span style={{ fontSize: '0.84rem', color: 'var(--ctv3-paper)', fontWeight: 600 }}>{row.v}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* FRONT-014 — Section 4 : Lancer l'analyse */}
+      <SectionHeader index="04" label="Lancer l'analyse" />
       <button
         onClick={handleGenerate}
         disabled={completed < 2 || loading}
@@ -444,6 +539,12 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
       >
         {loading ? 'ANALYSE EN COURS...' : completed >= 4 ? 'SURPRENDS-MOI →' : completed >= 2 ? 'VOIR MES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
       </button>
+      {/* FRONT-014 — Sous-texte d'état du CTA (affichage dérivé de completed, aucune logique modifiée) */}
+      <p style={{ fontSize: '0.78rem', color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '8px 0 0', textAlign: 'center' }}>
+        {completed < 2
+          ? `Renseigne encore ${remaining} critère${remaining > 1 ? 's' : ''} pour lancer l’analyse.`
+          : 'Prêt à lancer — tu pourras affiner ensuite.'}
+      </p>
     </div>
   );
 }
@@ -483,8 +584,6 @@ export function SmartSearchHub() {
       {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
       <AirportSelector value={airport} onChange={handleAirportChange} />
 
-      <TabBar active={tab} onChange={setTab} />
-
       {/* Microcopy de positionnement (GOAL-038) — visible sur les deux parcours V1.
           Clarifie que Crisis Travel n'est pas un moteur universel de destinations :
           il détecte les pays où le contexte actuel crée une opportunité de voyage. */}
@@ -497,6 +596,17 @@ export function SmartSearchHub() {
         émergents ou sous-évalués</strong> et repère ceux où le contexte actuel peut rendre
         le voyage plus avantageux.
       </p>
+
+      {/* FRONT-014 — Section 1 : Mode d'analyse (titre + onglets + aide contextuelle) */}
+      <div style={{ marginBottom: 22 }}>
+        <SectionHeader index="01" label="Mode d'analyse" />
+        <TabBar active={tab} onChange={setTab} />
+        <p style={{ fontSize: '0.8rem', color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '10px 0 0' }}>
+          {tab === 'discovery'
+            ? 'Réponds à quelques critères : l’analyse trouve les destinations qui te correspondent.'
+            : 'Choisis une région : l’analyse se concentre sur ses destinations.'}
+        </p>
+      </div>
 
       {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} />}
       {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} />}
