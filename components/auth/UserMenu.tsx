@@ -54,14 +54,14 @@ export function UserMenu() {
           onClick={() => setShowAuth(true)}
           style={{
             padding: '6px 14px', borderRadius: 7, cursor: 'pointer',
-            background: 'rgba(255,59,47,0.12)', border: '1px solid rgba(255,59,47,0.3)',
-            color: '#ff3b2f',
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            background: 'var(--ctv3-red-soft)', border: '1px solid rgba(228,51,43,0.3)',
+            color: 'var(--ctv3-red)',
+            fontFamily: 'var(--ctv3-mono)',
             fontSize: '0.58rem', letterSpacing: '0.1em', fontWeight: 700,
             transition: 'all 0.15s',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,59,47,0.2)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,59,47,0.12)'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(228,51,43,0.2)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ctv3-red-soft)'; }}
         >
           CONNEXION
         </button>
@@ -78,9 +78,9 @@ export function UserMenu() {
         onClick={() => setShowMenu((v) => !v)}
         style={{
           width: 30, height: 30, borderRadius: '50%', cursor: 'pointer',
-          background: '#ff3b2f', border: '2px solid rgba(255,59,47,0.4)',
+          background: 'var(--ctv3-red)', border: '2px solid rgba(228,51,43,0.4)',
           color: '#fff', fontSize: 12, fontWeight: 700,
-          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+          fontFamily: 'var(--ctv3-mono)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
@@ -90,20 +90,20 @@ export function UserMenu() {
       {showMenu && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 300,
-          background: '#11111c', border: '1px solid #2e2e45', borderRadius: 10,
+          background: 'var(--ctv3-ink-870)', border: '1px solid var(--ctv3-line-bright)', borderRadius: 10,
           padding: 8, minWidth: 200,
           boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
         }}>
           <div style={{
-            padding: '8px 10px 10px', borderBottom: '1px solid #1f1f30', marginBottom: 4,
+            padding: '8px 10px 10px', borderBottom: '1px solid var(--ctv3-line-soft)', marginBottom: 4,
           }}>
             <div style={{
-              fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
-              fontSize: '0.55rem', color: '#3f3f5a', letterSpacing: '0.1em', marginBottom: 2,
+              fontFamily: 'var(--ctv3-mono)',
+              fontSize: '0.55rem', color: 'var(--ctv3-dim)', letterSpacing: '0.1em', marginBottom: 2,
             }}>
               CONNECTÉ EN TANT QUE
             </div>
-            <div style={{ color: '#c8c8da', fontSize: 12, wordBreak: 'break-all' }}>
+            <div style={{ color: 'var(--ctv3-paper)', fontSize: 12, wordBreak: 'break-all' }}>
               {user.email}
             </div>
           </div>
@@ -114,11 +114,11 @@ export function UserMenu() {
             style={{
               width: '100%', padding: '7px 10px', borderRadius: 6, cursor: portalLoading ? 'default' : 'pointer',
               background: 'transparent', border: 'none', textAlign: 'left',
-              color: '#9898b0', fontSize: 13,
+              color: 'var(--ctv3-muted)', fontSize: 13,
               display: 'flex', alignItems: 'center', gap: 8,
               transition: 'background 0.1s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#1e1e2e'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ctv3-ink-800)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <span style={{ fontSize: 11 }}>⚙</span>
@@ -130,11 +130,11 @@ export function UserMenu() {
             style={{
               width: '100%', padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
               background: 'transparent', border: 'none', textAlign: 'left',
-              color: '#9898b0', fontSize: 13,
+              color: 'var(--ctv3-muted)', fontSize: 13,
               display: 'flex', alignItems: 'center', gap: 8,
               transition: 'background 0.1s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#1e1e2e'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ctv3-ink-800)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <span style={{ fontSize: 11 }}>↩</span>
