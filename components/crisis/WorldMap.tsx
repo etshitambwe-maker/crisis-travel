@@ -76,16 +76,17 @@ export function WorldMap({ markers = MARKERS, showScores = true }: { markers?: M
           {/* stopColor uses hex aligned on .ctv3 tokens (var() is unreliable inside
               SVG <stop> depending on render context — documented fallback FRONT-012).
               #46b888=--ctv3-ideal · #d8a83e=--ctv3-reco · #d9742e=--ctv3-poss · #e4332b=--ctv3-deco/red */}
+          {/* FIX-2: halos calmed one notch so the map reads before the signals. */}
           <radialGradient id="glow-safe" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#46b888" stopOpacity="0.45"/>
+            <stop offset="0%" stopColor="#46b888" stopOpacity="0.38"/>
             <stop offset="100%" stopColor="#46b888" stopOpacity="0"/>
           </radialGradient>
           <radialGradient id="glow-warn" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#d8a83e" stopOpacity="0.42"/>
+            <stop offset="0%" stopColor="#d8a83e" stopOpacity="0.35"/>
             <stop offset="100%" stopColor="#d8a83e" stopOpacity="0"/>
           </radialGradient>
           <radialGradient id="glow-danger" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#e4332b" stopOpacity="0.5"/>
+            <stop offset="0%" stopColor="#e4332b" stopOpacity="0.42"/>
             <stop offset="100%" stopColor="#e4332b" stopOpacity="0"/>
           </radialGradient>
         </defs>
@@ -95,8 +96,11 @@ export function WorldMap({ markers = MARKERS, showScores = true }: { markers?: M
 
         {/* World continents — low-poly silhouette, georeferenced to project()'s
             equirectangular frame (x=(lon+180)/360*800, y=(90-lat)/180*400) so
-            landmasses sit under their real markers. Recognisable, not detailed. */}
-        <g opacity="0.32" fill="var(--ctv3-ink-700)" stroke="var(--ctv3-line-bright)" strokeWidth="0.7" strokeOpacity="0.6" strokeLinejoin="round">
+            landmasses sit under their real markers. Recognisable, not detailed.
+            FIX-2 contrast: slate fill #2c2c38 (lighter than --ctv3-ink-700 but still
+            deep/premium, not flat grey) + raised opacity + visible #454556 outline,
+            so the world map reads first and markers stay secondary. */}
+        <g opacity="0.55" fill="#2c2c38" stroke="#454556" strokeWidth="0.9" strokeOpacity="0.85" strokeLinejoin="round">
           {/* North America */}
           <path d="M 33 56 L 92 44 L 175 50 L 250 60 L 278 84 L 250 104 L 262 120 L 232 132 L 220 150 L 200 150 L 196 166 L 178 150 L 160 120 L 120 104 L 96 92 L 60 78 Z"/>
           {/* Central America bridge */}
