@@ -93,16 +93,26 @@ export function WorldMap({ markers = MARKERS, showScores = true }: { markers?: M
         {/* Grid backdrop (masked to fade at edges) */}
         <rect width="800" height="400" fill="url(#wm-grid)" mask="url(#wm-grid-mask)"/>
 
-        {/* Simplified continents — subtle landmass with faint edge light */}
-        <g opacity="0.22" fill="var(--ctv3-ink-700)" stroke="var(--ctv3-line-bright)" strokeWidth="0.6" strokeOpacity="0.5">
-          <path d="M 120 100 Q 160 80 200 95 Q 240 110 260 140 Q 250 175 220 190 Q 180 200 150 180 Q 125 155 120 100 Z"/>
-          <path d="M 220 220 Q 245 215 260 240 Q 265 280 250 320 Q 235 340 225 335 Q 215 310 215 270 Q 218 240 220 220 Z"/>
-          <path d="M 380 110 Q 420 100 440 115 Q 445 135 430 150 Q 405 155 385 145 Q 375 130 380 110 Z"/>
-          <path d="M 400 180 Q 440 175 460 200 Q 475 250 460 290 Q 440 315 415 310 Q 395 285 395 240 Q 398 205 400 180 Z"/>
-          <path d="M 470 100 Q 550 85 620 105 Q 660 125 670 160 Q 655 190 610 195 Q 560 198 510 180 Q 475 150 470 100 Z"/>
-          <path d="M 550 180 Q 575 175 585 195 Q 588 220 575 230 Q 560 225 552 210 Q 548 195 550 180 Z"/>
-          <path d="M 610 210 Q 640 215 650 235 Q 645 255 625 260 Q 608 250 605 230 Q 607 218 610 210 Z"/>
-          <path d="M 640 290 Q 680 285 700 305 Q 705 325 685 335 Q 655 335 640 320 Q 635 300 640 290 Z"/>
+        {/* World continents — low-poly silhouette, georeferenced to project()'s
+            equirectangular frame (x=(lon+180)/360*800, y=(90-lat)/180*400) so
+            landmasses sit under their real markers. Recognisable, not detailed. */}
+        <g opacity="0.32" fill="var(--ctv3-ink-700)" stroke="var(--ctv3-line-bright)" strokeWidth="0.7" strokeOpacity="0.6" strokeLinejoin="round">
+          {/* North America */}
+          <path d="M 33 56 L 92 44 L 175 50 L 250 60 L 278 84 L 250 104 L 262 120 L 232 132 L 220 150 L 200 150 L 196 166 L 178 150 L 160 120 L 120 104 L 96 92 L 60 78 Z"/>
+          {/* Central America bridge */}
+          <path d="M 196 166 L 212 162 L 226 178 L 240 192 L 232 200 L 218 188 L 206 176 Z"/>
+          {/* South America */}
+          <path d="M 240 192 L 268 184 L 290 196 L 304 224 L 322 218 L 314 250 L 296 286 L 272 312 L 252 322 L 246 300 L 256 268 L 246 232 L 236 208 Z"/>
+          {/* Europe */}
+          <path d="M 374 116 L 392 100 L 404 86 L 420 70 L 438 64 L 448 78 L 436 92 L 452 96 L 470 88 L 492 84 L 500 104 L 478 116 L 456 124 L 432 128 L 410 128 L 390 126 L 378 124 Z"/>
+          {/* Africa */}
+          <path d="M 364 168 L 392 150 L 422 124 L 446 132 L 470 150 L 500 158 L 514 176 L 500 196 L 480 220 L 466 252 L 444 276 L 428 262 L 420 230 L 404 204 L 384 188 L 370 180 Z"/>
+          {/* Asia */}
+          <path d="M 492 84 L 533 67 L 590 58 L 650 56 L 720 52 L 778 49 L 760 78 L 712 88 L 690 104 L 712 116 L 690 128 L 650 122 L 633 140 L 660 156 L 633 173 L 612 162 L 600 180 L 573 186 L 558 164 L 540 150 L 558 130 L 540 114 L 512 108 L 498 100 Z"/>
+          {/* SE Asia / Indonesia islets */}
+          <path d="M 612 188 L 640 184 L 668 192 L 690 200 L 672 212 L 644 206 L 620 200 Z"/>
+          {/* Oceania / Australia */}
+          <path d="M 655 249 L 690 238 L 728 244 L 740 262 L 730 280 L 707 284 L 684 276 L 662 264 Z"/>
         </g>
 
         {/* Markers — integrated sensor signals */}
@@ -112,9 +122,10 @@ export function WorldMap({ markers = MARKERS, showScores = true }: { markers?: M
           const glow = glowId(m.score);
           return (
             <g key={i}>
-              {/* Soft blurred halo — breathes via opacity, not radius (less gadgety) */}
-              <circle cx={x} cy={y} r="24" fill={`url(#${glow})`} filter="url(#wm-soft)">
-                <animate attributeName="opacity" values="0.55;1;0.55" dur="4.5s" repeatCount="indefinite" begin={`${i * 0.5}s`}/>
+              {/* Soft blurred halo — tightened so the map reads first, markers stay
+                  secondary signals. Breathes via opacity, not radius (less gadgety). */}
+              <circle cx={x} cy={y} r="18" fill={`url(#${glow})`} filter="url(#wm-soft)">
+                <animate attributeName="opacity" values="0.45;0.85;0.45" dur="4.5s" repeatCount="indefinite" begin={`${i * 0.5}s`}/>
               </circle>
               {/* Thin outer ring for definition */}
               <circle cx={x} cy={y} r="7" fill="none" stroke={color} strokeWidth="1" strokeOpacity="0.35"/>
