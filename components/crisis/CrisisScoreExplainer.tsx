@@ -1,12 +1,13 @@
 'use client';
 
 // FRONT-007 : refonte visuelle uniquement — migration vers le système .ctv3.
-// Poids (40/30/20/10), libellés, descriptions, emojis et formule sont inchangés.
+// FRONT-019 : retrait des emojis (direction CTV3 sans emoji) — remplacés par une
+//   pastille sobre de la couleur du pilier. Poids (40/30/20/10), libellés,
+//   descriptions et formule sont STRICTEMENT inchangés. Aucun impact scoring.
 
 const PILLARS = [
   {
     key: 'security',
-    icon: '🛡️',
     label: 'Sécurité',
     weight: 40,
     color: 'var(--ctv3-ideal)',
@@ -14,7 +15,6 @@ const PILLARS = [
   },
   {
     key: 'geopolitical',
-    icon: '🌐',
     label: 'Géopolitique',
     weight: 30,
     color: 'var(--ctv3-blue)',
@@ -22,7 +22,6 @@ const PILLARS = [
   },
   {
     key: 'budget',
-    icon: '💶',
     label: 'Budget',
     weight: 20,
     color: 'var(--ctv3-reco)',
@@ -30,7 +29,6 @@ const PILLARS = [
   },
   {
     key: 'practicality',
-    icon: '✈️',
     label: 'Praticité',
     weight: 10,
     color: 'var(--ctv3-poss)',
@@ -72,7 +70,11 @@ export function CrisisScoreExplainer() {
             padding: '8px 8px 7px',
             display: 'flex', flexDirection: 'column', gap: 4,
           }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>{p.icon}</span>
+            {/* Pastille sobre (remplace l'emoji, FRONT-019) — carré tinted couleur pilier */}
+            <span aria-hidden style={{
+              width: 10, height: 10, background: p.color, opacity: 0.9,
+              transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0,
+            }} />
             <div style={{
               fontFamily: 'var(--ctv3-mono)',
               fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
