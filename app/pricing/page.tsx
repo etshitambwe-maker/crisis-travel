@@ -109,7 +109,7 @@ export default function PricingPage() {
         {/* Hero */}
         <section style={{ padding: '40px 0 36px', textAlign: 'center', position: 'relative' }}>
           <div style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontFamily: 'var(--ctv3-mono)',
             fontSize: 9.5, letterSpacing: '0.2em', color: '#ff3b2f',
             textTransform: 'uppercase', marginBottom: 14, display: 'inline-flex',
             alignItems: 'center', gap: 6,
@@ -118,7 +118,7 @@ export default function PricingPage() {
             TARIFS
           </div>
           <h1 style={{
-            margin: '0 0 14px', fontFamily: 'var(--font-space-mono), monospace',
+            margin: '0 0 14px', fontFamily: 'var(--ctv3-mono)',
             fontSize: 'clamp(28px, 7vw, 42px)', fontWeight: 700,
             letterSpacing: '-0.03em', color: '#f0f0f5', lineHeight: 1.1,
           }}>
@@ -154,7 +154,7 @@ export default function PricingPage() {
                 <div style={{
                   position: 'absolute', top: 12, right: 12,
                   background: plan.color, color: '#07070c',
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontFamily: 'var(--ctv3-mono)',
                   fontSize: '0.52rem', letterSpacing: '0.12em', fontWeight: 700,
                   padding: '3px 8px', borderRadius: 4,
                 }}>
@@ -168,7 +168,7 @@ export default function PricingPage() {
                   position: 'absolute', top: 12, right: 12,
                   background: 'rgba(61,220,151,0.2)', border: '1px solid rgba(61,220,151,0.4)',
                   color: '#3ddc97',
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontFamily: 'var(--ctv3-mono)',
                   fontSize: '0.52rem', letterSpacing: '0.12em', fontWeight: 700,
                   padding: '3px 8px', borderRadius: 4,
                 }}>
@@ -178,7 +178,7 @@ export default function PricingPage() {
 
               {/* Nom du plan */}
               <div style={{
-                fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                fontFamily: 'var(--ctv3-mono)',
                 fontSize: '0.62rem', letterSpacing: '0.18em', color: plan.color,
                 fontWeight: 700, textTransform: 'uppercase', marginBottom: 14,
               }}>
@@ -188,14 +188,14 @@ export default function PricingPage() {
               {/* Prix */}
               <div style={{ marginBottom: 20 }}>
                 <span style={{
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontFamily: 'var(--ctv3-mono)',
                   fontSize: 36, fontWeight: 700, letterSpacing: '-0.03em',
                   color: '#f0f0f5', lineHeight: 1,
                 }}>
                   {plan.price === 0 ? '0€' : `${plan.price}€`}
                 </span>
                 <span style={{
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontFamily: 'var(--ctv3-mono)',
                   fontSize: 11, color: '#6b6b85', marginLeft: 6,
                 }}>
                   {plan.period}
@@ -216,7 +216,7 @@ export default function PricingPage() {
                       color: f.included ? plan.color : '#3f3f5a',
                       fontSize: 9, fontWeight: 700,
                     }}>
-                      {f.included ? '✓' : '×'}
+                      {f.included ? '+' : '–'}
                     </span>
                     {f.label}
                   </div>
@@ -236,7 +236,7 @@ export default function PricingPage() {
                       : `${plan.color}20`,
                   border: `1px solid ${plan.id === 'free' ? '#1f1f30' : plan.color}`,
                   color: plan.id === 'free' ? '#3f3f5a' : plan.highlight ? '#07070c' : plan.color,
-                  fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+                  fontFamily: 'var(--ctv3-mono)',
                   fontSize: '0.68rem', letterSpacing: '0.1em', fontWeight: 700,
                   transition: 'all 0.2s',
                   boxShadow: plan.highlight && plan.id !== 'free' ? `0 4px 16px ${plan.color}40` : 'none',
@@ -248,10 +248,10 @@ export default function PricingPage() {
                 }}
                 onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
               >
-                {loading === plan.id ? '⏳ REDIRECTION...' :
+                {loading === plan.id ? 'REDIRECTION...' :
                  plan.id === 'free' ? 'PLAN ACTUEL' :
-                 plan.id === 'premium_annual' ? '⚡ CHOISIR ANNUEL →' :
-                 '⚡ PASSER PREMIUM →'}
+                 plan.id === 'premium_annual' ? 'CHOISIR ANNUEL' :
+                 'PASSER PREMIUM'}
               </button>
             </div>
           ))}
@@ -271,7 +271,7 @@ export default function PricingPage() {
         {/* FAQ */}
         <div style={{ borderTop: '1px solid #1f1f30', paddingTop: 32 }}>
           <div style={{
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontFamily: 'var(--ctv3-mono)',
             fontSize: 10, letterSpacing: '0.16em', color: '#6b6b85',
             textTransform: 'uppercase', marginBottom: 20, textAlign: 'center',
           }}>
@@ -314,7 +314,7 @@ export default function PricingPage() {
         {/* Disclaimer */}
         <p style={{
           textAlign: 'center', fontSize: 11, color: '#3f3f5a', lineHeight: 1.5, marginTop: 24,
-          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', letterSpacing: '0.04em',
+          fontFamily: 'var(--ctv3-mono)', letterSpacing: '0.04em',
         }}>
           Paiement sécurisé par Stripe · Aucune carte requise pour le plan gratuit
         </p>

@@ -57,7 +57,7 @@ function SectionHead({ label, meta }: { label: string; meta?: string }) {
       marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid #1f1f30',
     }}>
       <div style={{
-        fontFamily: 'var(--font-space-mono), monospace',
+        fontFamily: 'var(--ctv3-mono)',
         fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase',
         fontWeight: 700, color: '#f0f0f5',
         display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -67,7 +67,7 @@ function SectionHead({ label, meta }: { label: string; meta?: string }) {
       </div>
       {meta && (
         <span style={{
-          fontFamily: 'var(--font-space-mono), monospace',
+          fontFamily: 'var(--ctv3-mono)',
           fontSize: 9.5, color: '#6b6b85', letterSpacing: '0.12em', textTransform: 'uppercase',
         }}>
           {meta}
@@ -106,7 +106,7 @@ export default function StatusPage() {
         <div style={{ marginBottom: 36 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
-            fontFamily: 'var(--font-space-mono), monospace',
+            fontFamily: 'var(--ctv3-mono)',
             fontSize: 9.5, letterSpacing: '0.18em', color: '#6b6b85', textTransform: 'uppercase',
           }}>
             <span>ÉTAT DES SOURCES</span>
@@ -116,7 +116,7 @@ export default function StatusPage() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <h1 style={{
-              fontFamily: 'var(--font-space-mono), monospace',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: 'clamp(26px, 6vw, 36px)', fontWeight: 700,
               letterSpacing: '-0.02em', color: '#f0f0f5', margin: 0, lineHeight: 1.1,
             }}>
@@ -129,7 +129,7 @@ export default function StatusPage() {
                 padding: '6px 14px', borderRadius: 999,
                 border: `1px solid ${globalOk ? 'rgba(61,220,151,0.3)' : 'rgba(255,212,63,0.3)'}`,
                 background: globalOk ? 'rgba(61,220,151,0.06)' : 'rgba(255,212,63,0.06)',
-                fontFamily: 'var(--font-space-mono), monospace',
+                fontFamily: 'var(--ctv3-mono)',
                 fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: globalOk ? '#3ddc97' : '#ffd23f',
               }}>
@@ -141,7 +141,7 @@ export default function StatusPage() {
 
           {data && (
             <p style={{
-              fontFamily: 'var(--font-space-mono), monospace',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: 10, color: '#6b6b85', marginTop: 8, letterSpacing: '0.08em',
             }}>
               Vérifié le {new Date(data.checkedAt).toLocaleString('fr-FR', {
@@ -159,7 +159,7 @@ export default function StatusPage() {
         }}>
           <p style={{
             margin: 0, color: '#9898b0', fontSize: 14, lineHeight: 1.65,
-            fontFamily: 'var(--font-dm-sans, sans-serif)',
+            fontFamily: 'var(--ctv3-serif)',
           }}>
             Crisis Travel surveille en temps réel un ensemble de{' '}
             <strong style={{ color: '#c8c8d8', fontWeight: 600 }}>sources économiques, géopolitiques et institutionnelles</strong>{' '}
@@ -178,7 +178,7 @@ export default function StatusPage() {
           {loading && (
             <div style={{
               padding: '40px', textAlign: 'center',
-              fontFamily: 'var(--font-space-mono), monospace',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: 11, color: '#6b6b85', letterSpacing: '0.14em',
             }}>
               VÉRIFICATION EN COURS...
@@ -189,7 +189,7 @@ export default function StatusPage() {
             <div style={{
               background: 'rgba(255,77,46,0.08)', border: '1px solid rgba(255,77,46,0.25)',
               borderRadius: 10, padding: '16px 20px',
-              fontFamily: 'var(--font-space-mono), monospace',
+              fontFamily: 'var(--ctv3-mono)',
               fontSize: 12, color: '#ff4d2e',
             }}>
               Impossible de vérifier l'état des sources. Réessaie dans quelques secondes.
@@ -211,7 +211,7 @@ export default function StatusPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <StatusDot ok={ok} />
                         <span style={{
-                          fontFamily: 'var(--font-space-mono), monospace',
+                          fontFamily: 'var(--ctv3-mono)',
                           fontSize: 13, fontWeight: 700, color: '#f0f0f5',
                         }}>
                           {meta?.label ?? api.name}
@@ -219,13 +219,13 @@ export default function StatusPage() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                         <span style={{
-                          fontFamily: 'var(--font-space-mono), monospace',
+                          fontFamily: 'var(--ctv3-mono)',
                           fontSize: 10, color: '#4a4a6a', letterSpacing: '0.06em',
                         }}>
                           {api.latencyMs} ms
                         </span>
                         <span style={{
-                          fontFamily: 'var(--font-space-mono), monospace',
+                          fontFamily: 'var(--ctv3-mono)',
                           fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase',
                           color: ok ? '#3ddc97' : '#ff4d2e',
                           background: ok ? 'rgba(61,220,151,0.08)' : 'rgba(255,77,46,0.08)',
@@ -240,7 +240,7 @@ export default function StatusPage() {
                       <p style={{
                         margin: 0, marginLeft: 18,
                         fontSize: 12.5, color: '#6b6b85', lineHeight: 1.5,
-                        fontFamily: 'var(--font-dm-sans, sans-serif)',
+                        fontFamily: 'var(--ctv3-serif)',
                       }}>
                         {meta.description}
                       </p>
@@ -260,7 +260,7 @@ export default function StatusPage() {
           }}>
             <p style={{
               margin: 0, fontSize: 13, color: '#c8a840', lineHeight: 1.55,
-              fontFamily: 'var(--font-dm-sans, sans-serif)',
+              fontFamily: 'var(--ctv3-serif)',
             }}>
               Certaines sources sont temporairement indisponibles. Les analyses restent actives
               et utilisent les données les plus récentes disponibles en cache.
@@ -276,21 +276,21 @@ export default function StatusPage() {
             style={{
               padding: '10px 20px', borderRadius: 8, cursor: loading ? 'not-allowed' : 'pointer',
               background: 'rgba(74,158,255,0.08)', border: '1px solid rgba(74,158,255,0.25)',
-              color: '#4a9eff', fontFamily: 'var(--font-space-mono), monospace',
+              color: '#4a9eff', fontFamily: 'var(--ctv3-mono)',
               fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
               opacity: loading ? 0.5 : 1, transition: 'all 0.2s',
             }}
           >
-            {loading ? 'ACTUALISATION...' : '↻ ACTUALISER'}
+            {loading ? 'ACTUALISATION...' : 'ACTUALISER'}
           </button>
           <Link href="/#analyse" style={{
             padding: '10px 20px', borderRadius: 8, textDecoration: 'none',
             background: 'transparent', border: '1px solid #1f1f30',
-            color: '#6b6b85', fontFamily: 'var(--font-space-mono), monospace',
+            color: '#6b6b85', fontFamily: 'var(--ctv3-mono)',
             fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
             display: 'inline-block',
           }}>
-            ← LANCER UNE ANALYSE
+            LANCER UNE ANALYSE
           </Link>
         </div>
 

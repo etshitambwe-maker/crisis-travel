@@ -16,7 +16,7 @@ export default function TermsPage() {
 
         {/* Badge */}
         <div style={{
-          fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+          fontFamily: 'var(--ctv3-mono)',
           fontSize: 9.5, letterSpacing: '0.2em', color: '#ff3b2f',
           textTransform: 'uppercase', marginBottom: 14,
           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -27,14 +27,14 @@ export default function TermsPage() {
 
         <h1 style={{
           margin: '0 0 8px',
-          fontFamily: 'var(--font-space-mono), monospace',
-          fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 700,
+          fontFamily: 'var(--ctv3-display)',
+          fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 800,
           letterSpacing: '-0.03em', color: '#f0f0f5', lineHeight: 1.15,
         }}>
           {"Conditions d'utilisation"}
         </h1>
 
-        <p style={{ color: '#3f3f5a', fontSize: 12, marginBottom: 40, fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)', letterSpacing: '0.04em' }}>
+        <p style={{ color: '#3f3f5a', fontSize: 12, marginBottom: 40, fontFamily: 'var(--ctv3-mono)', letterSpacing: '0.04em' }}>
           Dernière mise à jour : 1 juin 2026
         </p>
 
@@ -116,11 +116,11 @@ export default function TermsPage() {
         <div style={{ marginTop: 48, paddingTop: 24, borderTop: '1px solid #1f1f30' }}>
           <Link href="/" style={{
             color: '#6b6b85', fontSize: 12, textDecoration: 'none',
-            fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+            fontFamily: 'var(--ctv3-mono)',
             letterSpacing: '0.08em',
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
-            ← RETOUR À L&apos;ACCUEIL
+            RETOUR À L&apos;ACCUEIL
           </Link>
         </div>
 
@@ -138,13 +138,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     }}>
       <h2 style={{
         margin: '0 0 12px',
-        fontFamily: 'var(--ct-mono, var(--font-space-mono), monospace)',
+        fontFamily: 'var(--ctv3-mono)',
         fontSize: '0.72rem', letterSpacing: '0.1em', fontWeight: 700,
         color: '#ff3b2f', textTransform: 'uppercase',
       }}>
         {title}
       </h2>
-      <div style={{ color: '#9898b0', fontSize: 13.5, lineHeight: 1.65 }}>
+      <div style={{ color: '#9898b0', fontSize: 13.5, lineHeight: 1.65, fontFamily: 'var(--ctv3-serif)' }}>
         {children}
       </div>
     </div>
