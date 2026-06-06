@@ -8,22 +8,22 @@
 
 const STEPS = [
   {
-    num: '01',
+    step: 'Étape 1',
     title: 'Définis ton profil',
     desc: 'Vos préférences de voyage : style, sensibilité au budget, contraintes ou dates si vous les avez.',
   },
   {
-    num: '02',
+    step: 'Étape 2',
     title: 'Analyse des signaux',
     desc: 'Nous mettons en perspective les signaux disponibles : sécurité, contexte économique, praticité et opportunités voyage.',
   },
   {
-    num: '03',
+    step: 'Étape 3',
     title: 'Compare les destinations',
     desc: 'Les destinations sont classées et expliquées — pas seulement notées — pour une lecture claire du contexte.',
   },
   {
-    num: '04',
+    step: 'Étape 4',
     title: 'Prépare ton voyage',
     desc: "Un outil d'aide à la décision, à compléter avec les sources officielles avant de réserver ou d'approfondir.",
   },
@@ -65,15 +65,17 @@ export function HowItWorks() {
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 16,
       }}>
         {STEPS.map((s) => (
-          <div key={s.num} style={{
+          <div key={s.step} style={{
             background: 'var(--ctv3-ink-850)', border: '1px solid var(--ctv3-line)',
-            borderTop: '2px solid var(--ctv3-line-bright)', padding: '14px 14px 16px',
+            borderTop: '2px solid var(--ctv3-red)', padding: '14px 14px 16px',
             display: 'flex', flexDirection: 'column', gap: 8,
           }}>
+            {/* Libellé d'étape — rouge, présence assumée (FRONT-020) */}
             <span className="ctv3-mono" style={{
-              fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ctv3-faint)',
+              fontSize: 13, fontWeight: 700, letterSpacing: '0.14em',
+              textTransform: 'uppercase', color: 'var(--ctv3-red)',
             }}>
-              {s.num}
+              {s.step}
             </span>
             <div style={{
               fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 15,
@@ -90,11 +92,13 @@ export function HowItWorks() {
         ))}
       </div>
 
-      {/* Ligne honnêteté — outil d'aide à la décision, pas de garantie */}
+      {/* Ligne honnêteté — outil d'aide à la décision (FRONT-020 : plus visible, sobre) */}
       <p className="ctv3-mono" style={{
-        fontSize: 11, lineHeight: 1.6, letterSpacing: '0.02em',
-        color: 'var(--ctv3-faint)', margin: 0,
-        borderLeft: '2px solid var(--ctv3-line-bright)', paddingLeft: 12,
+        fontSize: 12, lineHeight: 1.65, letterSpacing: '0.02em',
+        color: 'var(--ctv3-muted)', margin: 0,
+        background: 'var(--ctv3-ink-850)',
+        borderLeft: '3px solid var(--ctv3-red)',
+        padding: '12px 14px',
       }}>
         Le Crisis Score met plusieurs dimensions en perspective pour aider à comparer.
         Il ne prédit pas l&apos;avenir, ne garantit pas la sécurité et ne remplace pas
