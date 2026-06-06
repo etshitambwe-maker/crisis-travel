@@ -2,6 +2,7 @@ import { Header } from '@/components/layout/Header';
 import { SmartSearchHub } from '@/components/crisis/SmartSearchHub';
 import { WorldMap } from '@/components/crisis/WorldMap';
 import { OpportunityCards } from '@/components/crisis/HomeClientSections';
+import { HowItWorks } from '@/components/crisis/HowItWorks';
 import { CrisisScoreExplainer } from '@/components/crisis/CrisisScoreExplainer';
 import { CountryFlag } from '@/components/design/CountryFlag';
 import { DestinationImage } from '@/components/design/DestinationImage';
@@ -108,6 +109,11 @@ export default function HomePage() {
               </DestinationImage>
             ))}
           </div>
+        </section>
+
+        {/* ── HOW IT WORKS — parcours pédagogique (FRONT-019) ── */}
+        <section style={{ marginBottom: 36 }}>
+          <HowItWorks />
         </section>
 
         {/* ── SCORE METHOD ───────────────────────────────────── */}
