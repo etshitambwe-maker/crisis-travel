@@ -6,12 +6,16 @@ import { getDestinationImagery } from '@/lib/design/destinationImagery';
 
 /**
  * FRONT-002 — Editorial destination entry points (formerly "Fenêtres optimales").
+ * FRONT-023 — Recadrage « points d'entrée d'analyse » : le ton « blog voyage » est
+ *   retiré au profit d'un registre analyse/contexte, et les pays sont dé-dupliqués
+ *   du rail hero (HERO_RAIL = PT/GE/MA/JP/VN/AL) en choisissant GR/TH/TN — couverts,
+ *   absents du rail — pour qu'aucune destination n'apparaisse deux fois sur la home.
  *
  * HONESTY: all fabricated metrics removed — no invented dates, prices, FX deltas,
- * or safety scores. Each card now carries only real product data: a covered
- * destination (FRONT-001 imagery + flag), its region, an honest positioning line,
- * and a CTA that navigates to /results with the SAME real pre-filled params as
- * before (mode / budget / duration / continent). Route behavior is unchanged.
+ * or safety scores. Each card carries only real product data: a covered destination
+ * (FRONT-001 imagery + flag), its region, and a CTA that navigates to /results with
+ * real pre-filled params (mode / budget / duration / continent). Route behavior
+ * unchanged — these are analysis shortcuts, not a scored ranking.
  *
  * `code` keys into the FRONT-001 destination imagery registry (TARGET_COUNTRIES).
  */
@@ -21,18 +25,18 @@ const ENTRIES: {
   href: string;
 }[] = [
   {
-    code: 'PT',
-    positioning: 'Méditerranée hors-saison : climat clément, affluence basse.',
+    code: 'GR',
+    positioning: 'Un point d’entrée pour tester une analyse Europe, budget maîtrisé.',
     href: '/results?mode=standard&budget=1800&duration=15&travelType=solo&continent=Europe',
   },
   {
-    code: 'JP',
-    positioning: 'Yen favorable à l’euro : un classique redevenu accessible.',
+    code: 'TH',
+    positioning: 'Un exemple long-courrier pour comparer coût, distance et contexte local.',
     href: '/results?mode=standard&budget=2400&duration=14&travelType=solo&continent=Asia',
   },
   {
-    code: 'MA',
-    positioning: 'Côte atlantique avant l’été : douceur et budget contenu.',
+    code: 'TN',
+    positioning: 'Un scénario proche pour observer l’équilibre budget, saison et stabilité.',
     href: '/results?mode=budget_crisis&budget=1200&duration=14&travelType=solo&continent=Africa',
   },
 ];
@@ -41,14 +45,23 @@ export function OpportunityCards() {
   const router = useRouter();
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-        gap: 16,
-      }}
-    >
-      {ENTRIES.map((e) => {
+    <>
+      {/* Intro — recadrage « points d'entrée d'analyse » (FRONT-023) */}
+      <p
+        className="ctv3-serif"
+        style={{ maxWidth: 620, color: 'var(--ctv3-muted)', fontSize: 14.5, lineHeight: 1.6, margin: '0 0 18px' }}
+      >
+        Choisissez un exemple pour lancer une analyse pré-remplie, puis comparez avec les signaux disponibles.
+      </p>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: 16,
+        }}
+      >
+        {ENTRIES.map((e) => {
         const ident = getDestinationImagery(e.code);
         return (
           <article
@@ -127,13 +140,13 @@ export function OpportunityCards() {
                   fontWeight: 500,
                 }}
               >
-                Analyser cette destination
-                <span aria-hidden="true">→</span>
+                Lancer une analyse pré-remplie
               </span>
             </div>
           </article>
         );
-      })}
-    </div>
+        })}
+      </div>
+    </>
   );
 }
