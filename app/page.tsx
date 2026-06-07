@@ -26,7 +26,7 @@ const COVERED = TARGET_COUNTRIES.length; // 65 — covered destination catalog
 const SCORED_PER_REQUEST = CANDIDATE_CAP; // 18 — scored per /api/analyze request
 
 // A small, fixed set of covered destinations used as the editorial hero rail.
-// Real countries from TARGET_COUNTRIES → real flags + FRONT-001 imagery only.
+// Real countries from TARGET_COUNTRIES -> real flags + FRONT-001 imagery only.
 const HERO_RAIL = ['PT', 'GE', 'MA', 'JP', 'VN', 'AL'] as const;
 
 export default function HomePage() {
@@ -135,7 +135,7 @@ export default function HomePage() {
 
         {/* ── EDITORIAL DESTINATION ENTRIES ──────────────────── */}
         <section style={{ marginBottom: 40 }}>
-          <SectionHead label="Destinations à considérer" meta="Pistes éditoriales" />
+          <SectionHead label="Commencer par une destination" meta="Points d’entrée" />
           <OpportunityCards />
         </section>
 
