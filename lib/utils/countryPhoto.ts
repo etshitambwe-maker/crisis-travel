@@ -28,7 +28,7 @@ const COUNTRY_COLORS: Record<string, [string, string]> = {
 const DEFAULT_COLORS: [string, string] = ['#1a1a3a', '#2a2a5a'];
 
 export function getFlagUrl(code: string): string {
-  // flagcdn.com — CDN gratuit, drapeaux SVG pour tous les ISO-2
+  // flagcdn.com — CDN gratuit, drapeaux PNG (format w320 .png) pour tous les ISO-2
   return `https://flagcdn.com/w320/${code.toLowerCase()}.png`;
 }
 

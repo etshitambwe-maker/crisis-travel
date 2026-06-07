@@ -3,7 +3,7 @@
  * ────────────────────────────────────────────────────────────────────────
  * Single source of truth for how a destination is visually represented.
  * Built additively on top of the existing, untouchable data:
- *   - TARGET_COUNTRIES (N=18) → countries.ts          [read-only]
+ *   - TARGET_COUNTRIES (N=65) in countries.ts          [read-only]
  *   - getFlagUrl / COUNTRY_COLORS / WIKI_NAME → countryPhoto.ts
  *
  * The contract per country:
@@ -63,6 +63,17 @@ export interface DestinationImagery {
 export const DESTINATION_IMAGE_BASE = '/images/destinations';
 
 /**
+ * Single extension used by every curated local destination photo path.
+ * Today all curated assets are authored as optimized JPEG, so this is 'jpg'
+ * and the emitted paths stay `…/hero.jpg` / `…/card.jpg` (unchanged).
+ *
+ * This is the ONE switch a future WebP migration flips: change this to 'webp'
+ * AFTER the .webp files exist on disk, and every registry path follows in
+ * lockstep — no per-call-site edits, no path drift between registry & assets.
+ */
+export const DESTINATION_PHOTO_EXT = 'jpg';
+
+/**
  * Continent → fallback accent. Gives the duotone a coherent regional
  * identity even before per-country photography exists. Tuned to the v3
  * palette (--ctv3-* tokens).
@@ -79,12 +90,12 @@ const DEFAULT_ACCENT = '#a1a1aa';
 
 /** Local hero asset path for a slug (file may not exist — fallback handles it). */
 export function heroImagePath(slug: string): string {
-  return `${DESTINATION_IMAGE_BASE}/${slug}/hero.jpg`;
+  return `${DESTINATION_IMAGE_BASE}/${slug}/hero.${DESTINATION_PHOTO_EXT}`;
 }
 
 /** Local card asset path for a slug (file may not exist — fallback handles it). */
 export function cardImagePath(slug: string): string {
-  return `${DESTINATION_IMAGE_BASE}/${slug}/card.jpg`;
+  return `${DESTINATION_IMAGE_BASE}/${slug}/card.${DESTINATION_PHOTO_EXT}`;
 }
 
 /**
@@ -122,7 +133,7 @@ function build(entry: (typeof TARGET_COUNTRIES)[number]): DestinationImagery {
   };
 }
 
-/** Registry keyed by ISO-2 country code, covering all 18 TARGET_COUNTRIES. */
+/** Registry keyed by ISO-2 country code, covering all 65 TARGET_COUNTRIES. */
 export const DESTINATION_IMAGERY: Record<string, DestinationImagery> =
   Object.fromEntries(TARGET_COUNTRIES.map((c) => [c.code, build(c)]));
 
@@ -151,6 +162,35 @@ export function getDestinationImagery(code: string): DestinationImagery {
     tint: ['#1a1a2a', '#0e0e12'],
     accent: DEFAULT_ACCENT,
   };
+}
+
+/**
+ * Central registry of which destinations have a curated LOCAL photo ready.
+ *
+ * Empty by design today: zero curated local photos exist yet, so every
+ * country resolves to the premium duotone fallback. This set is the single
+ * opt-in switch for the curated-local-photo path — add a country's ISO-2 code
+ * here ONLY once `…/<slug>/hero.<ext>` & `…/<slug>/card.<ext>` actually exist
+ * on disk. Nothing reads it at a call-site yet; it exists so future photo
+ * batches flip availability centrally instead of editing every page.
+ *
+ * Note: this is unrelated to the remote-photo path used on the results page
+ * (CountryCard fetches /api/photo/<code> and passes it as an explicit `src`).
+ * That path is independent and is not governed by this set.
+ */
+export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<string>(
+  [],
+);
+
+/**
+ * True when a curated LOCAL photo is known to exist for this destination.
+ * Always false today (availability set is empty), so duotone everywhere. Safe
+ * for unknown / off-coverage codes (returns false, never throws). Callers can
+ * use this to opt a slot into the local photo without hardcoding per-country
+ * knowledge; until a code is added to the set above, no <img> is ever mounted.
+ */
+export function hasDestinationPhoto(code: string): boolean {
+  return DESTINATION_PHOTO_AVAILABILITY.has((code || '').toUpperCase());
 }
 
 /** CSS background string for the duotone fallback (no photo case). */
