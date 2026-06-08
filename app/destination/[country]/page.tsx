@@ -15,7 +15,7 @@ import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 import { DestinationImage } from '@/components/design/DestinationImage';
 import { CountryFlag } from '@/components/design/CountryFlag';
 import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/design/atoms';
-import { getDestinationImagery } from '@/lib/design/destinationImagery';
+import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
 // dépasser les 10s par défaut de Vercel sur cold cache. 60s évite le timeout.
@@ -178,6 +178,7 @@ export default async function DestinationPage({ params }: Props) {
         height={300}
         showLabel={false}
         scrim="strong"
+        hasPhoto={hasDestinationPhoto(score.countryCode)}
       >
         <div style={{
           position: 'absolute', inset: 0, zIndex: 3,

@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { CountryFlag } from '@/components/design/CountryFlag';
 import { DestinationImage } from '@/components/design/DestinationImage';
-import { getDestinationImagery } from '@/lib/design/destinationImagery';
+import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
 
 /**
  * FRONT-002 — Editorial destination entry points (formerly "Fenêtres optimales").
@@ -88,8 +88,8 @@ export function OpportunityCards() {
               ev.currentTarget.style.transform = 'translateY(0)';
             }}
           >
-            {/* Photo-led: real photo when curated, else premium duotone (FRONT-001) */}
-            <DestinationImage code={e.code} slot="card" aspect="16/10" showLabel={false} scrim="soft" />
+            {/* Photo-led: curated local photo when available (FRONT-024D), else premium duotone (FRONT-001) */}
+            <DestinationImage code={e.code} slot="card" aspect="16/10" showLabel={false} scrim="soft" hasPhoto={hasDestinationPhoto(e.code)} />
 
             <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
