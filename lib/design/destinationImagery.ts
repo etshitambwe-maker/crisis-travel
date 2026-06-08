@@ -15,7 +15,7 @@
  *   unstable external photos. heroImage / cardImage point at future local
  *   paths under /public/images/destinations/<slug>/. Those files may not
  *   exist yet — DestinationImage MUST fall back gracefully to the premium
- *   duotone derived from `fallback`. Adding the real .jpg later requires
+ *   duotone derived from `fallback`. Adding the real .webp later requires
  *   NO code change: drop the file at the path this registry already emits.
  *
  * This module is data/helpers only — no React, no side effects.
@@ -187,10 +187,11 @@ export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<strin
 
 /**
  * True when a curated LOCAL photo is known to exist for this destination.
- * Always false today (availability set is empty), so duotone everywhere. Safe
+ * True for the five FRONT-024D pilot codes (GR/TH/TN/PT/MX), false for the
+ * other 60 TARGET_COUNTRIES (premium duotone fallback off-coverage). Safe
  * for unknown / off-coverage codes (returns false, never throws). Callers can
  * use this to opt a slot into the local photo without hardcoding per-country
- * knowledge; until a code is added to the set above, no <img> is ever mounted.
+ * knowledge; a code mounts an <img> only once it is present in the set above.
  */
 export function hasDestinationPhoto(code: string): boolean {
   return DESTINATION_PHOTO_AVAILABILITY.has((code || '').toUpperCase());
