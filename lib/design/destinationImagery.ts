@@ -64,14 +64,16 @@ export const DESTINATION_IMAGE_BASE = '/images/destinations';
 
 /**
  * Single extension used by every curated local destination photo path.
- * Today all curated assets are authored as optimized JPEG, so this is 'jpg'
- * and the emitted paths stay `…/hero.jpg` / `…/card.jpg` (unchanged).
- *
- * This is the ONE switch a future WebP migration flips: change this to 'webp'
- * AFTER the .webp files exist on disk, and every registry path follows in
+ * FRONT-024D flips this to 'webp': the pilot batch ships pre-generated WebP
+ * assets, so every emitted path is now `…/hero.webp` / `…/card.webp` in
  * lockstep — no per-call-site edits, no path drift between registry & assets.
+ *
+ * This is the ONE switch the WebP migration flips, AFTER the .webp files exist
+ * on disk. Countries without a curated photo are unaffected: they never mount
+ * an <img> (gated by DESTINATION_PHOTO_AVAILABILITY / hasDestinationPhoto), so
+ * the non-existent `.webp` path is never requested.
  */
-export const DESTINATION_PHOTO_EXT = 'jpg';
+export const DESTINATION_PHOTO_EXT = 'webp';
 
 /**
  * Continent → fallback accent. Gives the duotone a coherent regional
@@ -167,19 +169,20 @@ export function getDestinationImagery(code: string): DestinationImagery {
 /**
  * Central registry of which destinations have a curated LOCAL photo ready.
  *
- * Empty by design today: zero curated local photos exist yet, so every
- * country resolves to the premium duotone fallback. This set is the single
- * opt-in switch for the curated-local-photo path — add a country's ISO-2 code
- * here ONLY once `…/<slug>/hero.<ext>` & `…/<slug>/card.<ext>` actually exist
- * on disk. Nothing reads it at a call-site yet; it exists so future photo
- * batches flip availability centrally instead of editing every page.
+ * FRONT-024D pilot batch: exactly five destinations ship curated WebP assets
+ * under `…/<slug>/{hero,card}.webp`. Only these ISO-2 codes are opted in; the
+ * other 60 TARGET_COUNTRIES resolve to the premium duotone fallback and never
+ * mount an <img>. This set is the single opt-in switch for the curated-local-
+ * photo path — add a country's ISO-2 code here ONLY once its hero/card assets
+ * actually exist on disk. Slug ↔ folder mapping comes from meaeSlug
+ * (GR→grece, TH→thailande, TN→tunisie, PT→portugal, MX→mexique).
  *
  * Note: this is unrelated to the remote-photo path used on the results page
  * (CountryCard fetches /api/photo/<code> and passes it as an explicit `src`).
  * That path is independent and is not governed by this set.
  */
 export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<string>(
-  [],
+  ['GR', 'TH', 'TN', 'PT', 'MX'],
 );
 
 /**
