@@ -292,29 +292,42 @@ the next attempt.
 
 ---
 
-## 9. Future implementation roadmap
+## 9. Implementation roadmap
 
-This document is FRONT-024B (specification). It feeds the later phases:
+This document started as FRONT-024B (specification). It feeds the later phases:
 
-- **FRONT-024C — registry / fallback / opt-in hardening.** Add a "photo
-  available" mechanism so `DestinationImage` can opt in per destination without
-  editing each call-site; fix stale comments (registry header "N=18" should read
-  65; destinations README says flags are SVG but the code serves flagcdn PNG);
-  decide `.jpg` vs `.webp` registry path. Scope: small, code-only,
-  `lib/design/destinationImagery.ts` (and an optional manifest), with
+- **FRONT-024C — registry / fallback / opt-in hardening.** ✅ DONE. Added the
+  per-destination "photo available" opt-in (`DESTINATION_PHOTO_AVAILABILITY` +
+  `hasDestinationPhoto`) so `DestinationImage` opts in without editing call-sites;
+  fixed stale comments; introduced `DESTINATION_PHOTO_EXT`.
+- **FRONT-024D — WebP pilot batch.** ✅ DONE (merged). Pipeline established and a
+  5-destination pilot shipped under `/public/images/destinations/<slug>/`, registry
+  path switched to `.webp`. Pilot: GR, TH, TN, PT, MX. Weight budgets and duotone
+  fallback verified.
+- **FRONT-025A — scale-up planning.** ✅ DONE (read-only). Full 5→65 plan, per-
+  continent batching, QC protocol.
+- **FRONT-025B — Europe batch.** ✅ DONE (merged, main `aedbc39`, PR #31). 12 Europe
+  destinations activated (GE, AL, RS, BA, MD, MK, AM, TR, ME, XK, HR, HU) → **17 of
+  65 active, 48 still on duotone fallback**. Images generated off-repo
+  (Anti-Gravity + Nano Banana), QC'd pre-integration, weight re-encoded under the
+  decimal budget where needed, baseline tests rewritten (17 true / 48 false),
   tsc/vitest/build green.
-- **FRONT-024D — WebP pilot batch.** Establish the conversion/optimization
-  pipeline and ship a small pilot set (e.g. 5–10 destinations) under
-  `/public/images/destinations/<slug>/`, switching the registry path to WebP if
-  decided in 024C. Verify weight budgets and that the fallback still works for
-  not-yet-produced countries.
-- **FRONT-024E — progressive visual integration.** Turn on `hasPhoto` per page
-  and per component only where real photos exist, one surface at a time, with
-  desktop/mobile screenshots and no broken-image regressions.
+- **FRONT-025C+ — remaining continents.** PENDING. Middle East / Americas / Asia /
+  Africa, same spec and same off-repo → QC → integration workflow.
 
 GO/NO-GO for each phase: strict file scope, no backend/API/scoring/auth/Stripe/
 Supabase/affiliate changes, no unexpected route or copy changes, image coverage
 and fallback verified, performance checked where relevant.
+
+### Delivery status (as of FRONT-025B)
+
+| Variant | Active | Fallback (duotone) | Total |
+|---|---|---|---|
+| Destinations | 17 | 48 | 65 |
+
+Active codes: GR, TH, TN, PT, MX (024D pilot) · GE, AL, RS, BA, MD, MK, AM, TR, ME,
+XK, HR, HU (025B Europe). Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
+— hero 1600×900 (<300 000 B), card 800×500 (<120 000 B).
 
 ---
 
