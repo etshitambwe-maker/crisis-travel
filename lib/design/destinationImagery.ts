@@ -169,29 +169,41 @@ export function getDestinationImagery(code: string): DestinationImagery {
 /**
  * Central registry of which destinations have a curated LOCAL photo ready.
  *
- * FRONT-024D pilot batch: exactly five destinations ship curated WebP assets
- * under `…/<slug>/{hero,card}.webp`. Only these ISO-2 codes are opted in; the
- * other 60 TARGET_COUNTRIES resolve to the premium duotone fallback and never
- * mount an <img>. This set is the single opt-in switch for the curated-local-
- * photo path — add a country's ISO-2 code here ONLY once its hero/card assets
- * actually exist on disk. Slug ↔ folder mapping comes from meaeSlug
- * (GR→grece, TH→thailande, TN→tunisie, PT→portugal, MX→mexique).
+ * Curated WebP assets ship under `…/<slug>/{hero,card}.webp`. Only these ISO-2
+ * codes are opted in; every other TARGET_COUNTRIES entry resolves to the
+ * premium duotone fallback and never mounts an <img>. This set is the single
+ * opt-in switch for the curated-local-photo path — add a country's ISO-2 code
+ * here ONLY once its hero/card assets actually exist on disk. Slug ↔ folder
+ * mapping comes from meaeSlug (e.g. GR→grece, BA→bosnie-herzegovine,
+ * MK→macedoine-du-nord, ME→montenegro).
+ *
+ * Coverage:
+ *   - FRONT-024D pilot (5): GR, TH, TN, PT, MX.
+ *   - FRONT-025B Europe batch (12): GE, AL, RS, BA, MD, MK, AM, TR, ME, XK,
+ *     HR, HU.
+ *   Total = 17 of 65; the remaining 48 stay on duotone fallback.
  *
  * Note: this is unrelated to the remote-photo path used on the results page
  * (CountryCard fetches /api/photo/<code> and passes it as an explicit `src`).
  * That path is independent and is not governed by this set.
  */
 export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<string>(
-  ['GR', 'TH', 'TN', 'PT', 'MX'],
+  [
+    // FRONT-024D pilot
+    'GR', 'TH', 'TN', 'PT', 'MX',
+    // FRONT-025B Europe batch
+    'GE', 'AL', 'RS', 'BA', 'MD', 'MK', 'AM', 'TR', 'ME', 'XK', 'HR', 'HU',
+  ],
 );
 
 /**
  * True when a curated LOCAL photo is known to exist for this destination.
- * True for the five FRONT-024D pilot codes (GR/TH/TN/PT/MX), false for the
- * other 60 TARGET_COUNTRIES (premium duotone fallback off-coverage). Safe
- * for unknown / off-coverage codes (returns false, never throws). Callers can
- * use this to opt a slot into the local photo without hardcoding per-country
- * knowledge; a code mounts an <img> only once it is present in the set above.
+ * True for the 17 opted-in codes (5 FRONT-024D pilot + 12 FRONT-025B Europe),
+ * false for the other 48 TARGET_COUNTRIES (premium duotone fallback off-
+ * coverage). Safe for unknown / off-coverage codes (returns false, never
+ * throws). Callers can use this to opt a slot into the local photo without
+ * hardcoding per-country knowledge; a code mounts an <img> only once it is
+ * present in the set above.
  */
 export function hasDestinationPhoto(code: string): boolean {
   return DESTINATION_PHOTO_AVAILABILITY.has((code || '').toUpperCase());
