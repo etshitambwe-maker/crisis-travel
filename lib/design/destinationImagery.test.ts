@@ -15,8 +15,16 @@ const PILOT_CODES = ['GR', 'TH', 'TN', 'PT', 'MX'] as const;
 const EUROPE_025B_CODES = [
   'GE', 'AL', 'RS', 'BA', 'MD', 'MK', 'AM', 'TR', 'ME', 'XK', 'HR', 'HU',
 ] as const;
-/** All currently opted-in codes (17). */
-const ACTIVE_CODES = [...PILOT_CODES, ...EUROPE_025B_CODES] as const;
+/** FRONT-025C Middle East + Americas pt.1 batch (9). */
+const AMERICAS_ME_025C_CODES = [
+  'JO', 'AE', 'OM', 'CO', 'PE', 'EC', 'BO', 'CL', 'AR',
+] as const;
+/** All currently opted-in codes (26). */
+const ACTIVE_CODES = [
+  ...PILOT_CODES,
+  ...EUROPE_025B_CODES,
+  ...AMERICAS_ME_025C_CODES,
+] as const;
 
 /** code → meaeSlug for every active destination (asset folder names). */
 const ACTIVE_SLUGS: Record<(typeof ACTIVE_CODES)[number], string> = {
@@ -39,17 +47,27 @@ const ACTIVE_SLUGS: Record<(typeof ACTIVE_CODES)[number], string> = {
   XK: 'kosovo',
   HR: 'croatie',
   HU: 'hongrie',
+  // Middle East + Americas pt.1 025C
+  JO: 'jordanie',
+  AE: 'emirats-arabes-unis',
+  OM: 'oman',
+  CO: 'colombie',
+  PE: 'perou',
+  EC: 'equateur',
+  BO: 'bolivie',
+  CL: 'chili',
+  AR: 'argentine',
 };
 
-describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B)', () => {
-  it('exposes exactly the 17 opted-in codes in the availability set', () => {
-    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(17);
+describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B + 025C)', () => {
+  it('exposes exactly the 26 opted-in codes in the availability set', () => {
+    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(26);
     for (const code of ACTIVE_CODES) {
       expect(DESTINATION_PHOTO_AVAILABILITY.has(code)).toBe(true);
     }
   });
 
-  it('hasDestinationPhoto is true for all 17 active codes', () => {
+  it('hasDestinationPhoto is true for all 26 active codes', () => {
     for (const code of ACTIVE_CODES) {
       expect(hasDestinationPhoto(code)).toBe(true);
     }
@@ -61,7 +79,13 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B)'
     }
   });
 
-  it('hasDestinationPhoto is false for every non-active TARGET_COUNTRIES entry (48)', () => {
+  it('hasDestinationPhoto is true for each of the 9 Middle East + Americas 025C codes', () => {
+    for (const code of AMERICAS_ME_025C_CODES) {
+      expect(hasDestinationPhoto(code)).toBe(true);
+    }
+  });
+
+  it('hasDestinationPhoto is false for every non-active TARGET_COUNTRIES entry (39)', () => {
     const active = new Set<string>(ACTIVE_CODES);
     let falseCount = 0;
     for (const c of TARGET_COUNTRIES) {
@@ -69,7 +93,7 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B)'
       expect(hasDestinationPhoto(c.code)).toBe(false);
       falseCount += 1;
     }
-    expect(falseCount).toBe(48);
+    expect(falseCount).toBe(39);
     expect(TARGET_COUNTRIES.length).toBe(65);
   });
 

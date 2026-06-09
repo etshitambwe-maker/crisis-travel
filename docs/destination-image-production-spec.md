@@ -312,21 +312,28 @@ This document started as FRONT-024B (specification). It feeds the later phases:
   (Anti-Gravity + Nano Banana), QC'd pre-integration, weight re-encoded under the
   decimal budget where needed, baseline tests rewritten (17 true / 48 false),
   tsc/vitest/build green.
-- **FRONT-025C+ — remaining continents.** PENDING. Middle East / Americas / Asia /
+- **FRONT-025C — Middle East + Americas pt.1 batch.** ✅ DONE. 9 destinations
+  activated (JO, AE, OM, CO, PE, EC, BO, CL, AR) → **26 of 65 active, 39 still on
+  duotone fallback**. Images generated off-repo (Anti-Gravity + Nano Banana), QC'd
+  pre-integration (18/18: real WebP, exact dims, under decimal weight budget,
+  recognizable + differentiated Andean signatures), baseline tests updated
+  (26 true / 39 false), tsc/vitest/build green.
+- **FRONT-025D+ — remaining continents.** PENDING. Americas pt.2 / Asia /
   Africa, same spec and same off-repo → QC → integration workflow.
 
 GO/NO-GO for each phase: strict file scope, no backend/API/scoring/auth/Stripe/
 Supabase/affiliate changes, no unexpected route or copy changes, image coverage
 and fallback verified, performance checked where relevant.
 
-### Delivery status (as of FRONT-025B)
+### Delivery status (as of FRONT-025C)
 
 | Variant | Active | Fallback (duotone) | Total |
 |---|---|---|---|
-| Destinations | 17 | 48 | 65 |
+| Destinations | 26 | 39 | 65 |
 
 Active codes: GR, TH, TN, PT, MX (024D pilot) · GE, AL, RS, BA, MD, MK, AM, TR, ME,
-XK, HR, HU (025B Europe). Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
+XK, HR, HU (025B Europe) · JO, AE, OM, CO, PE, EC, BO, CL, AR (025C Middle East +
+Americas pt.1). Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
 — hero 1600×900 (<300 000 B), card 800×500 (<120 000 B).
 
 ---

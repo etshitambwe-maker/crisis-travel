@@ -181,7 +181,9 @@ export function getDestinationImagery(code: string): DestinationImagery {
  *   - FRONT-024D pilot (5): GR, TH, TN, PT, MX.
  *   - FRONT-025B Europe batch (12): GE, AL, RS, BA, MD, MK, AM, TR, ME, XK,
  *     HR, HU.
- *   Total = 17 of 65; the remaining 48 stay on duotone fallback.
+ *   - FRONT-025C Middle East + Americas pt.1 (9): JO, AE, OM, CO, PE, EC, BO,
+ *     CL, AR.
+ *   Total = 26 of 65; the remaining 39 stay on duotone fallback.
  *
  * Note: this is unrelated to the remote-photo path used on the results page
  * (CountryCard fetches /api/photo/<code> and passes it as an explicit `src`).
@@ -193,14 +195,17 @@ export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<strin
     'GR', 'TH', 'TN', 'PT', 'MX',
     // FRONT-025B Europe batch
     'GE', 'AL', 'RS', 'BA', 'MD', 'MK', 'AM', 'TR', 'ME', 'XK', 'HR', 'HU',
+    // FRONT-025C Middle East + Americas pt.1 batch
+    'JO', 'AE', 'OM', 'CO', 'PE', 'EC', 'BO', 'CL', 'AR',
   ],
 );
 
 /**
  * True when a curated LOCAL photo is known to exist for this destination.
- * True for the 17 opted-in codes (5 FRONT-024D pilot + 12 FRONT-025B Europe),
- * false for the other 48 TARGET_COUNTRIES (premium duotone fallback off-
- * coverage). Safe for unknown / off-coverage codes (returns false, never
+ * True for the 26 opted-in codes (5 FRONT-024D pilot + 12 FRONT-025B Europe +
+ * 9 FRONT-025C Middle East + Americas pt.1), false for the other 39
+ * TARGET_COUNTRIES (premium duotone fallback off-coverage). Safe for unknown /
+ * off-coverage codes (returns false, never
  * throws). Callers can use this to opt a slot into the local photo without
  * hardcoding per-country knowledge; a code mounts an <img> only once it is
  * present in the set above.
