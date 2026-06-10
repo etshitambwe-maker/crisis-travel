@@ -27,13 +27,18 @@ const ASIA_AMERICAS_025D_CODES = [
 const AFRICA_ASIA_025E_CODES = [
   'JP', 'KH', 'UZ', 'SG', 'KG', 'MA', 'KE', 'RW', 'ZA', 'MG',
 ] as const;
-/** All currently opted-in codes (46). */
+/** FRONT-025E2A Africa pt.2 batch (12). */
+const AFRICA_025E2A_CODES = [
+  'EG', 'SN', 'CI', 'GH', 'TZ', 'ET', 'MU', 'CM', 'CG', 'CD', 'NG', 'AO',
+] as const;
+/** All currently opted-in codes (58). */
 const ACTIVE_CODES = [
   ...PILOT_CODES,
   ...EUROPE_025B_CODES,
   ...AMERICAS_ME_025C_CODES,
   ...ASIA_AMERICAS_025D_CODES,
   ...AFRICA_ASIA_025E_CODES,
+  ...AFRICA_025E2A_CODES,
 ] as const;
 
 /** code → meaeSlug for every active destination (asset folder names). */
@@ -89,17 +94,30 @@ const ACTIVE_SLUGS: Record<(typeof ACTIVE_CODES)[number], string> = {
   RW: 'rwanda',
   ZA: 'afrique-du-sud',
   MG: 'madagascar',
+  // Africa pt.2 025E2A
+  EG: 'egypte',
+  SN: 'senegal',
+  CI: 'cote-d-ivoire',
+  GH: 'ghana',
+  TZ: 'tanzanie',
+  ET: 'ethiopie',
+  MU: 'maurice',
+  CM: 'cameroun',
+  CG: 'congo-brazzaville',
+  CD: 'republique-democratique-du-congo',
+  NG: 'nigeria',
+  AO: 'angola',
 };
 
-describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B + 025C + 025D + 025E)', () => {
-  it('exposes exactly the 46 opted-in codes in the availability set', () => {
-    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(46);
+describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B + 025C + 025D + 025E + 025E2A)', () => {
+  it('exposes exactly the 58 opted-in codes in the availability set', () => {
+    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(58);
     for (const code of ACTIVE_CODES) {
       expect(DESTINATION_PHOTO_AVAILABILITY.has(code)).toBe(true);
     }
   });
 
-  it('hasDestinationPhoto is true for all 46 active codes', () => {
+  it('hasDestinationPhoto is true for all 58 active codes', () => {
     for (const code of ACTIVE_CODES) {
       expect(hasDestinationPhoto(code)).toBe(true);
     }
@@ -129,7 +147,13 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B +
     }
   });
 
-  it('hasDestinationPhoto is false for every non-active TARGET_COUNTRIES entry (19)', () => {
+  it('hasDestinationPhoto is true for each of the 12 Africa pt.2 025E2A codes', () => {
+    for (const code of AFRICA_025E2A_CODES) {
+      expect(hasDestinationPhoto(code)).toBe(true);
+    }
+  });
+
+  it('hasDestinationPhoto is false for every non-active TARGET_COUNTRIES entry (7)', () => {
     const active = new Set<string>(ACTIVE_CODES);
     let falseCount = 0;
     for (const c of TARGET_COUNTRIES) {
@@ -137,12 +161,12 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B +
       expect(hasDestinationPhoto(c.code)).toBe(false);
       falseCount += 1;
     }
-    expect(falseCount).toBe(19);
+    expect(falseCount).toBe(7);
     expect(TARGET_COUNTRIES.length).toBe(65);
   });
 
   it('hasDestinationPhoto is false for representative non-active codes', () => {
-    for (const code of ['EG', 'IN', 'CM', 'PH']) {
+    for (const code of ['PH', 'MM', 'IN', 'KZ', 'PY', 'GT', 'CU']) {
       expect(hasDestinationPhoto(code)).toBe(false);
     }
   });
