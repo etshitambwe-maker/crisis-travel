@@ -318,22 +318,31 @@ This document started as FRONT-024B (specification). It feeds the later phases:
   pre-integration (18/18: real WebP, exact dims, under decimal weight budget,
   recognizable + differentiated Andean signatures), baseline tests updated
   (26 true / 39 false), tsc/vitest/build green.
-- **FRONT-025D+ — remaining continents.** PENDING. Americas pt.2 / Asia /
-  Africa, same spec and same off-repo → QC → integration workflow.
+- **FRONT-025D — Asia + Americas pt.2 batch.** ✅ DONE. 10 destinations
+  activated (BR, CR, ID, MY, NP, PA, DO, LK, UY, VN) → **36 of 65 active, 29 still
+  on duotone fallback**. Images generated off-repo (Anti-Gravity + Nano Banana),
+  QC'd pre-integration (20/20: real WebP, exact dims, under decimal weight budget;
+  4 files regenerated off-repo before integration to clear hard rejects —
+  costa-rica/hero painted dark band, costa-rica/card embedded "COSTA RICA /
+  ARENAL REGION" text, bresil/card duplicated seam, vietnam/hero duplicated seam),
+  baseline tests updated (36 true / 29 false), tsc/vitest/build green.
+- **FRONT-025E+ — remaining continents.** PENDING. Africa + remaining Asia, same
+  spec and same off-repo → QC → integration workflow.
 
 GO/NO-GO for each phase: strict file scope, no backend/API/scoring/auth/Stripe/
 Supabase/affiliate changes, no unexpected route or copy changes, image coverage
 and fallback verified, performance checked where relevant.
 
-### Delivery status (as of FRONT-025C)
+### Delivery status (as of FRONT-025D)
 
 | Variant | Active | Fallback (duotone) | Total |
 |---|---|---|---|
-| Destinations | 26 | 39 | 65 |
+| Destinations | 36 | 29 | 65 |
 
 Active codes: GR, TH, TN, PT, MX (024D pilot) · GE, AL, RS, BA, MD, MK, AM, TR, ME,
 XK, HR, HU (025B Europe) · JO, AE, OM, CO, PE, EC, BO, CL, AR (025C Middle East +
-Americas pt.1). Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
+Americas pt.1) · BR, CR, ID, MY, NP, PA, DO, LK, UY, VN (025D Asia + Americas pt.2).
+Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
 — hero 1600×900 (<300 000 B), card 800×500 (<120 000 B).
 
 ---
