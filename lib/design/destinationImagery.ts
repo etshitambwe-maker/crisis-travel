@@ -189,7 +189,8 @@ export function getDestinationImagery(code: string): DestinationImagery {
  *     MG.
  *   - FRONT-025E2A Africa pt.2 (12): EG, SN, CI, GH, TZ, ET, MU, CM, CG, CD,
  *     NG, AO.
- *   Total = 58 of 65; the remaining 7 stay on duotone fallback.
+ *   - FRONT-025E2B Asia + Americas final (7): PH, MM, IN, KZ, PY, GT, CU.
+ *   Total = 65 of 65 — full coverage, no duotone fallback remaining.
  *
  * Note: this is unrelated to the remote-photo path used on the results page
  * (CountryCard fetches /api/photo/<code> and passes it as an explicit `src`).
@@ -209,19 +210,18 @@ export const DESTINATION_PHOTO_AVAILABILITY: ReadonlySet<string> = new Set<strin
     'JP', 'KH', 'UZ', 'SG', 'KG', 'MA', 'KE', 'RW', 'ZA', 'MG',
     // FRONT-025E2A Africa pt.2 batch
     'EG', 'SN', 'CI', 'GH', 'TZ', 'ET', 'MU', 'CM', 'CG', 'CD', 'NG', 'AO',
+    // FRONT-025E2B Asia + Americas final batch — completes 65/65
+    'PH', 'MM', 'IN', 'KZ', 'PY', 'GT', 'CU',
   ],
 );
 
 /**
  * True when a curated LOCAL photo is known to exist for this destination.
- * True for the 58 opted-in codes (5 FRONT-024D pilot + 12 FRONT-025B Europe +
- * 9 FRONT-025C Middle East + Americas pt.1 + 10 FRONT-025D Asia + Americas
- * pt.2 + 10 FRONT-025E Africa + Asia pt.1 + 12 FRONT-025E2A Africa pt.2), false
- * for the other 7 TARGET_COUNTRIES (premium duotone fallback off-coverage). Safe
- * for unknown / off-coverage codes (returns false, never
- * throws). Callers can use this to opt a slot into the local photo without
- * hardcoding per-country knowledge; a code mounts an <img> only once it is
- * present in the set above.
+ * True for all 65 TARGET_COUNTRIES codes (full coverage as of FRONT-025E2B).
+ * Safe for unknown / off-coverage codes (returns false, never throws).
+ * Callers can use this to opt a slot into the local photo without hardcoding
+ * per-country knowledge; a code mounts an <img> only once it is present in
+ * the set above.
  */
 export function hasDestinationPhoto(code: string): boolean {
   return DESTINATION_PHOTO_AVAILABILITY.has((code || '').toUpperCase());

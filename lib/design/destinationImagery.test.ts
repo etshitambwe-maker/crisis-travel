@@ -31,7 +31,11 @@ const AFRICA_ASIA_025E_CODES = [
 const AFRICA_025E2A_CODES = [
   'EG', 'SN', 'CI', 'GH', 'TZ', 'ET', 'MU', 'CM', 'CG', 'CD', 'NG', 'AO',
 ] as const;
-/** All currently opted-in codes (58). */
+/** FRONT-025E2B Asia + Americas final batch (7) — completes 65/65. */
+const ASIA_AMERICAS_025E2B_CODES = [
+  'PH', 'MM', 'IN', 'KZ', 'PY', 'GT', 'CU',
+] as const;
+/** All opted-in codes (65 = full coverage). */
 const ACTIVE_CODES = [
   ...PILOT_CODES,
   ...EUROPE_025B_CODES,
@@ -39,6 +43,7 @@ const ACTIVE_CODES = [
   ...ASIA_AMERICAS_025D_CODES,
   ...AFRICA_ASIA_025E_CODES,
   ...AFRICA_025E2A_CODES,
+  ...ASIA_AMERICAS_025E2B_CODES,
 ] as const;
 
 /** code → meaeSlug for every active destination (asset folder names). */
@@ -107,17 +112,25 @@ const ACTIVE_SLUGS: Record<(typeof ACTIVE_CODES)[number], string> = {
   CD: 'republique-democratique-du-congo',
   NG: 'nigeria',
   AO: 'angola',
+  // Asia + Americas final 025E2B
+  PH: 'philippines',
+  MM: 'myanmar',
+  IN: 'inde',
+  KZ: 'kazakhstan',
+  PY: 'paraguay',
+  GT: 'guatemala',
+  CU: 'cuba',
 };
 
-describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B + 025C + 025D + 025E + 025E2A)', () => {
-  it('exposes exactly the 58 opted-in codes in the availability set', () => {
-    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(58);
+describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B→E2B, full 65/65)', () => {
+  it('exposes exactly 65 opted-in codes in the availability set (full coverage)', () => {
+    expect(DESTINATION_PHOTO_AVAILABILITY.size).toBe(65);
     for (const code of ACTIVE_CODES) {
       expect(DESTINATION_PHOTO_AVAILABILITY.has(code)).toBe(true);
     }
   });
 
-  it('hasDestinationPhoto is true for all 58 active codes', () => {
+  it('hasDestinationPhoto is true for all 65 active codes', () => {
     for (const code of ACTIVE_CODES) {
       expect(hasDestinationPhoto(code)).toBe(true);
     }
@@ -153,7 +166,13 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B +
     }
   });
 
-  it('hasDestinationPhoto is false for every non-active TARGET_COUNTRIES entry (7)', () => {
+  it('hasDestinationPhoto is true for each of the 7 Asia + Americas final 025E2B codes', () => {
+    for (const code of ASIA_AMERICAS_025E2B_CODES) {
+      expect(hasDestinationPhoto(code)).toBe(true);
+    }
+  });
+
+  it('hasDestinationPhoto is false for every code outside TARGET_COUNTRIES (full coverage = 0 fallback)', () => {
     const active = new Set<string>(ACTIVE_CODES);
     let falseCount = 0;
     for (const c of TARGET_COUNTRIES) {
@@ -161,20 +180,21 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B +
       expect(hasDestinationPhoto(c.code)).toBe(false);
       falseCount += 1;
     }
-    expect(falseCount).toBe(7);
+    expect(falseCount).toBe(0);
     expect(TARGET_COUNTRIES.length).toBe(65);
   });
 
-  it('hasDestinationPhoto is false for representative non-active codes', () => {
-    for (const code of ['PH', 'MM', 'IN', 'KZ', 'PY', 'GT', 'CU']) {
-      expect(hasDestinationPhoto(code)).toBe(false);
-    }
+  it('hasDestinationPhoto is false for off-catalogue codes (ZZ, XX)', () => {
+    expect(hasDestinationPhoto('ZZ')).toBe(false);
+    expect(hasDestinationPhoto('XX')).toBe(false);
   });
 
   it('hasDestinationPhoto is case-insensitive and safe for unknown/empty input', () => {
     expect(hasDestinationPhoto('gr')).toBe(true);
     expect(hasDestinationPhoto('al')).toBe(true);
     expect(hasDestinationPhoto('ba')).toBe(true);
+    expect(hasDestinationPhoto('ph')).toBe(true);
+    expect(hasDestinationPhoto('cu')).toBe(true);
     expect(hasDestinationPhoto('zz')).toBe(false);
     expect(hasDestinationPhoto('ZZ')).toBe(false);
     expect(hasDestinationPhoto('')).toBe(false);
@@ -210,6 +230,16 @@ describe('destinationImagery — curated local photo opt-in (FRONT-024D + 025B +
     expect(getDestinationImagery('ME').slug).toBe('montenegro');
     expect(getDestinationImagery('GE').slug).toBe('georgie');
     expect(getDestinationImagery('GR').slug).toBe('grece');
+  });
+
+  it('uses the exact slugs for the 025E2B batch', () => {
+    expect(getDestinationImagery('PH').slug).toBe('philippines');
+    expect(getDestinationImagery('MM').slug).toBe('myanmar');
+    expect(getDestinationImagery('IN').slug).toBe('inde');
+    expect(getDestinationImagery('KZ').slug).toBe('kazakhstan');
+    expect(getDestinationImagery('PY').slug).toBe('paraguay');
+    expect(getDestinationImagery('GT').slug).toBe('guatemala');
+    expect(getDestinationImagery('CU').slug).toBe('cuba');
   });
 
   it('uses grece (FR slug) and never greece (EN) in Greece paths', () => {
