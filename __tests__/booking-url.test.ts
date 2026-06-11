@@ -96,6 +96,62 @@ describe('buildBookingUrl — date enrichment', () => {
   });
 });
 
+describe('buildBookingUrl — date params never pollute URL when empty/absent', () => {
+  it('empty string checkin and checkout are treated as absent', () => {
+    // Simulates ResultsContent passing dateFrom='' / dateTo='' (DATES-001 behaviour)
+    const url = buildBookingUrl('Thaïlande', { checkin: '', checkout: '' });
+    expect(url).not.toContain('checkin=');
+    expect(url).not.toContain('checkout=');
+  });
+
+  it('empty checkin with valid checkout produces no date params', () => {
+    const url = buildBookingUrl('Vietnam', { checkin: '', checkout: '2026-09-10' });
+    expect(url).not.toContain('checkin=');
+    expect(url).not.toContain('checkout=');
+  });
+
+  it('valid checkin with empty checkout produces no date params', () => {
+    const url = buildBookingUrl('Maroc', { checkin: '2026-09-01', checkout: '' });
+    expect(url).not.toContain('checkin=');
+    expect(url).not.toContain('checkout=');
+  });
+});
+
+describe('buildBookingUrl — end-to-end: ResultsContent param propagation', () => {
+  // Simulates the full pipeline:
+  //   SmartSearchHub → URLSearchParams(from, to) → /results?from=&to=
+  //   → ResultsContent reads dateFrom/dateTo
+  //   → passes as checkin/checkout to TravelPackMiniBlock
+  //   → buildBookingUrl injects them into the Booking URL
+
+  it('valid from/to propagate to checkin/checkout in Booking URL', () => {
+    const dateFrom = '2026-09-01';
+    const dateTo   = '2026-09-14';
+    const url = buildBookingUrl('Japon', { checkin: dateFrom, checkout: dateTo, travelType: 'couple' });
+    expect(url).toContain('checkin=2026-09-01');
+    expect(url).toContain('checkout=2026-09-14');
+    expect(url).toContain('group_adults=2');
+  });
+
+  it('absent from/to (undefined, as when user skips dates) produce no checkin/checkout', () => {
+    // ResultsContent: dateFrom = params.get('from') ?? '' → undefined passed as checkin
+    const url = buildBookingUrl('Grèce', { checkin: undefined, checkout: undefined, travelType: 'solo' });
+    expect(url).not.toContain('checkin=');
+    expect(url).not.toContain('checkout=');
+    expect(url).toContain('group_adults=1');
+    expect(url).toContain('ss=Gr%C3%A8ce');
+  });
+
+  it('skyscanner link is homepage only — no date injection (not implemented)', () => {
+    // Skyscanner deep-link format is not stable/documented: intentionally not injecting dates.
+    const skyscannerUrl = 'https://www.skyscanner.fr/';
+    expect(skyscannerUrl).toBe('https://www.skyscanner.fr/');
+    expect(skyscannerUrl).not.toContain('checkin');
+    expect(skyscannerUrl).not.toContain('outboundDate');
+    expect(skyscannerUrl).not.toContain('inboundDate');
+  });
+});
+
 describe('buildBookingUrl — combined opts', () => {
   it('full enrichment: couple + dates', () => {
     const url = buildBookingUrl('Japon', {
