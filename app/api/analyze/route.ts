@@ -149,7 +149,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     // dépassé ce seuil. Garantit qu'on garde ~15s pour trier/sérialiser/répondre sous
     // le plafond Vercel 60s, et qu'on renvoie un résultat PARTIEL plutôt qu'un 504.
     const TIME_BUDGET_MS = 45000;
-    const tScoringStart = Date.now();
     const results = [];
     let partial = false;
     for (let i = 0; i < countries.length; i += BATCH) {
@@ -159,25 +158,13 @@ export async function POST(request: Request): Promise<NextResponse> {
         break;
       }
       const batch = countries.slice(i, i + BATCH);
-      const batchIndex = i / BATCH;
-      const tBatch = Date.now();
-      // Mesure par pays (GOAL-033, temporaire) : isole le coût réel d'un pays pour
-      // confirmer que le batch est parallèle (msBatch ≈ max(msCountry), pas la somme).
       const settled = await Promise.allSettled(
-        batch.map(async (c) => {
-          const tC = Date.now();
-          const r = await calculateCrisisScore(c, profile);
-          console.log('[API/analyze] country', JSON.stringify({ batchIndex, code: c.code, msCountry: Date.now() - tC }));
-          return r;
-        })
+        batch.map((c) => calculateCrisisScore(c, profile))
       );
-      console.log('[API/analyze] batch', JSON.stringify({ batchIndex, size: batch.length, msBatch: Date.now() - tBatch }));
       for (const r of settled) {
         if (r.status === 'fulfilled') results.push(r.value);
       }
     }
-    const msScoring = Date.now() - tScoringStart;
-
     // Tri selon sortBy ou mode
     let sorted = [...results];
     const sortBy = profile.sortBy;
@@ -193,11 +180,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     // detectOpportunities (Claude) ne s'exécute que s'il reste du budget — sinon on
     // omet les opportunités plutôt que de risquer le 504 sur la dernière ligne droite.
-    const tOppStart = Date.now();
     const rawOpportunities = Date.now() - t0 > TIME_BUDGET_MS
       ? []
       : await detectOpportunities(sorted, profile.budget);
-    const msOpportunities = Date.now() - tOppStart;
     const opportunities = rawOpportunities.map((op) => ({
       ...op,
       country: sorted.find((s) => s.countryCode === op.countryCode)?.country ?? op.countryCode,
@@ -207,14 +192,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const msTotal = Date.now() - t0;
     const cache = getCacheStats();
-    // Logs timing structurés temporaires (GOAL-032/033 / option E+F) — à retirer une
-    // fois le goulot confirmé en prod. `cache` révèle si Upstash sert vraiment (hits>0)
-    // ou s'il est injoignable (errors>0 → cold-cache permanent, racine de la lenteur).
-    console.log('[API/analyze] timing', JSON.stringify({
-      mode: profile.mode, selected: countries.length, scored: results.length,
-      msScoring, msOpportunities, msTotal, partial,
-      cacheHits: cache.hits, cacheMisses: cache.misses, cacheErrors: cache.errors, cacheHitRate: cache.hitRate,
-    }));
 
     const response: AnalyzeResponse = {
       results: sorted,
