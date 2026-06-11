@@ -1,7 +1,12 @@
 import { meaeLevelToScore } from '@/lib/utils/normalize';
 import type { ServiceResult } from '@/types/api.types';
 
-// Niveaux MEAE (France Diplomatie) — mis à jour manuellement chaque trimestre
+// Date de la dernière vérification manuelle des niveaux MEAE (France Diplomatie).
+// À mettre à jour à chaque révision trimestrielle de la table ci-dessous.
+export const MEAE_LAST_UPDATED = '2026-06-10';
+
+// URL officielle : https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/conseils-par-pays-destination/
+// Niveaux MEAE (France Diplomatie) — intégrés manuellement, mis à jour chaque trimestre
 // 1 = Vigilance normale | 2 = Vigilance renforcée | 3 = Déconseillé sauf raison impérative | 4 = Déconseillé
 const MEAE_LEVELS: Record<string, 1 | 2 | 3 | 4> = {
   // Europe
@@ -26,5 +31,5 @@ export async function getMEAEScore(
   _slug: string
 ): Promise<ServiceResult<{ score: number; level: number }>> {
   const level = MEAE_LEVELS[countryCode] ?? 2;
-  return { data: { score: meaeLevelToScore(level), level }, source: 'live' };
+  return { data: { score: meaeLevelToScore(level), level }, source: 'static' };
 }
