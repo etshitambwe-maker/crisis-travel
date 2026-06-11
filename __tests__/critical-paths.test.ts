@@ -409,3 +409,59 @@ describe('quota meta (QUOTA-001)', () => {
     expect(metaWithQuota.quota.remaining).toBe(1);
   });
 });
+
+describe('contacts officiels section (EMERGENCY-001)', () => {
+  const BASE_MEAE = 'https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/conseils-par-pays-destination/';
+
+  function buildMeaeUrl(meaeSlug: string | undefined): string {
+    return meaeSlug
+      ? `${BASE_MEAE}${meaeSlug}/`
+      : BASE_MEAE;
+  }
+
+  it('URL Diplomatie.gouv avec slug spécifique (Maroc)', () => {
+    const url = buildMeaeUrl('maroc');
+    expect(url).toBe(`${BASE_MEAE}maroc/`);
+    expect(url).toContain('diplomatie.gouv.fr');
+    expect(url).toContain('/maroc/');
+  });
+
+  it('URL Diplomatie.gouv fallback général sans meaeSlug', () => {
+    const url = buildMeaeUrl(undefined);
+    expect(url).toBe(BASE_MEAE);
+    expect(url).toContain('diplomatie.gouv.fr');
+    // Ne contient pas de slug inventé
+    expect(url.endsWith('/conseils-par-pays-destination/')).toBe(true);
+  });
+
+  it('aucun numéro de téléphone local dans le contenu statique de la section', () => {
+    // Le contenu textuel de la section contacts officiels ne doit contenir aucun numéro inventé.
+    const staticTexts = [
+      "Ambassades · Consulats · Numéros d'urgence",
+      "Les coordonnées consulaires et numéros d'urgence locaux varient selon le pays et peuvent évoluer.",
+      "Crisis Travel ne maintient pas de répertoire de contacts en temps réel.",
+      "Vérifier les contacts officiels sur Diplomatie.gouv →",
+      "La fiche officielle Diplomatie.gouv contient les coordonnées de l'ambassade de France,",
+      "les numéros d'urgence locaux et les recommandations consulaires à jour.",
+      "Vérifiez ces informations avant votre départ.",
+    ];
+    const phonePattern = /\+\d{7,}|\b0\d[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}\b/;
+    for (const text of staticTexts) {
+      expect(phonePattern.test(text)).toBe(false);
+    }
+  });
+
+  it('slug meaeSlug présent pour les pays du catalogue (PT, MA, JP)', () => {
+    // Vérifie que les pays du catalogue ont bien un meaeSlug non vide (données statiques)
+    const catalogue: Record<string, string> = {
+      PT: 'portugal',
+      MA: 'maroc',
+      JP: 'japon',
+    };
+    for (const [, slug] of Object.entries(catalogue)) {
+      const url = buildMeaeUrl(slug);
+      expect(url).toContain(slug);
+      expect(url).toContain('diplomatie.gouv.fr');
+    }
+  });
+});

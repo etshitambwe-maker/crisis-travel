@@ -428,8 +428,59 @@ export default async function DestinationPage({ params }: Props) {
           </>
         )}
 
-        {/* 05 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
-        <SectionLabel num="05" label="Synthèse IA" meta="Analyse éditoriale" />
+        {/* 05 — Contacts officiels */}
+        <SectionLabel num="05" label="Contacts officiels" meta="Sources officielles" />
+        <div style={{
+          border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)',
+          padding: '18px 20px', marginBottom: 36,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+            <div className="ctv3-mono" style={{
+              width: 38, height: 38, display: 'grid', placeItems: 'center', flexShrink: 0,
+              border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-muted)', fontSize: 16,
+            }}>
+              ℹ
+            </div>
+            <div>
+              <div className="ctv3-mono" style={{
+                fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase',
+                color: 'var(--ctv3-faint)', marginBottom: 6,
+              }}>
+                Ambassades · Consulats · Numéros d'urgence
+              </div>
+              <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 14, lineHeight: 1.5, margin: 0 }}>
+                Les coordonnées consulaires et numéros d'urgence locaux varient selon le pays et
+                peuvent évoluer. Crisis Travel ne maintient pas de répertoire de contacts en temps réel.
+              </p>
+            </div>
+          </div>
+          <a
+            href={meaeOfficialUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ctv3-mono"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 16px',
+              border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-paper)',
+              fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase',
+              textDecoration: 'none', fontWeight: 700, marginBottom: 12,
+            }}
+          >
+            Vérifier les contacts officiels sur Diplomatie.gouv →
+          </a>
+          <p className="ctv3-mono" style={{
+            fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.5,
+            letterSpacing: '0.02em', margin: 0,
+          }}>
+            La fiche officielle Diplomatie.gouv contient les coordonnées de l'ambassade de France,
+            les numéros d'urgence locaux et les recommandations consulaires à jour.
+            Vérifiez ces informations avant votre départ.
+          </p>
+        </div>
+
+        {/* 06 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
+        <SectionLabel num="06" label="Synthèse IA" meta="Analyse éditoriale" />
         <PremiumGate
           feature="Synthèse IA complète"
           description="Accédez à l'analyse narrative approfondie de Claude AI : contexte géopolitique, risques résiduels, recommandations personnalisées."
@@ -487,14 +538,14 @@ export default async function DestinationPage({ params }: Props) {
           </PremiumGate>
         </div>
 
-        {/* 06 — Historique */}
-        <SectionLabel num="06" label="Historique" meta="6 mois" />
+        {/* 07 — Historique */}
+        <SectionLabel num="07" label="Historique" meta="6 mois" />
         <div style={{ marginBottom: 36 }}>
           <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
         </div>
 
-        {/* 07 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
-        <SectionLabel num="07" label="Pack voyage" meta="Affiliés" />
+        {/* 08 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
+        <SectionLabel num="08" label="Pack voyage" meta="Affiliés" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}
