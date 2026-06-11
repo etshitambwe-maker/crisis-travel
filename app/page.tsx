@@ -9,6 +9,8 @@ import { DestinationImage } from '@/components/design/DestinationImage';
 import { Eyebrow } from '@/components/design/atoms';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
 import { CANDIDATE_CAP } from '@/lib/utils/selectCandidates';
+import { TickerBanner } from '@/components/crisis/TickerBanner';
+import { getMeaeTickerItems, MEAE_LAST_UPDATED } from '@/lib/utils/meae-ticker-items';
 
 /**
  * FRONT-002 — Homepage redesign (premium travel-editorial).
@@ -29,10 +31,13 @@ const SCORED_PER_REQUEST = CANDIDATE_CAP; // 18 — scored per /api/analyze requ
 // Real countries from TARGET_COUNTRIES -> real flags + FRONT-001 imagery only.
 const HERO_RAIL = ['PT', 'GE', 'MA', 'JP', 'VN', 'AL'] as const;
 
+const MEAE_TICKER_ITEMS = getMeaeTickerItems();
+
 export default function HomePage() {
   return (
     <div className="ctv3" style={{ minHeight: '100vh', overflowX: 'hidden', background: 'var(--ctv3-ink-900)' }}>
       <Header />
+      <TickerBanner items={MEAE_TICKER_ITEMS} lastUpdated={MEAE_LAST_UPDATED} />
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '0 20px 88px' }}>
         {/* ── HERO — editorial ───────────────────────────────── */}

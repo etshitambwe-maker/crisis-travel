@@ -8,7 +8,7 @@ export const MEAE_LAST_UPDATED = '2026-06-10';
 // URL officielle : https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/conseils-par-pays-destination/
 // Niveaux MEAE (France Diplomatie) — intégrés manuellement, mis à jour chaque trimestre
 // 1 = Vigilance normale | 2 = Vigilance renforcée | 3 = Déconseillé sauf raison impérative | 4 = Déconseillé
-const MEAE_LEVELS: Record<string, 1 | 2 | 3 | 4> = {
+export const MEAE_LEVELS: Record<string, 1 | 2 | 3 | 4> = {
   // Europe
   PT: 1, GE: 2, AL: 2, RS: 2, BA: 2, MD: 2, MK: 2, AM: 2,
   TR: 2, ME: 1, XK: 2, GR: 1, HR: 1, HU: 1,
