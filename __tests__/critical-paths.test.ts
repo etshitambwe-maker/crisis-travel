@@ -174,6 +174,42 @@ describe('analyse URL params construction', () => {
     const params = new URLSearchParams({ budget: '8000', duration: '60', travelType: 'nomad', mode: 'standard' });
     expect(parseInt(params.get('budget') ?? '0')).toBeLessThanOrEqual(8000);
   });
+
+  it('includes from and to when both dates are provided', () => {
+    const params = new URLSearchParams({
+      budget: '1500', duration: '7', travelType: 'solo', mode: 'standard',
+      from: '2026-09-01', to: '2026-09-10',
+    });
+    expect(params.get('from')).toBe('2026-09-01');
+    expect(params.get('to')).toBe('2026-09-10');
+    const url = `/results?${params.toString()}`;
+    expect(url).toContain('from=2026-09-01');
+    expect(url).toContain('to=2026-09-10');
+  });
+
+  it('omits from/to when dates are empty strings', () => {
+    const dateDepart = '';
+    const dateRetour = '';
+    const params = new URLSearchParams({ budget: '1500', duration: '7', travelType: 'solo', mode: 'standard' });
+    if (dateDepart) params.set('from', dateDepart);
+    if (dateRetour) params.set('to', dateRetour);
+    expect(params.get('from')).toBeNull();
+    expect(params.get('to')).toBeNull();
+  });
+
+  it('date validation: retour <= depart is invalid', () => {
+    function dateError(depart: string, retour: string): string | null {
+      if (!depart || !retour) return null;
+      if (retour <= depart) return 'La date de retour doit être après la date de départ.';
+      return null;
+    }
+    expect(dateError('2026-09-10', '2026-09-01')).toBeTruthy();
+    expect(dateError('2026-09-10', '2026-09-10')).toBeTruthy();
+    expect(dateError('2026-09-01', '2026-09-10')).toBeNull();
+    expect(dateError('', '2026-09-10')).toBeNull();
+    expect(dateError('2026-09-01', '')).toBeNull();
+    expect(dateError('', '')).toBeNull();
+  });
 });
 
 // ── Affiliate click URL construction (TravelPackMiniBlock) ───────────────────
