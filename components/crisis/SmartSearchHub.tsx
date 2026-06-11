@@ -535,7 +535,10 @@ function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
     const priority = state.priority ?? 'tout';
 
     setLoading(true);
-    router.push(`/results?budget=${b}&duration=${d}&travelType=${tt}&mode=${mode}&priority=${priority}&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+    const p = new URLSearchParams({ budget: String(b), duration: String(d), travelType: tt, mode, priority, airport });
+    if (dateDepart) p.set('from', dateDepart);
+    if (dateRetour) p.set('to', dateRetour);
+    router.push(`/results?${p.toString()}`);
     // Navigation en cours ; le verrou est relâché après une fenêtre (le composant sera démonté).
     setTimeout(releaseAnalyzeLock, 3000);
   }
@@ -649,7 +652,10 @@ export function SmartSearchHub() {
 
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
-    router.push(`/results?continent=${continent}&mode=${sortMode}&budget=1500&duration=7&travelType=solo&airport=${airport}&from=${dateDepart}&to=${dateRetour}`);
+    const rp = new URLSearchParams({ continent, mode: sortMode, budget: '1500', duration: '7', travelType: 'solo', airport });
+    if (dateDepart) rp.set('from', dateDepart);
+    if (dateRetour) rp.set('to', dateRetour);
+    router.push(`/results?${rp.toString()}`);
     // Release after a frame — navigation is in flight, lock stays until /results mounts
     setTimeout(releaseAnalyzeLock, 3000);
   }, [router, airport, dateDepart, dateRetour]);
