@@ -336,25 +336,38 @@ This document started as FRONT-024B (specification). It feeds the later phases:
   (diegetic architectural Kufic calligraphy on the monument ≠ embedded
   text/overlay — established as the rule for 025E+). Baseline tests updated
   (46 true / 19 false), tsc/vitest/build green.
-- **FRONT-025E+ — remaining continents.** PENDING (part 2). Remaining 19: Africa
-  (12: EG, SN, CI, GH, TZ, ET, MU, CM, CG, CD, NG, AO) + Asia (4: PH, MM, IN, KZ)
-  + Americas (3: PY, GT, CU). Same spec and same off-repo → QC → integration
-  workflow.
+- **FRONT-025E2A — Africa pt.2 batch.** ✅ DONE. 12 destinations activated
+  (EG, SN, CI, GH, TZ, ET, MU, CM, CG, CD, NG, AO) → **58 of 65 active, 7 still on
+  duotone fallback**. Images generated off-repo (delivered straight into
+  `public/images/destinations/<slug>/`, no move needed), QC'd pre-integration
+  (24/24: real WebP lossy, exact dims, under decimal weight budget; recognizable +
+  differentiated signatures; sensitive countries CG/CD/NG/AO/CM/ET framed on
+  nature/river/skyline, never conflict/poverty; CG vs CD and CI vs NG vs AO
+  visually separated). Two borderline calls ruled ACCEPT (user-confirmed):
+  senegal/hero (painted pirogue lettering = diegetic part of the subject, not an
+  overlay/watermark) and ethiopie/card (carved crosses on the Lalibela rock church
+  = diegetic architectural motif, consistent with the Uzbekistan calligraphy rule).
+  Baseline tests updated (58 true / 7 false), tsc/vitest/build green.
+- **FRONT-025E2B — Asia + Americas pt.2 (remaining).** PENDING (final batch).
+  Remaining 7: Asia (4: PH, MM, IN, KZ) + Americas (3: PY, GT, CU). Same spec and
+  same off-repo → QC → integration workflow. Closes the set at 65/65.
 
 GO/NO-GO for each phase: strict file scope, no backend/API/scoring/auth/Stripe/
 Supabase/affiliate changes, no unexpected route or copy changes, image coverage
 and fallback verified, performance checked where relevant.
 
-### Delivery status (as of FRONT-025E)
+### Delivery status (as of FRONT-025E2A)
 
 | Variant | Active | Fallback (duotone) | Total |
 |---|---|---|---|
-| Destinations | 46 | 19 | 65 |
+| Destinations | 58 | 7 | 65 |
 
 Active codes: GR, TH, TN, PT, MX (024D pilot) · GE, AL, RS, BA, MD, MK, AM, TR, ME,
 XK, HR, HU (025B Europe) · JO, AE, OM, CO, PE, EC, BO, CL, AR (025C Middle East +
 Americas pt.1) · BR, CR, ID, MY, NP, PA, DO, LK, UY, VN (025D Asia + Americas pt.2) ·
-JP, KH, UZ, SG, KG, MA, KE, RW, ZA, MG (025E Africa + Asia pt.1).
+JP, KH, UZ, SG, KG, MA, KE, RW, ZA, MG (025E Africa + Asia pt.1) ·
+EG, SN, CI, GH, TZ, ET, MU, CM, CG, CD, NG, AO (025E2A Africa pt.2).
+Remaining fallback (7): PH, MM, IN, KZ, PY, GT, CU.
 Paths: `/images/destinations/<meaeSlug>/{hero,card}.webp`
 — hero 1600×900 (<300 000 B), card 800×500 (<120 000 B).
 
