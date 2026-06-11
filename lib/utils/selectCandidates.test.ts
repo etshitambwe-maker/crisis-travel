@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { selectCandidates, CANDIDATE_CAP } from './selectCandidates';
 import { TARGET_COUNTRIES } from './countries';
-import { getHint } from './staticHints';
+import { getHint, STATIC_HINTS } from './staticHints';
 
 const ALL = TARGET_COUNTRIES.map((c) => ({ code: c.code }));
 
@@ -40,15 +40,50 @@ describe('selectCandidates — pré-sélection des pays (GOAL-031)', () => {
     expect(scores).toEqual([...scores].sort((a, b) => b - a));
   });
 
-  it('ne mute pas le tableau d’entrée', () => {
+  it("ne mute pas le tableau d’entree", () => {
     const input = [...ALL];
     const snapshot = input.map((c) => c.code);
-    selectCandidates(input, 'bunker', CANDIDATE_CAP);
+    selectCandidates(input, "bunker", CANDIDATE_CAP);
     expect(input.map((c) => c.code)).toEqual(snapshot);
   });
 
-  it('cap >= longueur renvoie tous les pays triés (pas d’erreur de borne)', () => {
-    const out = selectCandidates(ALL, 'standard', 9999);
+  it("cap >= longueur renvoie tous les pays tries (pas d’erreur de borne)", () => {
+    const out = selectCandidates(ALL, "standard", 9999);
     expect(out.length).toBe(ALL.length);
+  });
+});
+
+describe("STATIC_HINTS — couverture catalogue (STATIC-HINTS-002)", () => {
+  const catalogCodes: string[] = TARGET_COUNTRIES.map((c) => c.code);
+  const hintCodes = Object.keys(STATIC_HINTS);
+
+  it("chaque pays du catalogue a un hint dedie (pas de fallback silencieux)", () => {
+    const missing = catalogCodes.filter((code) => !hintCodes.includes(code));
+    expect(missing).toEqual([]);
+  });
+
+  it("aucun code dans STATIC_HINTS est absent du catalogue", () => {
+    const extra = hintCodes.filter((code) => !catalogCodes.includes(code));
+    expect(extra).toEqual([]);
+  });
+
+  it("tous les hints ont des valeurs numeriques dans [0, 100]", () => {
+    for (const [code, hint] of Object.entries(STATIC_HINTS)) {
+      expect(hint.score,    `${code}.score hors bornes`).toBeGreaterThanOrEqual(0);
+      expect(hint.score,    `${code}.score hors bornes`).toBeLessThanOrEqual(100);
+      expect(hint.security, `${code}.security hors bornes`).toBeGreaterThanOrEqual(0);
+      expect(hint.security, `${code}.security hors bornes`).toBeLessThanOrEqual(100);
+      expect(hint.budget,   `${code}.budget hors bornes`).toBeGreaterThanOrEqual(0);
+      expect(hint.budget,   `${code}.budget hors bornes`).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("getHint ne retourne jamais le fallback neutre 55/55/55 pour un pays du catalogue", () => {
+    const fallback = { score: 55, security: 55, budget: 55 };
+    for (const code of catalogCodes) {
+      const h = getHint(code);
+      const isFallback = h.score === fallback.score && h.security === fallback.security && h.budget === fallback.budget;
+      expect(isFallback, `${code} utilise le fallback neutre`).toBe(false);
+    }
   });
 });
