@@ -197,7 +197,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       results: sorted,
       topDestinations,
       opportunities,
-      meta: { analyzedCountries: results.length, duration: msTotal, cacheHitRate: cache.hitRate, partial },
+      meta: {
+        analyzedCountries: results.length,
+        duration: msTotal,
+        cacheHitRate: cache.hitRate,
+        partial,
+        // Quota exposé seulement pour les utilisateurs connectés (userId connu) —
+        // les anonymes n'ont pas de compteur Supabase fiable, on omet le champ.
+        ...(quota.isPremium || quota.used > 0 || quota.remaining < quota.limit
+          ? { quota: { remaining: quota.remaining, used: quota.used, limit: quota.limit, isPremium: quota.isPremium } }
+          : {}),
+      },
     };
     return NextResponse.json(response, {
       headers: {

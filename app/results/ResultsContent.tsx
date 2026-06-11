@@ -48,7 +48,7 @@ export function ResultsContent() {
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [errorMeta, setErrorMeta] = useState<{ upgradeUrl?: string; retryAfter?: number } | null>(null);
+  const [errorMeta, setErrorMeta] = useState<{ upgradeUrl?: string; retryAfter?: number; quotaUsed?: number; quotaLimit?: number } | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   const continent = params.get('continent') ?? undefined;
@@ -108,8 +108,13 @@ export function ResultsContent() {
         // À partir d'ici : erreur côté SERVEUR (on a bien reçu une réponse HTTP).
         const serverErr = (json?.error as string | undefined);
         if (r.status === 402) {
+          const quotaData = json?.quota as { used?: number; limit?: number } | undefined;
           setError(serverErr ?? 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.');
-          setErrorMeta({ upgradeUrl: (json?.upgradeUrl as string) ?? '/pricing' });
+          setErrorMeta({
+            upgradeUrl: (json?.upgradeUrl as string) ?? '/pricing',
+            quotaUsed: quotaData?.used,
+            quotaLimit: quotaData?.limit,
+          });
         } else if (r.status === 429) {
           const retryAfter = json?.retryAfter as number | undefined;
           const wait = retryAfter ? ` Réessayez dans ${Math.ceil(retryAfter / 60)} min.` : '';
@@ -193,6 +198,41 @@ export function ResultsContent() {
                 <>
                   <span style={{ width: 16, height: 1, background: 'var(--ctv3-line)' }} />
                   <span style={{ color: 'var(--ctv3-reco)' }}>Résultats partiels</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Bandeau quota — affiché seulement si meta.quota est présent (source Supabase fiable) */}
+          {data?.meta.quota && !data.meta.quota.isPremium && (
+            <div
+              className="ctv3-mono"
+              style={{
+                marginTop: 12,
+                padding: '9px 14px',
+                border: `1px solid ${data.meta.quota.remaining === 0 ? 'var(--ctv3-red)' : 'var(--ctv3-line)'}`,
+                background: data.meta.quota.remaining === 0 ? 'var(--ctv3-red-soft)' : 'var(--ctv3-ink-850)',
+                fontSize: 10.5, letterSpacing: '0.08em',
+                color: data.meta.quota.remaining === 0 ? 'var(--ctv3-red-2)' : 'var(--ctv3-muted)',
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              }}
+            >
+              {data.meta.quota.remaining > 0 ? (
+                <span>
+                  Il vous reste <strong style={{ color: 'var(--ctv3-paper)' }}>{data.meta.quota.remaining}</strong> analyse{data.meta.quota.remaining > 1 ? 's' : ''} gratuite{data.meta.quota.remaining > 1 ? 's' : ''} ce mois-ci.
+                </span>
+              ) : (
+                <>
+                  <span>Quota gratuit épuisé pour ce mois-ci.</span>
+                  <a
+                    href="/pricing"
+                    style={{
+                      color: 'var(--ctv3-red-2)', textDecoration: 'underline',
+                      fontWeight: 700, letterSpacing: '0.1em',
+                    }}
+                  >
+                    Passer à Premium →
+                  </a>
                 </>
               )}
             </div>
@@ -327,6 +367,12 @@ export function ResultsContent() {
             >
               {error}
             </div>
+            {/* Détail quota 402 — affiché seulement si données fiables issues du body API */}
+            {errorMeta?.quotaUsed !== undefined && errorMeta?.quotaLimit !== undefined && (
+              <div className="ctv3-mono" style={{ fontSize: 10.5, color: 'var(--ctv3-muted)', marginTop: 6, marginBottom: 8 }}>
+                {errorMeta.quotaUsed}/{errorMeta.quotaLimit} analyses utilisées ce mois-ci.
+              </div>
+            )}
             {errorMeta?.upgradeUrl ? (
               <a
                 href={errorMeta.upgradeUrl}
@@ -337,7 +383,7 @@ export function ResultsContent() {
                   letterSpacing: '0.12em', textDecoration: 'none', textTransform: 'uppercase', fontWeight: 700,
                 }}
               >
-                Voir les offres Premium →
+                Passer à Premium — analyses illimitées →
               </a>
             ) : (
               <a

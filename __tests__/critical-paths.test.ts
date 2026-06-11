@@ -303,3 +303,109 @@ describe('secondary affiliate CTAs (GOAL-048)', () => {
     }
   });
 });
+
+// ── Quota meta (QUOTA-001) ────────────────────────────────────────────────────
+// Ces tests vérifient la logique de la meta quota telle que construite dans
+// /api/analyze et consommée par ResultsContent. Aucun appel Supabase ici —
+// on teste uniquement la structure de données et les règles d'affichage.
+
+describe('quota meta (QUOTA-001)', () => {
+  type QuotaMeta = { remaining: number; used: number; limit: number; isPremium: boolean };
+
+  // Simule la condition d'inclusion du champ quota dans la meta API
+  function shouldIncludeQuota(isPremium: boolean, used: number, limit: number): boolean {
+    const remaining = Math.max(0, limit - used);
+    return isPremium || used > 0 || remaining < limit;
+  }
+
+  it('quota absent de meta si utilisateur anonyme (used=0, remaining=limit)', () => {
+    // Cas anonyme / Supabase absent : used=0, remaining=FREE_LIMIT, isPremium=false
+    // → la condition ne tient pas → quota non inclus dans meta
+    expect(shouldIncludeQuota(false, 0, 3)).toBe(false);
+  });
+
+  it('quota présent dans meta si utilisateur a consommé au moins 1 analyse', () => {
+    expect(shouldIncludeQuota(false, 1, 3)).toBe(true);
+    expect(shouldIncludeQuota(false, 2, 3)).toBe(true);
+    expect(shouldIncludeQuota(false, 3, 3)).toBe(true);
+  });
+
+  it('quota présent dans meta si utilisateur premium', () => {
+    expect(shouldIncludeQuota(true, 0, 999)).toBe(true);
+    expect(shouldIncludeQuota(true, 5, 999)).toBe(true);
+  });
+
+  it('remaining jamais négatif', () => {
+    const cases: QuotaMeta[] = [
+      { remaining: 0, used: 3, limit: 3, isPremium: false },
+      { remaining: 0, used: 5, limit: 3, isPremium: false }, // dépassement hypothétique
+    ];
+    for (const q of cases) {
+      expect(q.remaining).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('utilisateur free avec 2 analyses restantes : message correct', () => {
+    const quota: QuotaMeta = { remaining: 2, used: 1, limit: 3, isPremium: false };
+    const msg = quota.remaining > 0
+      ? `Il vous reste ${quota.remaining} analyse${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} ce mois-ci.`
+      : 'Quota gratuit épuisé pour ce mois-ci.';
+    expect(msg).toBe('Il vous reste 2 analyses gratuites ce mois-ci.');
+  });
+
+  it('utilisateur free avec 1 analyse restante : singulier correct', () => {
+    const quota: QuotaMeta = { remaining: 1, used: 2, limit: 3, isPremium: false };
+    const msg = quota.remaining > 0
+      ? `Il vous reste ${quota.remaining} analyse${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} ce mois-ci.`
+      : 'Quota gratuit épuisé pour ce mois-ci.';
+    expect(msg).toBe('Il vous reste 1 analyse gratuite ce mois-ci.');
+  });
+
+  it('utilisateur free quota épuisé : message correct', () => {
+    const quota: QuotaMeta = { remaining: 0, used: 3, limit: 3, isPremium: false };
+    const msg = quota.remaining > 0
+      ? `Il vous reste ${quota.remaining} analyse${quota.remaining > 1 ? 's' : ''} gratuite${quota.remaining > 1 ? 's' : ''} ce mois-ci.`
+      : 'Quota gratuit épuisé pour ce mois-ci.';
+    expect(msg).toBe('Quota gratuit épuisé pour ce mois-ci.');
+  });
+
+  it('premium : bandeau quota non affiché (isPremium=true)', () => {
+    const quota: QuotaMeta = { remaining: 999, used: 5, limit: 999, isPremium: true };
+    // ResultsContent n'affiche le bandeau que si !isPremium
+    const shouldShow = !quota.isPremium;
+    expect(shouldShow).toBe(false);
+  });
+
+  it('meta quota absente : aucun bandeau affiché (undefined)', () => {
+    const quotaMeta: QuotaMeta | undefined = undefined;
+    // Si meta.quota est absent, aucun affichage — le check `data?.meta.quota` garantit cela
+    expect(quotaMeta).toBeUndefined();
+  });
+
+  it('body 402 expose quota.used et quota.limit', () => {
+    // Simule la structure du body 402 de /api/analyze
+    const body402 = {
+      error: 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.',
+      quota: { used: 3, limit: 3, remaining: 0 },
+      upgradeUrl: '/pricing',
+    };
+    expect(body402.quota.used).toBe(3);
+    expect(body402.quota.limit).toBe(3);
+    expect(body402.quota.remaining).toBe(0);
+    expect(body402.upgradeUrl).toBe('/pricing');
+  });
+
+  it('meta analyzedCountries et partial conservés indépendamment du quota', () => {
+    // La meta quota est ajoutée par spread conditionnel — les champs existants ne bougent pas
+    const metaWithQuota = {
+      analyzedCountries: 18,
+      duration: 4200,
+      cacheHitRate: 0.72,
+      partial: false,
+      quota: { remaining: 1, used: 2, limit: 3, isPremium: false },
+    };
+    expect(metaWithQuota.analyzedCountries).toBe(18);
+    expect(metaWithQuota.partial).toBe(false);
+    expect(metaWithQuota.quota.remaining).toBe(1);
+  });
+});

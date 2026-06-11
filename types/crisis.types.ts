@@ -53,6 +53,13 @@ export interface AnalyzeResponse {
     cacheHitRate: number;
     /** true si le scoring a été interrompu par le budget de temps (GOAL-032) : résultats partiels mais exploitables. */
     partial?: boolean;
+    /** Quota analyses — absent si non connecté ou Supabase indisponible (ne jamais inventer côté client). */
+    quota?: {
+      remaining: number;
+      used: number;
+      limit: number;
+      isPremium: boolean;
+    };
   };
 }
 
