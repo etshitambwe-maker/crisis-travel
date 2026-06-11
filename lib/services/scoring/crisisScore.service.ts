@@ -28,7 +28,7 @@ function resolveSettled<T>(r: PromiseSettledResult<ServiceResult<T>>, fallbackDa
 
 function buildSubScore(
   value: number,
-  sources: Array<'live' | 'fallback'>,
+  sources: Array<'live' | 'fallback' | 'static'>,
   details: Record<string, number | string>
 ): SubScore {
   const fallbackCount = sources.filter((s) => s === 'fallback').length;

@@ -1,6 +1,6 @@
 export interface ServiceResult<T> {
   data: T;
-  source: 'live' | 'fallback';
+  source: 'live' | 'fallback' | 'static';
   error?: string;
 }
 

@@ -16,6 +16,7 @@ import { DestinationImage } from '@/components/design/DestinationImage';
 import { CountryFlag } from '@/components/design/CountryFlag';
 import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/design/atoms';
 import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
+import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
 // dépasser les 10s par défaut de Vercel sur cold cache. 60s évite le timeout.
@@ -35,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   return {
     title: `${c.name} — Fiche voyage & CrisisScore | Crisis Travel`,
-    description: `Analyse géopolitique et sécuritaire de ${c.name} pour les voyageurs français. Données officielles MEAE, budget estimé, alertes sécurité et synthèse IA en temps réel.`,
+    description: `Analyse géopolitique et sécuritaire de ${c.name} pour les voyageurs français. Niveaux MEAE intégrés, budget estimé, alertes sécurité et synthèse IA.`,
     openGraph: {
       title: `Est-ce sûr de voyager en ${c.name} en ce moment ?`,
       description: `Analyse CrisisScore de ${c.name} — sécurité, géopolitique, budget. Sources officielles MEAE, State Dept, ACLED.`,
@@ -141,6 +142,10 @@ export default async function DestinationPage({ params }: Props) {
   const meae = MEAE_DATA[meaeLevel];
   const meaeColor = MEAE_COLOR[meaeLevel];
   const majDate = new Date(score.calculatedAt).toLocaleDateString('fr-FR');
+  const countryInfo = findCountry(score.countryCode);
+  const meaeOfficialUrl = countryInfo?.meaeSlug
+    ? `https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/conseils-par-pays-destination/${countryInfo.meaeSlug}/`
+    : 'https://www.diplomatie.gouv.fr/fr/conseils-aux-voyageurs/conseils-par-pays-destination/';
 
   const subScores = [
     { lbl: 'Sécurité',     key: 'security' as const,     weight: 40 },
@@ -289,12 +294,20 @@ export default async function DestinationPage({ params }: Props) {
               textTransform: 'uppercase', marginBottom: 5, display: 'flex', justifyContent: 'space-between', gap: 8,
             }}>
               <span>MEAE · Niveau {meaeLevel}/4</span>
-              <span>Maj {majDate}</span>
+              <span>Intégré le {MEAE_LAST_UPDATED}</span>
             </div>
             <div style={{ fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 15, marginBottom: 5, color: meaeColor }}>
               {meae.title}
             </div>
             <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 14, lineHeight: 1.45 }}>{meae.desc}</p>
+            <p className="ctv3-mono" style={{ color: 'var(--ctv3-faint)', fontSize: 11, marginTop: 8, lineHeight: 1.4 }}>
+              Données intégrées — vérifiez la{' '}
+              <a href={meaeOfficialUrl} target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--ctv3-faint)', textDecoration: 'underline' }}>
+                source officielle Diplomatie.gouv
+              </a>
+              {' '}avant départ.
+            </p>
           </div>
         </div>
         <div style={{ marginBottom: 36 }}>
