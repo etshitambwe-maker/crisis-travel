@@ -70,6 +70,68 @@ const DURATION_MAP: Record<NonNullable<DiscoveryState['duration']>, number> = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+// ── Date Range Picker ────────────────────────────────────────────────────────
+function DateRangePicker({
+  dateDepart, dateRetour, onDepartChange, onRetourChange, error,
+}: {
+  dateDepart: string;
+  dateRetour: string;
+  onDepartChange: (v: string) => void;
+  onRetourChange: (v: string) => void;
+  error: string | null;
+}) {
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--ctv3-ink-900)',
+    border: '1px solid var(--ctv3-line)',
+    color: 'var(--ctv3-paper)',
+    fontFamily: 'var(--ctv3-mono)',
+    fontSize: '0.85rem',
+    padding: '10px 12px',
+    outline: 'none',
+    colorScheme: 'dark',
+    boxSizing: 'border-box',
+  };
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.68rem', color: 'var(--ctv3-muted)', letterSpacing: '0.1em', marginBottom: 6 }}>
+            DÉPART
+          </div>
+          <input
+            type="date"
+            value={dateDepart}
+            onChange={(e) => onDepartChange(e.target.value)}
+            style={inputStyle}
+            aria-label="Date de départ"
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.68rem', color: 'var(--ctv3-muted)', letterSpacing: '0.1em', marginBottom: 6 }}>
+            RETOUR
+          </div>
+          <input
+            type="date"
+            value={dateRetour}
+            onChange={(e) => onRetourChange(e.target.value)}
+            style={{
+              ...inputStyle,
+              borderColor: error ? 'var(--ctv3-red)' : 'var(--ctv3-line)',
+            }}
+            aria-label="Date de retour"
+          />
+        </div>
+      </div>
+      {error && (
+        <p style={{ margin: '6px 0 0', fontFamily: 'var(--ctv3-mono)', fontSize: '0.75rem', color: 'var(--ctv3-red-2)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Section header (FRONT-014) — sober numbered heading, .ctv3, no emoji/SVG ───
 function SectionHeader({ index, label, hint }: { index: string; label: string; hint?: string }) {
   return (
@@ -195,7 +257,13 @@ function AirportSelector({ value, onChange }: { value: string; onChange: (v: str
 }
 
 // ── Tab 2 : Region Explorer ──────────────────────────────────────────────────
-function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, sort: SortKey) => void; airport: string }) {
+function RegionTab({ onAnalyze, airport, dateDepart, dateRetour, dateError }: {
+  onAnalyze: (continent: Continent, sort: SortKey) => void;
+  airport: string;
+  dateDepart: string;
+  dateRetour: string;
+  dateError: string | null;
+}) {
   const [selected, setSelected] = useState<Continent | null>(null);
   const [sort, setSort] = useState<SortKey>('score');
   const [pending, setPending] = useState(false);
@@ -315,6 +383,8 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
               { k: 'Départ', v: airport },
               { k: 'Mode', v: 'Explorer une région' },
               { k: 'Région', v: selectedLabel ?? '—' },
+              ...(dateDepart ? [{ k: 'Date départ', v: dateDepart }] : []),
+              ...(dateRetour ? [{ k: 'Date retour', v: dateRetour }] : []),
             ].map((row) => (
               <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
                 <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-faint)', letterSpacing: '0.04em' }}>{row.k}</span>
@@ -327,8 +397,9 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
           <SectionHeader index="03" label="Lancer l'analyse" />
           {/* Analyze whole region button */}
           <button
-            disabled={pending}
+            disabled={pending || !!dateError}
             onClick={() => {
+              if (dateError) return;
               if (!acquireAnalyzeLock()) return;
               setPending(true);
               // Micro-delay lets React flush the disabled state before navigation
@@ -339,16 +410,16 @@ function RegionTab({ onAnalyze, airport }: { onAnalyze: (continent: Continent, s
             }}
             style={{
               width: '100%', padding: '15px',
-              cursor: pending ? 'not-allowed' : 'pointer',
-              background: pending ? 'rgba(228,51,43,0.06)' : 'rgba(228,51,43,0.14)',
+              cursor: (pending || !!dateError) ? 'not-allowed' : 'pointer',
+              background: (pending || !!dateError) ? 'rgba(228,51,43,0.06)' : 'rgba(228,51,43,0.14)',
               border: '1px solid rgba(228,51,43,0.45)',
-              color: pending ? 'var(--ctv3-faint)' : 'var(--ctv3-red-2)',
+              color: (pending || !!dateError) ? 'var(--ctv3-faint)' : 'var(--ctv3-red-2)',
               fontFamily: 'var(--ctv3-mono)', fontWeight: 700,
               fontSize: '0.85rem', letterSpacing: '0.1em', transition: 'all 0.2s',
-              opacity: pending ? 0.6 : 1,
+              opacity: (pending || !!dateError) ? 0.6 : 1,
             }}
-            onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(228,51,43,0.22)'; }}
-            onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = 'rgba(228,51,43,0.14)'; }}
+            onMouseEnter={(e) => { if (!pending && !dateError) e.currentTarget.style.background = 'rgba(228,51,43,0.22)'; }}
+            onMouseLeave={(e) => { if (!pending && !dateError) e.currentTarget.style.background = 'rgba(228,51,43,0.14)'; }}
           >
             {pending
               ? 'LANCEMENT EN COURS...'
@@ -435,10 +506,11 @@ function OptionGrid<T extends string>({
   );
 }
 
-function DiscoveryTab({ airport, dateDepart, dateRetour }: {
+function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
   airport: string;
   dateDepart: string;
   dateRetour: string;
+  dateError: string | null;
 }) {
   const router = useRouter();
   const [state, setState] = useState<DiscoveryState>({ priority: null, duration: null, budget: null, travelType: null });
@@ -454,6 +526,7 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
   // vers /results — la SEULE page qui exécute l'analyse complète. Le verrou + loading
   // restent pour le feedback de clic et empêcher les doubles navigations.
   function handleGenerate() {
+    if (dateError) return;
     if (!acquireAnalyzeLock()) return;
     const b = BUDGET_MAP[state.budget ?? 'moyen'];
     const d = DURATION_MAP[state.duration ?? 'semaine'];
@@ -513,6 +586,8 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
           { k: 'Départ', v: airport },
           { k: 'Mode', v: 'Surprends-moi' },
           { k: 'Critères', v: `${completed} sur ${total}` },
+          ...(dateDepart ? [{ k: 'Date départ', v: dateDepart }] : []),
+          ...(dateRetour ? [{ k: 'Date retour', v: dateRetour }] : []),
         ].map((row) => (
           <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
             <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-faint)', letterSpacing: '0.04em' }}>{row.k}</span>
@@ -525,16 +600,16 @@ function DiscoveryTab({ airport, dateDepart, dateRetour }: {
       <SectionHeader index="04" label="Lancer l'analyse" />
       <button
         onClick={handleGenerate}
-        disabled={completed < 2 || loading}
+        disabled={completed < 2 || loading || !!dateError}
         style={{
           width: '100%', padding: '16px',
-          cursor: completed < 2 || loading ? 'not-allowed' : 'pointer',
-          background: completed >= 2 ? 'var(--ctv3-red)' : 'var(--ctv3-ink-700)',
-          border: completed >= 2 ? '1px solid transparent' : '1px solid var(--ctv3-line)',
-          color: completed >= 2 ? '#fff' : 'var(--ctv3-faint)',
+          cursor: completed < 2 || loading || !!dateError ? 'not-allowed' : 'pointer',
+          background: completed >= 2 && !dateError ? 'var(--ctv3-red)' : 'var(--ctv3-ink-700)',
+          border: completed >= 2 && !dateError ? '1px solid transparent' : '1px solid var(--ctv3-line)',
+          color: completed >= 2 && !dateError ? '#fff' : 'var(--ctv3-faint)',
           fontFamily: 'var(--ctv3-mono)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em',
           transition: 'all 0.2s', marginTop: 8,
-          boxShadow: completed >= 2 ? '0 6px 24px rgba(228,51,43,0.35)' : 'none',
+          boxShadow: completed >= 2 && !dateError ? '0 6px 24px rgba(228,51,43,0.35)' : 'none',
         }}
       >
         {loading ? 'ANALYSE EN COURS...' : completed >= 4 ? 'SURPRENDS-MOI →' : completed >= 2 ? 'VOIR MES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
@@ -558,6 +633,13 @@ export function SmartSearchHub() {
   const [dateDepart, setDateDepart] = useState('');
   const [dateRetour, setDateRetour] = useState('');
   const router = useRouter();
+
+  // Validation : retour doit être strictement après départ (seulement si les deux sont renseignés)
+  const dateError: string | null = (() => {
+    if (!dateDepart || !dateRetour) return null;
+    if (dateRetour <= dateDepart) return 'La date de retour doit être après la date de départ.';
+    return null;
+  })();
 
   // Persiste l'aéroport pour TravelPackBlock sur les fiches destination
   function handleAirportChange(code: string) {
@@ -584,6 +666,15 @@ export function SmartSearchHub() {
       {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
       <AirportSelector value={airport} onChange={handleAirportChange} />
 
+      {/* Dates de voyage — optionnelles, visibles sur tous les onglets */}
+      <DateRangePicker
+        dateDepart={dateDepart}
+        dateRetour={dateRetour}
+        onDepartChange={setDateDepart}
+        onRetourChange={setDateRetour}
+        error={dateError}
+      />
+
       {/* Microcopy de positionnement (GOAL-038) — visible sur les deux parcours V1.
           Clarifie que Crisis Travel n'est pas un moteur universel de destinations :
           il détecte les pays où le contexte actuel crée une opportunité de voyage. */}
@@ -608,8 +699,8 @@ export function SmartSearchHub() {
         </p>
       </div>
 
-      {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} />}
-      {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} />}
+      {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} dateError={dateError} />}
+      {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} dateError={dateError} />}
     </div>
   );
 }
