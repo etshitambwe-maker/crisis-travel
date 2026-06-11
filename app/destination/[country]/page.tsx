@@ -17,6 +17,8 @@ import { CountryFlag } from '@/components/design/CountryFlag';
 import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/design/atoms';
 import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
+import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
+import type { VisaType } from '@/lib/data/visa-requirements';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
 // dépasser les 10s par défaut de Vercel sur cold cache. 60s évite le timeout.
@@ -68,6 +70,25 @@ const MEAE_COLOR: Record<number, string> = {
   2: 'var(--ctv3-reco)',
   3: 'var(--ctv3-poss)',
   4: 'var(--ctv3-deco)',
+};
+
+// Visa type → human label + color
+const VISA_LABEL: Record<VisaType, string> = {
+  none:             'Sans visa',
+  evisa:            'e-Visa requis',
+  voa:              'Visa à l\'arrivée',
+  embassy_simple:   'Visa ambassade',
+  embassy_complex:  'Visa ambassade (complexe)',
+  blocked:          'Entrée non autorisée',
+};
+
+const VISA_COLOR: Record<VisaType, string> = {
+  none:             'var(--ctv3-ideal)',
+  evisa:            'var(--ctv3-reco)',
+  voa:              'var(--ctv3-reco)',
+  embassy_simple:   'var(--ctv3-poss)',
+  embassy_complex:  'var(--ctv3-red-2)',
+  blocked:          'var(--ctv3-red-2)',
 };
 
 interface Props {
@@ -171,6 +192,8 @@ export default async function DestinationPage({ params }: Props) {
       val: `${Number(fx) > 0 ? '+' : ''}${fx}%`,
     },
   ].filter(Boolean) as { label: string; sub: string; val: string }[];
+
+  const visaReq = VISA_REQUIREMENTS[score.countryCode] ?? null;
 
   return (
     <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
@@ -339,8 +362,74 @@ export default async function DestinationPage({ params }: Props) {
           </>
         )}
 
-        {/* 04 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
-        <SectionLabel num="04" label="Synthèse IA" meta="Analyse éditoriale" />
+        {/* 04 — Formalités (visa + connexion aérienne — données statiques existantes) */}
+        {visaReq && (
+          <>
+            <SectionLabel num="04" label="Formalités" meta="Pour ressortissants français" />
+            <div style={{ marginBottom: 36 }}>
+              {/* Visa type badge */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'flex-start',
+                border: '1px solid var(--ctv3-line)',
+                borderLeft: `2px solid ${VISA_COLOR[visaReq.type]}`,
+                background: 'var(--ctv3-ink-850)', padding: '16px 18px', marginBottom: 12,
+              }}>
+                <div className="ctv3-mono" style={{
+                  width: 38, height: 38, display: 'grid', placeItems: 'center',
+                  border: `1px solid ${VISA_COLOR[visaReq.type]}`,
+                  color: VISA_COLOR[visaReq.type], fontSize: 13, fontWeight: 700, flexShrink: 0,
+                }}>
+                  {visaReq.type === 'none' ? '✓' : visaReq.type === 'blocked' ? '✕' : '!'}
+                </div>
+                <div>
+                  <div className="ctv3-mono" style={{
+                    fontSize: 9.5, letterSpacing: '0.14em', color: 'var(--ctv3-faint)',
+                    textTransform: 'uppercase', marginBottom: 5,
+                  }}>
+                    Visa · Passeport français
+                  </div>
+                  <div style={{
+                    fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 15,
+                    marginBottom: 5, color: VISA_COLOR[visaReq.type],
+                  }}>
+                    {VISA_LABEL[visaReq.type]}
+                  </div>
+                  {visaReq.processingDays > 0 && (
+                    <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 13.5, lineHeight: 1.45, marginBottom: 4 }}>
+                      Délai de traitement estimé : <strong style={{ color: 'var(--ctv3-paper)' }}>{visaReq.processingDays} jour{visaReq.processingDays > 1 ? 's' : ''}</strong> avant départ.
+                    </p>
+                  )}
+                  {visaReq.notes && (
+                    <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 13.5, lineHeight: 1.45 }}>
+                      {visaReq.notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Disclaimer officiel */}
+              <p className="ctv3-mono" style={{
+                fontSize: 10.5, color: 'var(--ctv3-faint)', lineHeight: 1.55,
+                letterSpacing: '0.02em', padding: '10px 14px',
+                border: '1px solid var(--ctv3-line-soft)',
+                background: 'var(--ctv3-ink-900)',
+              }}>
+                Informations indicatives — vérifiez toujours les conditions d'entrée auprès des autorités officielles avant votre départ.{' '}
+                <a
+                  href={meaeOfficialUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--ctv3-faint)', textDecoration: 'underline' }}
+                >
+                  Consulter la fiche officielle Diplomatie.gouv →
+                </a>
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* 05 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
+        <SectionLabel num="05" label="Synthèse IA" meta="Analyse éditoriale" />
         <PremiumGate
           feature="Synthèse IA complète"
           description="Accédez à l'analyse narrative approfondie de Claude AI : contexte géopolitique, risques résiduels, recommandations personnalisées."
@@ -398,14 +487,14 @@ export default async function DestinationPage({ params }: Props) {
           </PremiumGate>
         </div>
 
-        {/* 05 — Historique */}
-        <SectionLabel num="05" label="Historique" meta="6 mois" />
+        {/* 06 — Historique */}
+        <SectionLabel num="06" label="Historique" meta="6 mois" />
         <div style={{ marginBottom: 36 }}>
           <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
         </div>
 
-        {/* 06 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
-        <SectionLabel num="06" label="Pack voyage" meta="Affiliés" />
+        {/* 07 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
+        <SectionLabel num="07" label="Pack voyage" meta="Affiliés" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}

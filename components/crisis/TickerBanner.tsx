@@ -1,5 +1,11 @@
 'use client';
 
+// ⚠ NE PAS RÉACTIVER ce composant avec les données hardcodées ci-dessous.
+// DEFAULT_ITEMS et FINANCIAL_ITEMS sont des exemples figés (non mis à jour).
+// Réactivation uniquement via LIVE-001A : brancher sur des données MEAE réelles
+// niveaux 3/4 issues d'une API ou d'un flux officiel vérifiable.
+// Ce composant n'est rendu nulle part dans l'application (vérifier app/layout.tsx).
+
 type TickerItem = { flag: string; code: string; msg: string; lvl: 'safe' | 'warn' | 'danger' };
 
 const DEFAULT_ITEMS: TickerItem[] = [

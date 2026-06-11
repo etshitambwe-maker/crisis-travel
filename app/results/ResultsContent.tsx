@@ -422,8 +422,8 @@ export function ResultsContent() {
               <>
                 <SectionLabel
                   num={data.opportunities.length > 0 ? '02' : '01'}
-                  label={ranked.length > 5 ? 'Toutes les destinations' : 'Top destinations'}
-                  meta="Tri par score ↓"
+                  label={continent ? `Destinations · ${CONTINENT_LABELS[continent] ?? continent}` : ranked.length > 5 ? 'Toutes les destinations' : 'Meilleures destinations'}
+                  meta={`${ranked.length} parmi ${data.meta.analyzedCountries} analysés`}
                 />
                 <div
                   style={{
@@ -463,6 +463,25 @@ export function ResultsContent() {
                   />
                 );
               })()}
+            </div>
+
+            {/* CTA Nouvelle analyse — toujours visible après résultats */}
+            <div style={{ marginTop: 40, textAlign: 'center', borderTop: '1px solid var(--ctv3-line)', paddingTop: 32 }}>
+              <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 14, marginBottom: 16 }}>
+                Vous souhaitez affiner vos critères ou explorer une autre région ?
+              </p>
+              <a
+                href="/"
+                className="ctv3-mono"
+                style={{
+                  display: 'inline-block', padding: '11px 24px',
+                  border: '1px solid var(--ctv3-line-bright)',
+                  color: 'var(--ctv3-paper)', fontSize: 11,
+                  letterSpacing: '0.14em', textDecoration: 'none', textTransform: 'uppercase', fontWeight: 700,
+                }}
+              >
+                ← Nouvelle analyse
+              </a>
             </div>
           </>
         )}
