@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest } from '@/types/crisis.types';
+import { PdfExportButton } from './PdfExportButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -389,12 +390,30 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             </p>
           </div>
 
+          {/* PDF export — uses already-generated itinerary, no extra Claude call */}
+          <div
+            data-testid="itinerary-pdf-export"
+            style={{ marginTop: 14 }}
+          >
+            <PdfExportButton
+              countryCode={props.countryCode ?? ''}
+              countryName={props.countryName ?? props.countryCode ?? ''}
+              profile={{
+                budget:     props.budget,
+                travelType: props.travelType,
+                from:       props.dateFrom,
+                to:         props.dateTo,
+              }}
+              itinerary={result.itinerary}
+            />
+          </div>
+
           {/* Regenerate */}
           <button
             onClick={generate}
             className="ctv3-mono"
             style={{
-              marginTop: 14, padding: '9px 16px', cursor: 'pointer',
+              marginTop: 10, padding: '9px 16px', cursor: 'pointer',
               background: 'none', border: '1px solid var(--ctv3-line)',
               color: 'var(--ctv3-muted)', fontSize: 10, letterSpacing: '0.1em',
               fontWeight: 700, textTransform: 'uppercase',

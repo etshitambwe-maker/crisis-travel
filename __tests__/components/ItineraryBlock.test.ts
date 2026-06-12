@@ -278,7 +278,163 @@ describe('non-régression ITINERARY-003 — fichiers non touchés', () => {
   });
 });
 
-// ── 7. Structure données transmises à /api/itinerary ─────────────────────────
+// ── 7. PDF export button — PDF-UX-003 ────────────────────────────────────────
+
+const PDF_BTN_PATH = 'components/crisis/PdfExportButton.tsx';
+
+describe('ItineraryBlock — bouton export PDF (PDF-UX-003)', () => {
+  it('PdfExportButton est importé dans ItineraryBlock', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain("import { PdfExportButton }");
+    expect(src).toContain('PdfExportButton');
+  });
+
+  it('le bouton PDF n\'est rendu que dans le bloc success (data-testid="itinerary-pdf-export")', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('data-testid="itinerary-pdf-export"');
+    // Vérifie que itinerary-pdf-export est à l'intérieur du bloc success
+    const successStart = src.indexOf('data-testid="itinerary-result"');
+    const successEnd   = src.lastIndexOf('{/* Footer note');
+    const successBlock = src.slice(successStart, successEnd);
+    expect(successBlock).toContain('data-testid="itinerary-pdf-export"');
+  });
+
+  it('le bouton PDF est absent hors du bloc success (pas dans idle/loading/error)', () => {
+    const src = readSource(BLOCK_PATH);
+    // Trouver le bloc idle (avant le premier {status === 'loading'})
+    const idleBlock = src.slice(0, src.indexOf('{status === \'loading\''));
+    expect(idleBlock).not.toContain('itinerary-pdf-export');
+    // Le bloc error_401
+    const err401Start = src.indexOf('data-testid="itinerary-error-401"');
+    const err401End   = src.indexOf('data-testid="itinerary-error-402"');
+    const err401Block = src.slice(err401Start, err401End);
+    expect(err401Block).not.toContain('itinerary-pdf-export');
+  });
+
+  it('PdfExportButton reçoit itinerary={result.itinerary} dans le bloc success', () => {
+    const src = readSource(BLOCK_PATH);
+    const successStart = src.indexOf('data-testid="itinerary-result"');
+    const successEnd   = src.lastIndexOf('{/* Footer note');
+    const successBlock = src.slice(successStart, successEnd);
+    expect(successBlock).toContain('itinerary={result.itinerary}');
+  });
+
+  it('PdfExportButton reçoit countryCode depuis props', () => {
+    const src = readSource(BLOCK_PATH);
+    const successStart = src.indexOf('data-testid="itinerary-result"');
+    const successEnd   = src.lastIndexOf('{/* Footer note');
+    const successBlock = src.slice(successStart, successEnd);
+    expect(successBlock).toContain('countryCode={props.countryCode');
+  });
+
+  it('PdfExportButton reçoit un profile avec budget/travelType/from/to', () => {
+    const src = readSource(BLOCK_PATH);
+    const successStart = src.indexOf('data-testid="itinerary-pdf-export"');
+    const successEnd   = src.indexOf('</div>', successStart) + 6;
+    const pdfBlock     = src.slice(successStart, successEnd + 200);
+    expect(pdfBlock).toContain('budget');
+    expect(pdfBlock).toContain('travelType');
+    expect(pdfBlock).toContain('from');
+    expect(pdfBlock).toContain('to');
+  });
+
+  it('le bouton PDF n\'appelle pas /api/itinerary', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).not.toContain('/api/itinerary');
+  });
+
+  it('le bouton PDF n\'appelle pas /api/analyze', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).not.toContain('/api/analyze');
+  });
+
+  it('le bouton PDF appelle /api/export-pdf/[countryCode]', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain('/api/export-pdf/${countryCode}');
+  });
+
+  it('le payload inclut itinerary quand fourni', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain('if (itinerary) body.itinerary = itinerary');
+  });
+
+  it('le bouton PDF affiche un état loading pendant l\'export', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain("status === 'loading'");
+    expect(src).toContain('Génération…');
+  });
+
+  it('le bouton PDF gère l\'erreur 401', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain('res.status === 401');
+    expect(src).toContain('error_401');
+    expect(src).toContain('data-testid="pdf-export-error-401"');
+  });
+
+  it('le bouton PDF gère l\'erreur 402 avec CTA /pricing', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain('res.status === 402');
+    expect(src).toContain('error_402');
+    expect(src).toContain('data-testid="pdf-export-error-402"');
+    expect(src).toContain('href="/pricing"');
+  });
+
+  it('le bouton PDF gère l\'erreur générique (400/500)', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).toContain("!res.ok");
+    expect(src).toContain("status === 'error'");
+  });
+
+  it('le bouton PDF ne relance pas generate() et n\'importe pas generateItinerary', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).not.toContain('generateItinerary');
+    expect(src).not.toContain('generate()');
+  });
+
+  it('le wording du bouton PDF ne contient pas "PDF officiel"', () => {
+    const src = readSource(PDF_BTN_PATH);
+    expect(src).not.toContain('PDF officiel');
+    expect(src).not.toContain('temps réel');
+    expect(src).not.toContain('live');
+    expect(src).not.toContain('sécurité garantie');
+  });
+});
+
+// ── 7b. Non-régression backend PDF-UX-003 ────────────────────────────────────
+
+describe('non-régression PDF-UX-003 — backend non modifié', () => {
+  const PDF_ROUTE_PATH = 'app/api/export-pdf/[code]/route.ts';
+
+  it('la route export-pdf existe', () => {
+    expect(existsSync(resolve(process.cwd(), PDF_ROUTE_PATH))).toBe(true);
+  });
+
+  it('la route export-pdf contient getUserWithSubscription (auth)', () => {
+    const src = readSource(PDF_ROUTE_PATH);
+    expect(src).toContain('getUserWithSubscription');
+  });
+
+  it('la route export-pdf contient les statuts 401 et 402', () => {
+    const src = readSource(PDF_ROUTE_PATH);
+    expect(src).toContain('401');
+    expect(src).toContain('402');
+  });
+
+  it('la route export-pdf accepte un payload itinerary optionnel', () => {
+    const src = readSource(PDF_ROUTE_PATH);
+    expect(src).toContain('itinerarySchema');
+    expect(src).toContain('itinerary: itinerarySchema');
+  });
+
+  it('la route /api/itinerary n\'a pas été touchée par PDF-UX-003', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('getUserWithSubscription');
+    expect(src).toContain("premiumOnly: true");
+    expect(src).not.toContain('export-pdf');
+  });
+});
+
+// ── 8. Structure données transmises à /api/itinerary ─────────────────────────
 
 describe('ItineraryBlock — données transmises à /api/itinerary', () => {
   it('buildRequest est défini et utilise countryCode', () => {
