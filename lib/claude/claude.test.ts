@@ -13,10 +13,11 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-// Cache non utilisé par detectOpportunities, mais importé par le module — on neutralise.
+// Capture les clés de cache construites — permet de prouver qu'une clé inclut le profil.
+const capturedCacheKeys: string[] = [];
 vi.mock('@/lib/cache/redis', () => ({
   withCache: async (_k: string, f: () => Promise<unknown>) => ({ data: await f(), fromCache: false }),
-  buildCacheKey: (...p: string[]) => p.join(':'),
+  buildCacheKey: (...p: string[]) => { const k = p.join(':'); capturedCacheKeys.push(k); return k; },
 }));
 
 const scores = [
@@ -28,6 +29,7 @@ beforeEach(() => {
   vi.resetModules();
   process.env.ANTHROPIC_API_KEY = 'sk-test';
   capturedClientOpts = undefined;
+  capturedCacheKeys.length = 0;
 });
 
 afterEach(() => {
@@ -82,5 +84,47 @@ describe('detectOpportunities — hard timeout strict (GOAL-034)', () => {
     const { detectOpportunities } = await load();
     const result = await detectOpportunities(scores, 1500);
     expect(result).toEqual([]);
+  });
+});
+
+// ── ANALYZE-PROFILE-001 — la clé cache narrative distingue les profils ──────────
+
+describe('generateDestinationNarrative — clé cache profile-aware (ANALYZE-PROFILE-001)', () => {
+  const score = {
+    country: 'Cameroun', countryCode: 'CM', total: 55,
+    security:     { value: 50, source: 'live', confidence: 'medium', details: {} },
+    geopolitical: { value: 55, source: 'live', confidence: 'medium', details: { trend: 'stable' } },
+    budget:       { value: 60, source: 'live', confidence: 'medium', details: { currencyVariation: 0, mealCheap: 8, hotelAvg: 60 } },
+    practicality: { value: 45, source: 'live', confidence: 'medium', details: {} },
+    status: 'possible', confidence: 'medium', calculatedAt: new Date().toISOString(),
+  } as never;
+
+  const mk = (travelType: string) =>
+    ({ departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType, mode: 'standard' }) as never;
+
+  it('la clé narrative inclut le travelType', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'Analyse famille.' }] });
+    const { generateDestinationNarrative } = await load();
+    await generateDestinationNarrative(score, mk('family'));
+    const narrativeKey = capturedCacheKeys.find((k) => k.includes('claude-narrative'));
+    expect(narrativeKey).toBeDefined();
+    expect(narrativeKey).toContain('family');
+  });
+
+  it('solo et family produisent des clés narrative DIFFÉRENTES (pas de partage cache)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'x' }] });
+    const { generateDestinationNarrative } = await load();
+
+    capturedCacheKeys.length = 0;
+    await generateDestinationNarrative(score, mk('solo'));
+    const soloKey = capturedCacheKeys.find((k) => k.includes('claude-narrative'));
+
+    capturedCacheKeys.length = 0;
+    await generateDestinationNarrative(score, mk('family'));
+    const familyKey = capturedCacheKeys.find((k) => k.includes('claude-narrative'));
+
+    expect(soloKey).toBeDefined();
+    expect(familyKey).toBeDefined();
+    expect(soloKey).not.toBe(familyKey);
   });
 });

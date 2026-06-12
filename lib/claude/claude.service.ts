@@ -40,7 +40,15 @@ export async function generateDestinationNarrative(
     return buildFallbackNarrative(score);
   }
 
-  const key = buildCacheKey('claude-narrative', score.countryCode, String(Math.floor(score.total / 5)));
+  // La clé inclut le travelType : le prompt distingue déjà solo/couple/family/nomad,
+  // donc deux profils ne doivent PAS partager la même narrative en cache
+  // (ANALYZE-PROFILE-001 — sinon une narrative "solo" est resservie à une famille).
+  const key = buildCacheKey(
+    'claude-narrative',
+    score.countryCode,
+    String(Math.floor(score.total / 5)),
+    profile.travelType,
+  );
   try {
     const { data, fromCache } = await withCache(
       key,

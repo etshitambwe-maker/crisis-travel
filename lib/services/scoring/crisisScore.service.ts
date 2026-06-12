@@ -132,11 +132,14 @@ async function calcBudget(
 async function calcPracticality(
   c: CountryInfo,
   teleportPromise: Promise<TeleportSR>,
+  profile: UserProfile,
 ): Promise<SubScore> {
   // Utilise visa + connexions aériennes en base, enrichi par Teleport si disponible.
   // Teleport est partagé via la même promesse que calcBudget (récupéré une seule fois
   // par pays — GOAL-033). La formule et la pondération sont inchangées.
-  const baseScore = calculatePracticalityScore(c.code);
+  // Le profil (travelType) module la praticité — family/couple plus sensibles aux
+  // frictions logistiques (ANALYZE-PROFILE-001), sans appel réseau supplémentaire.
+  const baseScore = calculatePracticalityScore(c.code, profile);
   const teleportResult = await teleportPromise;
 
   if (teleportResult.source === 'live') {
@@ -166,7 +169,7 @@ export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile)
     calcSecurity(c),
     calcGeopolitical(c),
     calcBudget(c, profile, teleportPromise),
-    calcPracticality(c, teleportPromise),
+    calcPracticality(c, teleportPromise, profile),
   ]);
 
   const total = clamp(Math.round(

@@ -62,3 +62,56 @@ describe('calculateCrisisScore — dédup Teleport (GOAL-033)', () => {
     expect(r.practicality.value).toBeGreaterThan(0);
   });
 });
+
+// ── ANALYZE-PROFILE-001 — le travelType module la praticité (family ≠ solo) ──────
+
+describe('calculateCrisisScore — profil voyageur (ANALYZE-PROFILE-001)', () => {
+  // Cameroun : visa embassy_simple (score 40, forte friction) → terrain où une
+  // famille est nettement plus pénalisée qu'un solo sur la praticité.
+  const cm = { code: 'CM', name: 'Cameroun', meaeSlug: 'cameroun', iso3: 'CMR', acledName: 'Cameroon' };
+  // Portugal : visa 100 + vol direct CDG → aucune friction → modificateur nul.
+  const pt = { code: 'PT', name: 'Portugal', meaeSlug: 'portugal', iso3: 'PRT', acledName: 'Portugal' };
+
+  const mk = (travelType: UserProfile['travelType']): UserProfile =>
+    ({ departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType, mode: 'standard' }) as UserProfile;
+
+  it('family obtient une praticité STRICTEMENT inférieure à solo sur une destination à friction', async () => {
+    const solo   = await calculateCrisisScore(cm, mk('solo'));
+    const family = await calculateCrisisScore(cm, mk('family'));
+    expect(family.practicality.value).toBeLessThan(solo.practicality.value);
+  });
+
+  it('family obtient un score TOTAL inférieur ou égal à solo (praticité pèse 10%)', async () => {
+    const solo   = await calculateCrisisScore(cm, mk('solo'));
+    const family = await calculateCrisisScore(cm, mk('family'));
+    expect(family.total).toBeLessThanOrEqual(solo.total);
+    // Et au moins un sous-score diffère réellement (preuve que le profil n'est pas perdu).
+    expect(family.practicality.value).not.toBe(solo.practicality.value);
+  });
+
+  it('couple est pénalisé moins que family (moitié de la sensibilité)', async () => {
+    const solo   = await calculateCrisisScore(cm, mk('solo'));
+    const couple = await calculateCrisisScore(cm, mk('couple'));
+    const family = await calculateCrisisScore(cm, mk('family'));
+    expect(couple.practicality.value).toBeLessThan(solo.practicality.value);
+    expect(couple.practicality.value).toBeGreaterThan(family.practicality.value);
+  });
+
+  it('nomad et solo sont identiques (aucun modificateur)', async () => {
+    const solo  = await calculateCrisisScore(cm, mk('solo'));
+    const nomad = await calculateCrisisScore(cm, mk('nomad'));
+    expect(nomad.practicality.value).toBe(solo.practicality.value);
+  });
+
+  it("sans friction (Portugal : visa 100 + vol direct), family = solo (pas de pénalité gratuite)", async () => {
+    const solo   = await calculateCrisisScore(pt, mk('solo'));
+    const family = await calculateCrisisScore(pt, mk('family'));
+    expect(family.practicality.value).toBe(solo.practicality.value);
+  });
+
+  it("le profil n'ajoute AUCUN appel réseau (Teleport toujours 1 appel/pays)", async () => {
+    teleportCalls = 0;
+    await calculateCrisisScore(cm, mk('family'));
+    expect(teleportCalls).toBe(1);
+  });
+});
