@@ -1,16 +1,61 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
 import { generateDestinationNarrative } from '@/lib/claude/claude.service';
 import { findCountry } from '@/lib/utils/countries';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
+import type { ItineraryResult } from '@/types/crisis.types';
 
-export async function GET(
-  _request: Request,
+// PDF-UX-002: maxDuration augmenté à 60s — PDF + Claude narrative peut dépasser 10s (défaut Vercel Hobby).
+export const maxDuration = 60;
+
+// ── Validation payload POST ───────────────────────────────────────────────────
+
+const profileSchema = z.object({
+  budget:     z.number().positive().max(1_000_000).optional(),
+  duration:   z.number().int().min(1).max(365).optional(),
+  travelType: z.enum(['solo', 'couple', 'family', 'nomad']).optional(),
+  from:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).optional();
+
+// ItineraryResult est accepté tel quel depuis le client — validation minimale de shape.
+const itinerarySchema = z.object({
+  countryCode:   z.string(),
+  countryName:   z.string(),
+  durationDays:  z.number(),
+  budget:        z.object({ amount: z.number(), currency: z.string(), level: z.string() }),
+  days:          z.array(z.object({
+    day:             z.number(),
+    title:           z.string(),
+    summary:         z.string(),
+    morning:         z.string(),
+    afternoon:       z.string(),
+    evening:         z.string(),
+    estimatedBudget: z.string(),
+    safetyNote:      z.string(),
+  })),
+  globalAdvice:          z.array(z.string()),
+  safetyDisclaimer:      z.string(),
+  officialSourceReminder: z.string(),
+  generatedAt:           z.string(),
+  cityOrRegion:          z.string().optional(),
+}).optional();
+
+const pdfPayloadSchema = z.object({
+  profile:   profileSchema,
+  itinerary: itinerarySchema,
+});
+
+// ── Route handler ─────────────────────────────────────────────────────────────
+
+export async function POST(
+  request: Request,
   { params }: { params: Promise<{ code: string }> }
 ): Promise<NextResponse> {
   const { code } = await params;
 
-  // Auth + vérification Premium
+  // Auth + vérification Premium — même pattern que /api/itinerary (402 non-premium)
   const { user, isPremium } = await getUserWithSubscription();
   if (!user) {
     return NextResponse.json({ error: 'Authentification requise' }, { status: 401 });
@@ -27,16 +72,36 @@ export async function GET(
     return NextResponse.json({ error: 'Pays non trouvé' }, { status: 404 });
   }
 
-  try {
-    const profile = {
-      departureCountry: 'FR', budget: 1500, duration: 7,
-      period: 'flexible', travelType: 'solo' as const, mode: 'standard' as const,
-    };
+  // Payload optionnel — si absent ou non-JSON, on utilise les fallbacks conservateurs.
+  let clientProfile: z.infer<typeof profileSchema> = undefined;
+  let clientItinerary: ItineraryResult | undefined = undefined;
 
-    const score = await calculateCrisisScore(country, profile);
+  const contentType = request.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    let body: unknown;
+    try { body = await request.json(); } catch { body = {}; }
+    const parsed = pdfPayloadSchema.safeParse(body);
+    if (parsed.success) {
+      clientProfile   = parsed.data.profile;
+      clientItinerary = parsed.data.itinerary as ItineraryResult | undefined;
+    }
+  }
+
+  // Profil réel — valeurs client si présentes, sinon fallbacks conservateurs documentés.
+  // Fallbacks : budget=1500€, duration=7j, solo — valeurs moyennes représentatives.
+  const profile = {
+    departureCountry: 'FR',
+    budget:     clientProfile?.budget     ?? 1500,
+    duration:   clientProfile?.duration   ?? 7,
+    period:     'flexible',
+    travelType: clientProfile?.travelType ?? 'solo' as const,
+    mode:       'standard' as const,
+  };
+
+  try {
+    const score     = await calculateCrisisScore(country, profile);
     const narrative = await generateDestinationNarrative(score, profile);
 
-    // Import dynamique pour éviter les problèmes de type avec @react-pdf/renderer
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { renderToBuffer } = require('@react-pdf/renderer') as { renderToBuffer: (el: unknown) => Promise<Buffer> };
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -45,7 +110,12 @@ export async function GET(
     const { TravelReport } = require('@/lib/pdf/report.service');
 
     const pdfBuffer: Buffer = await renderToBuffer(
-      React.createElement(TravelReport, { score, narrative })
+      React.createElement(TravelReport, {
+        score,
+        narrative,
+        profile,
+        itinerary: clientItinerary,
+      })
     );
 
     const filename = `crisis-travel-${country.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
@@ -54,9 +124,9 @@ export async function GET(
     return new NextResponse(uint8, {
       status: 200,
       headers: {
-        'Content-Type': 'application/pdf',
+        'Content-Type':        'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'no-store',
+        'Cache-Control':       'no-store',
       },
     });
   } catch (error) {
