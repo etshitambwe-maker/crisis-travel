@@ -448,3 +448,69 @@ describe('non-régression PDF-UX-002 — fichiers non touchés', () => {
     expect(readSource(BTN_PATH)).not.toContain('calculateCrisisScore');
   });
 });
+
+// ── 6. Non-régression PDF-DEBUG-P0 — chargement @react-pdf/renderer en runtime ───
+// Le bug : @react-pdf/renderer est ESM-only ; un require() synchrone casse son
+// reconciler au runtime serveur ("Cannot read properties of undefined (reading 'S')")
+// → 500 invisible aux tests Node. Le fix impose import statique ESM + nodejs runtime
+// + externalisation bundler. Ces tests verrouillent ce contrat.
+
+describe('PDF-DEBUG-P0 — contrat de chargement @react-pdf/renderer', () => {
+  it("la route N'utilise PAS require('@react-pdf/renderer') (ESM-only → casse au runtime)", () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).not.toMatch(/require\(\s*['"]@react-pdf\/renderer['"]\s*\)/);
+  });
+
+  it('la route importe renderToBuffer en import statique ESM', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toMatch(/import\s*\{\s*renderToBuffer\s*\}\s*from\s*['"]@react-pdf\/renderer['"]/);
+  });
+
+  it("la route déclare runtime = 'nodejs' (pas Edge — react-pdf nécessite Node)", () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toMatch(/export\s+const\s+runtime\s*=\s*['"]nodejs['"]/);
+  });
+
+  it("la route n'utilise plus aucun appel require('...') interne (TravelReport/react inclus)", () => {
+    const src = readSource(ROUTE_PATH);
+    // Cible un vrai appel require('module') — pas la mention "require()" en commentaire.
+    expect(src).not.toMatch(/require\(\s*['"]/);
+  });
+
+  it('next.config externalise @react-pdf/renderer du bundler serveur', () => {
+    const cfg = readSource('next.config.ts');
+    expect(cfg).toContain('serverExternalPackages');
+    expect(cfg).toContain('@react-pdf/renderer');
+  });
+});
+
+// ── 7. Smoke runtime — renderToBuffer(TravelReport) produit un vrai PDF ──────────
+// Ce test exerce le rendu réel (ce qui manquait : les tests précédents lisaient le
+// source mais ne rendaient jamais). Garantit que TravelReport reste rendable.
+
+describe('PDF-DEBUG-P0 — smoke render Mode B', () => {
+  it('renderToBuffer produit un PDF valide à partir d\'un scoreSnapshot', async () => {
+    const React = (await import('react')).default;
+    const { renderToBuffer } = await import('@react-pdf/renderer');
+    const { TravelReport } = await import('@/lib/pdf/report.service');
+
+    const score = {
+      country: 'Japon', countryCode: 'JP', total: 82,
+      security:     { value: 88, source: 'fallback' as const, confidence: 'medium' as const, details: { meaeLevel: 1 } },
+      geopolitical: { value: 80, source: 'fallback' as const, confidence: 'medium' as const, details: { tension: 12 } },
+      budget:       { value: 70, source: 'fallback' as const, confidence: 'medium' as const, details: { mealCheap: 8, hotelAvg: 60, currencyVariation: 3 } },
+      practicality: { value: 75, source: 'fallback' as const, confidence: 'medium' as const, details: { visa: 'none' } },
+      status: 'ideal' as const, confidence: 'medium' as const,
+      calculatedAt: new Date().toISOString(),
+    };
+
+    const el = React.createElement(TravelReport, {
+      score, narrative: 'Synthèse de test.', profile: {}, countryName: 'Japon',
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const buf = await renderToBuffer(el as any);
+
+    expect(buf.length).toBeGreaterThan(1000);
+    expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+});

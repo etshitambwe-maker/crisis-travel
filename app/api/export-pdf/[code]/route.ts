@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import React from 'react';
+import { renderToBuffer } from '@react-pdf/renderer';
 import { findCountry } from '@/lib/utils/countries';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
+import { TravelReport } from '@/lib/pdf/report.service';
 import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
 
 // PDF-UX-002: maxDuration augmenté à 60s — PDF + Claude narrative peut dépasser 10s (défaut Vercel Hobby).
 export const maxDuration = 60;
+// @react-pdf/renderer est ESM-only : un require() synchrone échoue ("reading 'S'"
+// dans son reconciler) sous le bundler serveur. Import statique ESM + Node runtime
+// le chargent correctement. (PDF-DEBUG-P0)
+export const runtime = 'nodejs';
 
 // ── Validation payload POST ───────────────────────────────────────────────────
 
@@ -113,13 +120,6 @@ export async function POST(
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { renderToBuffer } = require('@react-pdf/renderer') as { renderToBuffer: (el: unknown) => Promise<Buffer> };
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const React = require('react');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TravelReport } = require('@/lib/pdf/report.service');
-
     const profile = {
       budget:     clientProfile?.budget,
       duration:   clientProfile?.duration,
@@ -130,27 +130,29 @@ export async function POST(
 
     let pdfBuffer: Buffer;
 
+    // TravelReport rend un <Document> @react-pdf, mais TS voit ReportProps et non
+    // DocumentProps — le cast aligne le type sur ce qu'attend renderToBuffer.
+    const renderReport = (props: Parameters<typeof TravelReport>[0]) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderToBuffer(React.createElement(TravelReport, props) as any);
+
     if (clientItinerary) {
       // ── Mode A — export-only itinerary (PDF-UX-004) ────────────────────────
       // itinerary déjà généré → pas d'appel Claude/scoring.
-      pdfBuffer = await renderToBuffer(
-        React.createElement(TravelReport, {
-          profile,
-          itinerary:   clientItinerary,
-          countryName: country.name,
-        })
-      );
+      pdfBuffer = await renderReport({
+        profile,
+        itinerary:   clientItinerary,
+        countryName: country.name,
+      });
     } else if (clientScoreSnapshot) {
       // ── Mode B — export-only destination report (PDF-UX-005) ───────────────
       // score déjà calculé SSR sur la page destination → pas d'appel Claude/scoring.
-      pdfBuffer = await renderToBuffer(
-        React.createElement(TravelReport, {
-          score:       clientScoreSnapshot,
-          narrative:   clientNarrative,
-          profile,
-          countryName: country.name,
-        })
-      );
+      pdfBuffer = await renderReport({
+        score:       clientScoreSnapshot,
+        narrative:   clientNarrative,
+        profile,
+        countryName: country.name,
+      });
     } else {
       // ── Mode C — legacy fallback : aucune donnée client suffisante ──────────
       // Uniquement si ni itinerary ni scoreSnapshot ne sont fournis.
@@ -170,15 +172,13 @@ export async function POST(
       const score     = await calculateCrisisScore(country, fullProfile);
       const narrative = await generateDestinationNarrative(score, fullProfile);
 
-      pdfBuffer = await renderToBuffer(
-        React.createElement(TravelReport, {
-          score,
-          narrative,
-          profile,
-          itinerary:   undefined,
-          countryName: country.name,
-        })
-      );
+      pdfBuffer = await renderReport({
+        score,
+        narrative,
+        profile,
+        itinerary:   undefined,
+        countryName: country.name,
+      });
     }
 
     const filename = `crisis-travel-${country.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
