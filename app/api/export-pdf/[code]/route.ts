@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
-import { generateDestinationNarrative } from '@/lib/claude/claude.service';
 import { findCountry } from '@/lib/utils/countries';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 import type { ItineraryResult } from '@/types/crisis.types';
@@ -35,11 +33,11 @@ const itinerarySchema = z.object({
     estimatedBudget: z.string(),
     safetyNote:      z.string(),
   })),
-  globalAdvice:          z.array(z.string()),
-  safetyDisclaimer:      z.string(),
+  globalAdvice:           z.array(z.string()),
+  safetyDisclaimer:       z.string(),
   officialSourceReminder: z.string(),
-  generatedAt:           z.string(),
-  cityOrRegion:          z.string().optional(),
+  generatedAt:            z.string(),
+  cityOrRegion:           z.string().optional(),
 }).optional();
 
 const pdfPayloadSchema = z.object({
@@ -87,21 +85,7 @@ export async function POST(
     }
   }
 
-  // Profil réel — valeurs client si présentes, sinon fallbacks conservateurs documentés.
-  // Fallbacks : budget=1500€, duration=7j, solo — valeurs moyennes représentatives.
-  const profile = {
-    departureCountry: 'FR',
-    budget:     clientProfile?.budget     ?? 1500,
-    duration:   clientProfile?.duration   ?? 7,
-    period:     'flexible',
-    travelType: clientProfile?.travelType ?? 'solo' as const,
-    mode:       'standard' as const,
-  };
-
   try {
-    const score     = await calculateCrisisScore(country, profile);
-    const narrative = await generateDestinationNarrative(score, profile);
-
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { renderToBuffer } = require('@react-pdf/renderer') as { renderToBuffer: (el: unknown) => Promise<Buffer> };
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -109,14 +93,53 @@ export async function POST(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { TravelReport } = require('@/lib/pdf/report.service');
 
-    const pdfBuffer: Buffer = await renderToBuffer(
-      React.createElement(TravelReport, {
-        score,
-        narrative,
-        profile,
-        itinerary: clientItinerary,
-      })
-    );
+    const profile = {
+      budget:     clientProfile?.budget,
+      duration:   clientProfile?.duration,
+      travelType: clientProfile?.travelType,
+      from:       clientProfile?.from,
+      to:         clientProfile?.to,
+    };
+
+    let pdfBuffer: Buffer;
+
+    if (clientItinerary) {
+      // ── Mode export-only (PDF-UX-004) ──────────────────────────────────────
+      // itinerary déjà généré fourni dans le payload → pas d'appel Claude/scoring.
+      pdfBuffer = await renderToBuffer(
+        React.createElement(TravelReport, {
+          profile,
+          itinerary: clientItinerary,
+          countryName: country.name,
+        })
+      );
+    } else {
+      // ── Mode legacy : pas d'itinéraire fourni → scoring + narrative complets ─
+      const { calculateCrisisScore }        = await import('@/lib/services/scoring/crisisScore.service');
+      const { generateDestinationNarrative } = await import('@/lib/claude/claude.service');
+
+      const fullProfile = {
+        departureCountry: 'FR',
+        budget:     clientProfile?.budget     ?? 1500,
+        duration:   clientProfile?.duration   ?? 7,
+        period:     'flexible',
+        travelType: clientProfile?.travelType ?? 'solo' as const,
+        mode:       'standard' as const,
+      };
+
+      const score     = await calculateCrisisScore(country, fullProfile);
+      const narrative = await generateDestinationNarrative(score, fullProfile);
+
+      pdfBuffer = await renderToBuffer(
+        React.createElement(TravelReport, {
+          score,
+          narrative,
+          profile,
+          itinerary: undefined,
+          countryName: country.name,
+        })
+      );
+    }
 
     const filename = `crisis-travel-${country.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
     const uint8 = new Uint8Array(pdfBuffer);

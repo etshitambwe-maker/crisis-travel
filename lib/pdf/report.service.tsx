@@ -290,9 +290,13 @@ function getStatusLabel(status: string): string {
 }
 
 interface ReportProps {
-  score:       CrisisScore;
-  narrative:   string;
+  /** Optionnel en mode export-only (itinerary fourni sans scoring) */
+  score?:      CrisisScore;
+  /** Optionnel en mode export-only */
+  narrative?:  string;
   generatedAt?: string;
+  /** Nom du pays affiché en fallback si score absent */
+  countryName?: string;
   profile?: {
     budget?:     number;
     duration?:   number;
@@ -303,20 +307,20 @@ interface ReportProps {
   itinerary?: ItineraryResult;
 }
 
-export function TravelReport({ score, narrative, generatedAt, profile, itinerary }: ReportProps) {
-  const color = getScoreColor(score.total);
+export function TravelReport({ score, narrative, generatedAt, countryName, profile, itinerary }: ReportProps) {
+  const color = score ? getScoreColor(score.total) : '#5b8def';
   const date  = generatedAt ?? new Date().toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'long', year: 'numeric',
   });
 
-  const subScores = [
+  const subScores = score ? [
     { label: 'SECURITE',     value: score.security.value,     weight: 'x40%' },
     { label: 'GEOPOLITIQUE', value: score.geopolitical.value, weight: 'x30%' },
     { label: 'BUDGET',       value: score.budget.value,       weight: 'x20%' },
     { label: 'PRATICITE',    value: score.practicality.value, weight: 'x10%' },
-  ];
+  ] : [];
 
-  const budgetRows = [
+  const budgetRows = score ? [
     score.budget.details.mealCheap && {
       label: 'Repas bon marche (x3/j)',
       value: `${score.budget.details.mealCheap}EUR`,
@@ -329,7 +333,7 @@ export function TravelReport({ score, narrative, generatedAt, profile, itinerary
       label: 'Impact change EUR',
       value: `${Number(score.budget.details.currencyVariation) > 0 ? '+' : ''}${score.budget.details.currencyVariation}%`,
     },
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  ].filter(Boolean) as Array<{ label: string; value: string }> : [];
 
   // Section numéros dynamiques selon contenu
   let sectionNum = 1;
@@ -337,9 +341,9 @@ export function TravelReport({ score, narrative, generatedAt, profile, itinerary
 
   return (
     <Document
-      title={`Crisis Travel - Rapport ${score.country}`}
+      title={`Crisis Travel - Rapport ${score?.country ?? itinerary?.countryName ?? countryName ?? ''}`}
       author="Crisis Travel"
-      subject={`Analyse CrisisScore ${score.country}`}
+      subject={`Analyse CrisisScore ${score?.country ?? itinerary?.countryName ?? countryName ?? ''}`}
     >
       <Page size="A4" style={styles.page}>
 
@@ -364,34 +368,51 @@ export function TravelReport({ score, narrative, generatedAt, profile, itinerary
 
         {/* Hero pays + score */}
         <View style={styles.countryHero}>
-          <View style={[styles.scoreCircle, { borderColor: color }]}>
-            <Text style={[styles.scoreValue, { color }]}>{score.total}</Text>
-            <Text style={styles.scoreLabel}>/100</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.countryName}>{score.country.toUpperCase()}</Text>
-            <Text style={{ fontSize: 10, color, fontFamily: 'Helvetica-Bold', letterSpacing: 1, marginTop: 4 }}>
-              {getStatusLabel(score.status)} - CONFIANCE {score.confidence.toUpperCase()}
-            </Text>
-            <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6, letterSpacing: 0.5 }}>
-              MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')} - CODE {score.countryCode}
-            </Text>
-          </View>
-        </View>
-
-        {/* Sous-scores */}
-        <Text style={styles.sectionTitle}>{nextSection()} / SOUS-SCORES CrisisScore</Text>
-        <View style={styles.subScoreGrid}>
-          {subScores.map((s) => (
-            <View key={s.label} style={styles.subScoreCard}>
-              <Text style={styles.subScoreLabel}>{s.label}</Text>
-              <Text style={[styles.subScoreValue, { color: getScoreColor(s.value) }]}>{s.value}</Text>
-              <Text style={styles.subScoreWeight}>{s.weight}</Text>
+          {score ? (
+            <>
+              <View style={[styles.scoreCircle, { borderColor: color }]}>
+                <Text style={[styles.scoreValue, { color }]}>{score.total}</Text>
+                <Text style={styles.scoreLabel}>/100</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.countryName}>{score.country.toUpperCase()}</Text>
+                <Text style={{ fontSize: 10, color, fontFamily: 'Helvetica-Bold', letterSpacing: 1, marginTop: 4 }}>
+                  {getStatusLabel(score.status)} - CONFIANCE {score.confidence.toUpperCase()}
+                </Text>
+                <Text style={{ fontSize: 8, color: '#6b7280', marginTop: 6, letterSpacing: 0.5 }}>
+                  MAJ {new Date(score.calculatedAt).toLocaleDateString('fr-FR')} - CODE {score.countryCode}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <Text style={styles.countryName}>
+                {(itinerary?.countryName ?? countryName ?? '').toUpperCase()}
+              </Text>
+              <Text style={{ fontSize: 9, color: '#6b7280', marginTop: 6, letterSpacing: 0.5 }}>
+                ITINERAIRE GENERE LE {date.toUpperCase()}
+              </Text>
             </View>
-          ))}
+          )}
         </View>
 
-        {/* Budget */}
+        {/* Sous-scores — uniquement si score disponible */}
+        {subScores.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>{nextSection()} / SOUS-SCORES CrisisScore</Text>
+            <View style={styles.subScoreGrid}>
+              {subScores.map((s) => (
+                <View key={s.label} style={styles.subScoreCard}>
+                  <Text style={styles.subScoreLabel}>{s.label}</Text>
+                  <Text style={[styles.subScoreValue, { color: getScoreColor(s.value) }]}>{s.value}</Text>
+                  <Text style={styles.subScoreWeight}>{s.weight}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* Budget — uniquement si score disponible */}
         {budgetRows.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>{nextSection()} / INDICATEURS BUDGET</Text>
@@ -404,9 +425,13 @@ export function TravelReport({ score, narrative, generatedAt, profile, itinerary
           </>
         )}
 
-        {/* Synthèse IA */}
-        <Text style={styles.sectionTitle}>{nextSection()} / SYNTHESE CLAUDE AI</Text>
-        <Text style={styles.narrativeText}>{narrative}</Text>
+        {/* Synthèse IA — uniquement si narrative disponible */}
+        {narrative && (
+          <>
+            <Text style={styles.sectionTitle}>{nextSection()} / SYNTHESE CLAUDE AI</Text>
+            <Text style={styles.narrativeText}>{narrative}</Text>
+          </>
+        )}
 
         {/* Itinéraire IA — section optionnelle, incluse uniquement si fourni dans le payload */}
         {itinerary && (

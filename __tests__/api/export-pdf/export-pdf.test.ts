@@ -49,15 +49,15 @@ describe('export-pdf route — structure et sécurité', () => {
     expect(src).toContain('isPremium');
   });
 
-  it('le profil hardcodé est remplacé par les valeurs du payload', () => {
+  it('le profil est construit depuis clientProfile avec fallback dans le mode legacy', () => {
     const src = readSource(ROUTE_PATH);
-    // Les valeurs doivent être issues de clientProfile avec fallback, pas fixées seules
+    // Les valeurs clientProfile sont utilisées dans les deux modes
     expect(src).toContain('clientProfile?.budget');
     expect(src).toContain('clientProfile?.duration');
     expect(src).toContain('clientProfile?.travelType');
-    // Pas de valeurs hardcodées sans fallback dynamique
-    const hardcodedLine = /budget:\s*1500[^,\n]*,\s*duration:\s*7[^,\n]*,\s*(?:period|travelType)/;
-    expect(hardcodedLine.test(src)).toBe(false);
+    // Les fallbacks 1500/7/solo sont dans le bloc legacy (else), pas au niveau global
+    expect(src).toContain('?? 1500');
+    expect(src).toContain('?? 7');
   });
 
   it("l'itinéraire client est utilisé si fourni dans le payload", () => {
@@ -80,6 +80,101 @@ describe('export-pdf route — structure et sécurité', () => {
     const src = readSource(ROUTE_PATH);
     expect(src).not.toContain('checkAndIncrementQuota');
     expect(src).not.toContain('analysisQuota');
+  });
+});
+
+// ── 1b. PDF-UX-004 — mode export-only quand itinerary fourni ─────────────────
+
+describe('export-pdf route — mode export-only (PDF-UX-004)', () => {
+  it('quand itinerary est fourni, calculateCrisisScore est dans un bloc conditionnel else isolé', () => {
+    const src = readSource(ROUTE_PATH);
+    // La branche export-only ne doit pas contenir calculateCrisisScore en chemin principal
+    // On vérifie la structure : import dynamique de calculateCrisisScore dans le else uniquement
+    expect(src).toContain('calculateCrisisScore');
+    // L'import dynamique doit être dans le bloc else (legacy), pas au top-level
+    expect(src).not.toMatch(/^import\s+\{[^}]*calculateCrisisScore/m);
+    // L'import doit être dynamique (await import)
+    expect(src).toMatch(/await import\(['"]\@\/lib\/services\/scoring\/crisisScore\.service['"]\)/);
+  });
+
+  it('quand itinerary est fourni, generateDestinationNarrative est dans le bloc else isolé', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('generateDestinationNarrative');
+    // Pas d'import statique top-level
+    expect(src).not.toMatch(/^import\s+\{[^}]*generateDestinationNarrative/m);
+    // Import dynamique dans le else
+    expect(src).toMatch(/await import\(['"]\@\/lib\/claude\/claude\.service['"]\)/);
+  });
+
+  it('la bifurcation export-only vs legacy est explicite (if clientItinerary)', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('if (clientItinerary)');
+  });
+
+  it("le mode export-only n'appelle pas calculateCrisisScore directement", () => {
+    const src = readSource(ROUTE_PATH);
+    // Dans le bloc if(clientItinerary), renderToBuffer est appelé sans calculateCrisisScore
+    // On vérifie que les deux imports lourds sont strictement dans le else
+    const elseIdx = src.indexOf('} else {');
+    const ifIdx   = src.indexOf('if (clientItinerary)');
+    expect(ifIdx).toBeGreaterThan(-1);
+    expect(elseIdx).toBeGreaterThan(ifIdx);
+    // calculateCrisisScore n'apparaît qu'après le else
+    const crisisIdx = src.indexOf('calculateCrisisScore');
+    expect(crisisIdx).toBeGreaterThan(elseIdx);
+  });
+
+  it("le mode export-only n'appelle pas generateDestinationNarrative directement", () => {
+    const src = readSource(ROUTE_PATH);
+    const elseIdx     = src.indexOf('} else {');
+    const narrativeIdx = src.indexOf('generateDestinationNarrative');
+    expect(narrativeIdx).toBeGreaterThan(elseIdx);
+  });
+
+  it('TravelReport reçoit itinerary: clientItinerary dans le mode export-only', () => {
+    const src = readSource(ROUTE_PATH);
+    // Dans le bloc if(clientItinerary), on passe itinerary: clientItinerary à TravelReport
+    expect(src).toContain('itinerary: clientItinerary');
+  });
+
+  it('le mode export-only passe countryName à TravelReport', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('countryName: country.name');
+  });
+
+  it('les appels lourds legacy restent dans le else — fallback conservateur documenté', () => {
+    const src = readSource(ROUTE_PATH);
+    // Fallbacks 1500€/7j/solo uniquement dans le bloc else (legacy)
+    const elseIdx = src.indexOf('} else {');
+    const budget1500Idx = src.indexOf('?? 1500');
+    const duration7Idx  = src.indexOf('?? 7');
+    expect(budget1500Idx).toBeGreaterThan(elseIdx);
+    expect(duration7Idx).toBeGreaterThan(elseIdx);
+  });
+
+  it('TravelReport accepte score optionnel dans report.service', () => {
+    const src = readSource(REPORT_PATH);
+    expect(src).toMatch(/score\?:\s*CrisisScore/);
+  });
+
+  it('TravelReport accepte narrative optionnel dans report.service', () => {
+    const src = readSource(REPORT_PATH);
+    expect(src).toMatch(/narrative\?:\s*string/);
+  });
+
+  it('TravelReport accepte countryName dans report.service', () => {
+    const src = readSource(REPORT_PATH);
+    expect(src).toContain('countryName?:');
+  });
+
+  it('le rendu narrative est conditionnel ({narrative && ...})', () => {
+    const src = readSource(REPORT_PATH);
+    expect(src).toMatch(/\{narrative &&/);
+  });
+
+  it('le rendu sous-scores est conditionnel (subScores.length > 0)', () => {
+    const src = readSource(REPORT_PATH);
+    expect(src).toMatch(/subScores\.length > 0/);
   });
 });
 
