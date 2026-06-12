@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import type { ItineraryResult } from '@/types/crisis.types';
 
 interface PdfExportButtonProps {
   countryCode: string;
@@ -11,26 +12,32 @@ interface PdfExportButtonProps {
     from?:       string;
     to?:         string;
   };
+  /** When provided, sent as-is to avoid a second Claude call server-side. */
+  itinerary?: ItineraryResult;
 }
 
-export function PdfExportButton({ countryCode, countryName, profile }: PdfExportButtonProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+type ExportStatus = 'idle' | 'loading' | 'error' | 'error_401' | 'error_402';
+
+export function PdfExportButton({ countryCode, countryName, profile, itinerary }: PdfExportButtonProps) {
+  const [status, setStatus] = useState<ExportStatus>('idle');
 
   async function handleExport() {
     if (status === 'loading') return;
     setStatus('loading');
 
     try {
+      const body: Record<string, unknown> = { profile: profile ?? {} };
+      if (itinerary) body.itinerary = itinerary;
+
       const res = await fetch(`/api/export-pdf/${countryCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: profile ?? {} }),
+        body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        setStatus('error');
-        return;
-      }
+      if (res.status === 401) { setStatus('error_401'); return; }
+      if (res.status === 402) { setStatus('error_402'); return; }
+      if (!res.ok) { setStatus('error'); return; }
 
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
@@ -47,6 +54,49 @@ export function PdfExportButton({ countryCode, countryName, profile }: PdfExport
     }
   }
 
+  if (status === 'error_401') {
+    return (
+      <div data-testid="pdf-export-error-401" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-muted)' }}>
+          Connexion requise pour exporter.
+        </span>
+        <a
+          href="/login"
+          className="ctv3-mono"
+          style={{
+            padding: '8px 14px', textDecoration: 'none',
+            border: '1px solid var(--ctv3-line-bright)',
+            color: 'var(--ctv3-paper)', background: 'var(--ctv3-ink-750)',
+            fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
+          }}
+        >
+          Se connecter →
+        </a>
+      </div>
+    );
+  }
+
+  if (status === 'error_402') {
+    return (
+      <div data-testid="pdf-export-error-402" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-reco)' }}>
+          Export PDF réservé aux abonnés Premium.
+        </span>
+        <a
+          href="/pricing"
+          className="ctv3-mono"
+          style={{
+            padding: '8px 14px', textDecoration: 'none',
+            background: 'var(--ctv3-reco)', color: 'var(--ctv3-ink-950)',
+            fontSize: 10, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase',
+          }}
+        >
+          Passer à Premium →
+        </a>
+      </div>
+    );
+  }
+
   return (
     <button
       data-testid="pdf-export-btn"
@@ -61,7 +111,11 @@ export function PdfExportButton({ countryCode, countryName, profile }: PdfExport
         opacity: status === 'loading' ? 0.6 : 1,
       }}
     >
-      {status === 'loading' ? 'Génération…' : status === 'error' ? 'Erreur — Réessayer' : '↓ Exporter en PDF'}
+      {status === 'loading'
+        ? 'Génération…'
+        : status === 'error'
+          ? 'Erreur — Réessayer'
+          : '↓ Exporter en PDF'}
     </button>
   );
 }
