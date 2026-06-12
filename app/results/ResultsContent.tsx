@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CountryCard } from '@/components/crisis/CountryCard';
 import { TravelPackMiniBlock } from '@/components/crisis/TravelPackMiniBlock';
+import { ItineraryBlock } from '@/components/crisis/ItineraryBlock';
 import { Eyebrow, SectionLabel, Chip } from '@/components/design/atoms';
 import { getDestinationImagery } from '@/lib/design/destinationImagery';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
@@ -510,6 +511,35 @@ export function ResultsContent() {
                 );
               })()}
             </div>
+
+            {/* Itinéraire IA premium — ITINERARY-003.
+                Rendu uniquement quand une destination top est disponible.
+                Aucun appel API automatique au chargement — génération à la demande uniquement. */}
+            {ranked[0] && (
+              <div style={{ maxWidth: 640, margin: '0 auto' }}>
+                <ItineraryBlock
+                  countryCode={ranked[0].countryCode}
+                  countryName={ranked[0].country}
+                  dateFrom={dateFrom || undefined}
+                  dateTo={dateTo || undefined}
+                  budget={parseInt(params.get('budget') ?? '0') || undefined}
+                  travelers={
+                    (() => {
+                      const tt = (params.get('travelType') ?? 'solo') as 'solo' | 'couple' | 'family' | 'nomad';
+                      return tt === 'couple' || tt === 'family' ? 2 : 1;
+                    })()
+                  }
+                  travelType={(params.get('travelType') ?? 'solo') as 'solo' | 'couple' | 'family' | 'nomad'}
+                  meaeLevel={
+                    (() => {
+                      const lvl = ranked[0].security?.details?.meaeLevel;
+                      const n = typeof lvl === 'number' ? lvl : parseInt(String(lvl ?? '1'));
+                      return ([1, 2, 3, 4].includes(n) ? n : 1) as 1 | 2 | 3 | 4;
+                    })()
+                  }
+                />
+              </div>
+            )}
 
             {/* CTA Nouvelle analyse — toujours visible après résultats */}
             <div style={{ marginTop: 40, textAlign: 'center', borderTop: '1px solid var(--ctv3-line)', paddingTop: 32 }}>
