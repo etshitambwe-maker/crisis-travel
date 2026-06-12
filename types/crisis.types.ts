@@ -63,6 +63,71 @@ export interface AnalyzeResponse {
   };
 }
 
+// ── Itinerary types (ITINERARY-002) ─────────────────────────────────────────
+
+export type BudgetLevel = 'low' | 'medium' | 'high' | 'luxury';
+
+export interface ItineraryBudget {
+  amount: number;
+  currency: string;
+  level: BudgetLevel;
+}
+
+export interface ItineraryDay {
+  day: number;
+  title: string;
+  summary: string;
+  morning: string;
+  afternoon: string;
+  evening: string;
+  estimatedBudget: string;
+  safetyNote: string;
+}
+
+export interface ItineraryResult {
+  countryCode: string;
+  countryName: string;
+  cityOrRegion?: string;
+  durationDays: number;
+  budget: ItineraryBudget;
+  days: ItineraryDay[];
+  globalAdvice: string[];
+  safetyDisclaimer: string;
+  officialSourceReminder: string;
+  generatedAt: string;
+}
+
+export interface ItineraryRiskContext {
+  meaeLevel: 1 | 2 | 3 | 4;
+  source: 'static' | 'live';
+  lastUpdated?: string;
+}
+
+export interface ItineraryRequest {
+  countryCode?: string;
+  countryName?: string;
+  cityOrRegion?: string;
+  from?: string;
+  to?: string;
+  budget?: number;
+  currency?: string;
+  travelers?: number;
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+  preferences?: string[];
+  riskContext?: ItineraryRiskContext;
+}
+
+export interface ItineraryApiResponse {
+  itinerary: ItineraryResult;
+  meta: {
+    premiumOnly: true;
+    source: 'ai';
+    officialDataMode: 'static';
+  };
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
 export function clamp(value: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, value));
 }
