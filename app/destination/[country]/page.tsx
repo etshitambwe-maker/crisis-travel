@@ -18,6 +18,7 @@ import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/d
 import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
+import { PdfExportButton } from '@/components/crisis/PdfExportButton';
 import type { VisaType } from '@/lib/data/visa-requirements';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
@@ -522,19 +523,10 @@ export default async function DestinationPage({ params }: Props) {
             isPremium={isPremium}
             isLoggedIn={!!user}
           >
-            <a
-              href={`/api/export-pdf/${score.countryCode}`}
-              download
-              className="ctv3-mono"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7,
-                padding: '11px 16px', border: '1px solid var(--ctv3-blue)', color: 'var(--ctv3-blue)',
-                fontSize: 10.5, letterSpacing: '0.12em', fontWeight: 700,
-                textDecoration: 'none', textTransform: 'uppercase',
-              }}
-            >
-              ↓ Exporter en PDF
-            </a>
+            <PdfExportButton
+              countryCode={score.countryCode}
+              countryName={score.country}
+            />
           </PremiumGate>
         </div>
 
