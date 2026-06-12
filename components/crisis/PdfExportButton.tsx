@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { ItineraryResult } from '@/types/crisis.types';
+import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
 
 interface PdfExportButtonProps {
   countryCode: string;
@@ -14,11 +14,19 @@ interface PdfExportButtonProps {
   };
   /** When provided, sent as-is to avoid a second Claude call server-side. */
   itinerary?: ItineraryResult;
+  /**
+   * Already-computed CrisisScore from the destination page (SSR).
+   * When provided together with narrative, triggers export-only destination-report
+   * mode server-side — no server-side scoring or Claude call is made.
+   */
+  scoreSnapshot?: CrisisScore;
+  /** Already-generated Claude narrative from the destination page (SSR). */
+  narrative?: string;
 }
 
 type ExportStatus = 'idle' | 'loading' | 'error' | 'error_401' | 'error_402';
 
-export function PdfExportButton({ countryCode, countryName, profile, itinerary }: PdfExportButtonProps) {
+export function PdfExportButton({ countryCode, countryName, profile, itinerary, scoreSnapshot, narrative }: PdfExportButtonProps) {
   const [status, setStatus] = useState<ExportStatus>('idle');
 
   async function handleExport() {
@@ -27,7 +35,9 @@ export function PdfExportButton({ countryCode, countryName, profile, itinerary }
 
     try {
       const body: Record<string, unknown> = { profile: profile ?? {} };
-      if (itinerary) body.itinerary = itinerary;
+      if (itinerary)      body.itinerary      = itinerary;
+      if (scoreSnapshot)  body.scoreSnapshot  = scoreSnapshot;
+      if (narrative)      body.narrative      = narrative;
 
       const res = await fetch(`/api/export-pdf/${countryCode}`, {
         method: 'POST',

@@ -63,7 +63,8 @@ describe('export-pdf route — structure et sécurité', () => {
   it("l'itinéraire client est utilisé si fourni dans le payload", () => {
     const src = readSource(ROUTE_PATH);
     expect(src).toContain('clientItinerary');
-    expect(src).toContain('itinerary: clientItinerary');
+    // Vérifie la présence de clientItinerary dans le payload TravelReport (indépendant de l'alignement)
+    expect(src).toMatch(/itinerary:\s+clientItinerary/);
   });
 
   it("generateItinerary n'est pas importé dans la route PDF", () => {
@@ -113,28 +114,27 @@ describe('export-pdf route — mode export-only (PDF-UX-004)', () => {
 
   it("le mode export-only n'appelle pas calculateCrisisScore directement", () => {
     const src = readSource(ROUTE_PATH);
-    // Dans le bloc if(clientItinerary), renderToBuffer est appelé sans calculateCrisisScore
-    // On vérifie que les deux imports lourds sont strictement dans le else
-    const elseIdx = src.indexOf('} else {');
-    const ifIdx   = src.indexOf('if (clientItinerary)');
+    // Les imports lourds doivent être dans le bloc legacy final (} else {),
+    // après les deux blocs export-only (if clientItinerary / else if clientScoreSnapshot).
+    const legacyElseIdx = src.lastIndexOf('} else {');
+    const ifIdx         = src.indexOf('if (clientItinerary)');
     expect(ifIdx).toBeGreaterThan(-1);
-    expect(elseIdx).toBeGreaterThan(ifIdx);
-    // calculateCrisisScore n'apparaît qu'après le else
+    expect(legacyElseIdx).toBeGreaterThan(ifIdx);
     const crisisIdx = src.indexOf('calculateCrisisScore');
-    expect(crisisIdx).toBeGreaterThan(elseIdx);
+    expect(crisisIdx).toBeGreaterThan(legacyElseIdx);
   });
 
   it("le mode export-only n'appelle pas generateDestinationNarrative directement", () => {
     const src = readSource(ROUTE_PATH);
-    const elseIdx     = src.indexOf('} else {');
-    const narrativeIdx = src.indexOf('generateDestinationNarrative');
-    expect(narrativeIdx).toBeGreaterThan(elseIdx);
+    const legacyElseIdx = src.lastIndexOf('} else {');
+    const narrativeIdx  = src.indexOf('generateDestinationNarrative');
+    expect(narrativeIdx).toBeGreaterThan(legacyElseIdx);
   });
 
-  it('TravelReport reçoit itinerary: clientItinerary dans le mode export-only', () => {
+  it('TravelReport reçoit itinerary clientItinerary dans le mode export-only', () => {
     const src = readSource(ROUTE_PATH);
-    // Dans le bloc if(clientItinerary), on passe itinerary: clientItinerary à TravelReport
-    expect(src).toContain('itinerary: clientItinerary');
+    // Vérifie la présence de clientItinerary passé à TravelReport (indépendant de l'alignement)
+    expect(src).toMatch(/itinerary:\s+clientItinerary/);
   });
 
   it('le mode export-only passe countryName à TravelReport', () => {
@@ -142,14 +142,14 @@ describe('export-pdf route — mode export-only (PDF-UX-004)', () => {
     expect(src).toContain('countryName: country.name');
   });
 
-  it('les appels lourds legacy restent dans le else — fallback conservateur documenté', () => {
+  it('les appels lourds legacy restent dans le else final — fallback conservateur documenté', () => {
     const src = readSource(ROUTE_PATH);
-    // Fallbacks 1500€/7j/solo uniquement dans le bloc else (legacy)
-    const elseIdx = src.indexOf('} else {');
+    // Fallbacks 1500€/7j/solo uniquement dans le bloc legacy final
+    const legacyElseIdx = src.lastIndexOf('} else {');
     const budget1500Idx = src.indexOf('?? 1500');
     const duration7Idx  = src.indexOf('?? 7');
-    expect(budget1500Idx).toBeGreaterThan(elseIdx);
-    expect(duration7Idx).toBeGreaterThan(elseIdx);
+    expect(budget1500Idx).toBeGreaterThan(legacyElseIdx);
+    expect(duration7Idx).toBeGreaterThan(legacyElseIdx);
   });
 
   it('TravelReport accepte score optionnel dans report.service', () => {
@@ -175,6 +175,93 @@ describe('export-pdf route — mode export-only (PDF-UX-004)', () => {
   it('le rendu sous-scores est conditionnel (subScores.length > 0)', () => {
     const src = readSource(REPORT_PATH);
     expect(src).toMatch(/subScores\.length > 0/);
+  });
+});
+
+// ── 1c. PDF-UX-005 — mode export-only destination report (scoreSnapshot) ──────
+
+describe('export-pdf route — mode export-only destination report (PDF-UX-005)', () => {
+  it('la route accepte scoreSnapshot dans le payload schema', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('scoreSnapshotSchema');
+    expect(src).toContain('scoreSnapshot:');
+  });
+
+  it('la route accepte narrative dans le payload schema', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toMatch(/narrative:\s+z\.string\(\)\.optional\(\)/);
+  });
+
+  it('clientScoreSnapshot est extrait du payload parsé', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('clientScoreSnapshot');
+    expect(src).toContain('clientNarrative');
+  });
+
+  it('la bifurcation scoreSnapshot est explicite (else if clientScoreSnapshot)', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('else if (clientScoreSnapshot)');
+  });
+
+  it('Mode B passe score: clientScoreSnapshot à TravelReport', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('score:       clientScoreSnapshot');
+  });
+
+  it('Mode B passe narrative: clientNarrative à TravelReport', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('narrative:   clientNarrative');
+  });
+
+  it("Mode B n'appelle pas calculateCrisisScore (avant le bloc legacy)", () => {
+    const src = readSource(ROUTE_PATH);
+    // Mode B (else if clientScoreSnapshot) est avant le bloc legacy (} else {)
+    const modeB      = src.indexOf('else if (clientScoreSnapshot)');
+    const legacyElse = src.lastIndexOf('} else {');
+    expect(modeB).toBeGreaterThan(-1);
+    expect(legacyElse).toBeGreaterThan(modeB);
+    // calculateCrisisScore n'est qu'après legacyElse
+    const crisisIdx = src.indexOf('calculateCrisisScore');
+    expect(crisisIdx).toBeGreaterThan(legacyElse);
+  });
+
+  it("Mode B n'appelle pas generateDestinationNarrative", () => {
+    const src = readSource(ROUTE_PATH);
+    const legacyElse   = src.lastIndexOf('} else {');
+    const narrativeIdx = src.indexOf('generateDestinationNarrative');
+    expect(narrativeIdx).toBeGreaterThan(legacyElse);
+  });
+
+  it('PdfExportButton déclare la prop scoreSnapshot', () => {
+    const src = readSource(BTN_PATH);
+    expect(src).toContain('scoreSnapshot?:');
+  });
+
+  it('PdfExportButton déclare la prop narrative (string)', () => {
+    const src = readSource(BTN_PATH);
+    expect(src).toContain('narrative?:');
+  });
+
+  it('PdfExportButton importe CrisisScore', () => {
+    const src = readSource(BTN_PATH);
+    expect(src).toContain('CrisisScore');
+  });
+
+  it('PdfExportButton inclut scoreSnapshot dans le body si présent', () => {
+    const src = readSource(BTN_PATH);
+    expect(src).toContain('body.scoreSnapshot  = scoreSnapshot');
+  });
+
+  it('PdfExportButton inclut narrative dans le body si présent', () => {
+    const src = readSource(BTN_PATH);
+    expect(src).toContain('body.narrative      = narrative');
+  });
+
+  it('trois modes distincts documentés dans la route (Mode A / B / C)', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toContain('Mode A');
+    expect(src).toContain('Mode B');
+    expect(src).toContain('Mode C');
   });
 });
 
@@ -269,7 +356,7 @@ describe('PdfExportButton — composant client', () => {
 
 // ── 4. Intégration page destination ──────────────────────────────────────────
 
-describe('destination page — intégration PdfExportButton', () => {
+describe('destination page — intégration PdfExportButton (PDF-UX-005)', () => {
   it('PdfExportButton est importé', () => {
     const src = readSource(DEST_PATH);
     expect(src).toContain("import { PdfExportButton }");
@@ -283,6 +370,43 @@ describe('destination page — intégration PdfExportButton', () => {
   it("le lien <a href='/api/export-pdf/...'> est supprimé", () => {
     const src = readSource(DEST_PATH);
     expect(src).not.toContain("href={`/api/export-pdf/");
+  });
+
+  it('PdfExportButton reçoit scoreSnapshot={score} sur la page destination (PDF-UX-005)', () => {
+    const src = readSource(DEST_PATH);
+    expect(src).toContain('scoreSnapshot={score}');
+  });
+
+  it('PdfExportButton reçoit narrative={narrative} sur la page destination (PDF-UX-005)', () => {
+    const src = readSource(DEST_PATH);
+    expect(src).toContain('narrative={narrative}');
+  });
+
+  it('score et narrative sont disponibles avant le rendu de PdfExportButton', () => {
+    const src = readSource(DEST_PATH);
+    // score et narrative sont déstructurés depuis result.data dans la page
+    expect(src).toContain('const { score, narrative }');
+  });
+
+  it("la page destination n'appelle pas PdfExportButton sans scoreSnapshot", () => {
+    const src = readSource(DEST_PATH);
+    // Vérifier qu'il n'y a pas d'occurrence de PdfExportButton sans scoreSnapshot
+    // (le seul rendu doit contenir scoreSnapshot)
+    const btnOccurrences = src.split('<PdfExportButton').length - 1;
+    const snapshotOccurrences = src.split('scoreSnapshot={score}').length - 1;
+    expect(btnOccurrences).toBeGreaterThan(0);
+    expect(snapshotOccurrences).toBe(btnOccurrences);
+  });
+
+  it("calculateCrisisScore n'est pas appelé depuis PdfExportButton sur la page destination", () => {
+    // PdfExportButton est un composant client — il ne doit pas importer calculateCrisisScore
+    const src = readSource(BTN_PATH);
+    expect(src).not.toContain('calculateCrisisScore');
+  });
+
+  it("generateDestinationNarrative n'est pas appelé depuis PdfExportButton", () => {
+    const src = readSource(BTN_PATH);
+    expect(src).not.toContain('generateDestinationNarrative');
   });
 });
 

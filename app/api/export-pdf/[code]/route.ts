@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { findCountry } from '@/lib/utils/countries';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
-import type { ItineraryResult } from '@/types/crisis.types';
+import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
 
 // PDF-UX-002: maxDuration augmenté à 60s — PDF + Claude narrative peut dépasser 10s (défaut Vercel Hobby).
 export const maxDuration = 60;
@@ -17,7 +17,7 @@ const profileSchema = z.object({
   to:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 }).optional();
 
-// ItineraryResult est accepté tel quel depuis le client — validation minimale de shape.
+// ItineraryResult accepté tel quel depuis le client — validation minimale de shape.
 const itinerarySchema = z.object({
   countryCode:   z.string(),
   countryName:   z.string(),
@@ -40,9 +40,32 @@ const itinerarySchema = z.object({
   cityOrRegion:           z.string().optional(),
 }).optional();
 
+// CrisisScore snapshot — validation minimale des champs consommés par TravelReport.
+const subScoreSchema = z.object({
+  value:      z.number(),
+  source:     z.enum(['live', 'fallback', 'partial']),
+  confidence: z.enum(['high', 'medium', 'low']),
+  details:    z.record(z.string(), z.union([z.number(), z.string()])),
+});
+const scoreSnapshotSchema = z.object({
+  country:       z.string(),
+  countryCode:   z.string(),
+  total:         z.number(),
+  security:      subScoreSchema,
+  geopolitical:  subScoreSchema,
+  budget:        subScoreSchema,
+  practicality:  subScoreSchema,
+  status:        z.enum(['ideal', 'recommended', 'possible', 'discouraged']),
+  confidence:    z.enum(['high', 'medium', 'low']),
+  calculatedAt:  z.string(),
+  opportunities: z.array(z.string()).optional(),
+}).optional();
+
 const pdfPayloadSchema = z.object({
-  profile:   profileSchema,
-  itinerary: itinerarySchema,
+  profile:       profileSchema,
+  itinerary:     itinerarySchema,
+  scoreSnapshot: scoreSnapshotSchema,
+  narrative:     z.string().optional(),
 });
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -71,8 +94,10 @@ export async function POST(
   }
 
   // Payload optionnel — si absent ou non-JSON, on utilise les fallbacks conservateurs.
-  let clientProfile: z.infer<typeof profileSchema> = undefined;
-  let clientItinerary: ItineraryResult | undefined = undefined;
+  let clientProfile:       z.infer<typeof profileSchema>       = undefined;
+  let clientItinerary:     ItineraryResult | undefined          = undefined;
+  let clientScoreSnapshot: CrisisScore | undefined              = undefined;
+  let clientNarrative:     string | undefined                   = undefined;
 
   const contentType = request.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
@@ -80,8 +105,10 @@ export async function POST(
     try { body = await request.json(); } catch { body = {}; }
     const parsed = pdfPayloadSchema.safeParse(body);
     if (parsed.success) {
-      clientProfile   = parsed.data.profile;
-      clientItinerary = parsed.data.itinerary as ItineraryResult | undefined;
+      clientProfile       = parsed.data.profile;
+      clientItinerary     = parsed.data.itinerary     as ItineraryResult | undefined;
+      clientScoreSnapshot = parsed.data.scoreSnapshot as CrisisScore | undefined;
+      clientNarrative     = parsed.data.narrative;
     }
   }
 
@@ -104,18 +131,31 @@ export async function POST(
     let pdfBuffer: Buffer;
 
     if (clientItinerary) {
-      // ── Mode export-only (PDF-UX-004) ──────────────────────────────────────
-      // itinerary déjà généré fourni dans le payload → pas d'appel Claude/scoring.
+      // ── Mode A — export-only itinerary (PDF-UX-004) ────────────────────────
+      // itinerary déjà généré → pas d'appel Claude/scoring.
       pdfBuffer = await renderToBuffer(
         React.createElement(TravelReport, {
           profile,
-          itinerary: clientItinerary,
+          itinerary:   clientItinerary,
+          countryName: country.name,
+        })
+      );
+    } else if (clientScoreSnapshot) {
+      // ── Mode B — export-only destination report (PDF-UX-005) ───────────────
+      // score déjà calculé SSR sur la page destination → pas d'appel Claude/scoring.
+      pdfBuffer = await renderToBuffer(
+        React.createElement(TravelReport, {
+          score:       clientScoreSnapshot,
+          narrative:   clientNarrative,
+          profile,
           countryName: country.name,
         })
       );
     } else {
-      // ── Mode legacy : pas d'itinéraire fourni → scoring + narrative complets ─
-      const { calculateCrisisScore }        = await import('@/lib/services/scoring/crisisScore.service');
+      // ── Mode C — legacy fallback : aucune donnée client suffisante ──────────
+      // Uniquement si ni itinerary ni scoreSnapshot ne sont fournis.
+      // Imports dynamiques isolés pour ne pas alourdir les modes A et B.
+      const { calculateCrisisScore }         = await import('@/lib/services/scoring/crisisScore.service');
       const { generateDestinationNarrative } = await import('@/lib/claude/claude.service');
 
       const fullProfile = {
@@ -135,7 +175,7 @@ export async function POST(
           score,
           narrative,
           profile,
-          itinerary: undefined,
+          itinerary:   undefined,
           countryName: country.name,
         })
       );

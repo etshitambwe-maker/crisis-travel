@@ -526,6 +526,8 @@ export default async function DestinationPage({ params }: Props) {
             <PdfExportButton
               countryCode={score.countryCode}
               countryName={score.country}
+              scoreSnapshot={score}
+              narrative={narrative}
             />
           </PremiumGate>
         </div>
