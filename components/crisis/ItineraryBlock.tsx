@@ -54,8 +54,13 @@ function ItinerarySkeleton() {
         @keyframes itinerary-pulse { 0%,100%{opacity:0.4} 50%{opacity:0.8} }
         .itin-skel { animation: itinerary-pulse 1.6s ease-in-out infinite; background: var(--ctv3-ink-750); border-radius: 3px; }
       `}</style>
-      <div className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--ctv3-muted)', textTransform: 'uppercase', marginBottom: 14 }}>
-        Génération en cours…
+      <div style={{ marginBottom: 14 }}>
+        <div className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--ctv3-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+          Génération en cours…
+        </div>
+        <div className="ctv3-mono" style={{ fontSize: 9.5, color: 'var(--ctv3-dim)', letterSpacing: '0.04em' }}>
+          Génération de votre suggestion d&apos;itinéraire — cela peut prendre quelques secondes.
+        </div>
       </div>
       {[1, 2, 3].map((i) => (
         <div key={i} style={{ border: '1px solid var(--ctv3-line)', padding: '14px 16px', marginBottom: 10 }}>
@@ -237,6 +242,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             fontFamily: 'var(--ctv3-mono)', fontSize: 11, letterSpacing: '0.12em',
             fontWeight: 700, textTransform: 'uppercase',
             opacity: hasDestination ? 1 : 0.5,
+            width: '100%', maxWidth: 320,
           }}
         >
           Générer mon itinéraire →
@@ -252,17 +258,18 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           <p className="ctv3-mono" style={{ fontSize: 12, color: 'var(--ctv3-muted)', marginBottom: 10 }}>
             Connexion requise pour générer un itinéraire.
           </p>
-          <button
-            onClick={generate}
+          <a
+            href="/login"
             className="ctv3-mono"
             style={{
-              padding: '9px 16px', cursor: 'pointer', background: 'var(--ctv3-ink-750)',
+              display: 'inline-block', padding: '9px 16px', textDecoration: 'none',
+              background: 'var(--ctv3-ink-750)',
               border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-paper)',
               fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
             }}
           >
             Se connecter →
-          </button>
+          </a>
         </div>
       )}
 
@@ -317,7 +324,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           <div
             className="ctv3-mono"
             style={{
-              display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16,
+              display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16, rowGap: 6,
               fontSize: 10, letterSpacing: '0.1em', color: 'var(--ctv3-faint)', textTransform: 'uppercase',
             }}
           >
@@ -398,13 +405,15 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
         </div>
       )}
 
-      {/* Footer note — always visible */}
-      <p className="ctv3-mono" style={{
-        fontSize: 9.5, color: 'var(--ctv3-dim)', marginTop: 14, lineHeight: 1.5,
-        letterSpacing: '0.02em', borderTop: '1px solid var(--ctv3-line)', paddingTop: 10,
-      }}>
-        Suggestion d&apos;itinéraire générée par IA à titre indicatif uniquement. Adaptez toujours votre trajet selon les recommandations locales et officielles.
-      </p>
+      {/* Footer note — visible sauf en success où safetyDisclaimer prend le relais */}
+      {status !== 'success' && (
+        <p className="ctv3-mono" style={{
+          fontSize: 9.5, color: 'var(--ctv3-dim)', marginTop: 14, lineHeight: 1.5,
+          letterSpacing: '0.02em', borderTop: '1px solid var(--ctv3-line)', paddingTop: 10,
+        }}>
+          Suggestion d&apos;itinéraire générée par IA à titre indicatif uniquement. Adaptez toujours votre trajet selon les recommandations locales et officielles.
+        </p>
+      )}
     </div>
   );
 }

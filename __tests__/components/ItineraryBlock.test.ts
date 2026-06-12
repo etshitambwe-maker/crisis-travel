@@ -111,9 +111,36 @@ describe('ItineraryBlock — gestion auth et premium', () => {
     expect(src).toContain('Connexion requise');
   });
 
+  it('le bouton 401 est un lien href="/login" et ne rappelle pas generate()', () => {
+    const src = readSource(BLOCK_PATH);
+    // Doit contenir un lien vers /login dans le bloc 401
+    expect(src).toContain('href="/login"');
+    // Dans le bloc error_401, il ne doit pas y avoir onClick={generate}
+    const block401Start = src.indexOf('data-testid="itinerary-error-401"');
+    const block401End = src.indexOf('</div>', block401Start + 1);
+    const block401 = src.slice(block401Start, block401End);
+    expect(block401).not.toContain('onClick={generate}');
+  });
+
   it('le message 500/400 permet de réessayer', () => {
     const src = readSource(BLOCK_PATH);
     expect(src).toContain('data-testid="itinerary-retry-btn"');
+  });
+
+  it('le skeleton affiche un texte de progression', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('cela peut prendre quelques secondes');
+  });
+
+  it('le skeleton ne contient pas de wording trompeur', () => {
+    const src = readSource(BLOCK_PATH);
+    // Chercher dans la zone skeleton (entre ItinerarySkeleton et la fin de la fonction)
+    const skeletonStart = src.indexOf('function ItinerarySkeleton');
+    const skeletonEnd = src.indexOf('// ── Day card', skeletonStart);
+    const skeleton = src.slice(skeletonStart, skeletonEnd);
+    expect(skeleton).not.toContain('secondes exactes');
+    expect(skeleton).not.toContain('temps réel');
+    expect(skeleton).not.toContain('live');
   });
 });
 
