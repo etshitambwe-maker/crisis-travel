@@ -55,8 +55,10 @@ export async function generateDestinationNarrative(
       async () => {
         const t0 = Date.now();
         const msg = await client.messages.create({
+          // 1200 (vs 700) : couvre les pays verbeux sans couper la section finale
+          // "Risques résiduels" (REPORT-LENGTH-001).
           model: 'claude-sonnet-4-6',
-          max_tokens: 700,
+          max_tokens: 1200,
           messages: [
             {
               role: 'user',
@@ -78,6 +80,12 @@ Termine par : **Risques résiduels :** [3 risques concrets, une ligne chacun]`,
             },
           ],
         });
+        // Garde anti-troncature (REPORT-LENGTH-001) : si Claude est coupé au plafond,
+        // on lève AVANT le retour — withCache ne mettra donc JAMAIS en cache une
+        // narrative tronquée, et le catch ci-dessous renverra le fallback complet.
+        if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
+          throw new Error('narrative: réponse tronquée (stop_reason=max_tokens)');
+        }
         logger.api('Claude', score.countryCode, Date.now() - t0, false);
         return (msg.content[0] as { text: string }).text;
       },
@@ -257,12 +265,20 @@ Génère exactement ${days} jours dans le tableau "days".`;
         try {
           const msg = await Promise.race([
             client.messages.create({
+              // 8000 (vs 4000) : un itinéraire 14 jours en JSON dépassait 4000 tokens
+              // et était coupé en plein milieu → JSON.parse échouait (REPORT-LENGTH-001).
               model: 'claude-sonnet-4-6',
-              max_tokens: 4000,
+              max_tokens: 8000,
               messages: [{ role: 'user', content: prompt }],
             }),
             hardTimeout,
           ]);
+          // Garde anti-troncature : si la réponse est coupée au plafond, on lève AVANT
+          // le retour. withCache ne mettra donc PAS en cache un JSON tronqué (qui serait
+          // resservi cassé pendant 2h), et le catch renverra le fallback contrôlé loggué.
+          if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
+            throw new Error('itinerary: réponse tronquée (stop_reason=max_tokens)');
+          }
           logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', Date.now() - t0, false);
           return (msg.content[0] as { text: string }).text;
         } finally {
