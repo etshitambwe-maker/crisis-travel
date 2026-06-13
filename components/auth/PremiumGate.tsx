@@ -18,6 +18,44 @@ interface Props {
   variant?: 'overlay' | 'card';
 }
 
+// Bénéfices premium affichés dans le gate — wording court, la grille complète
+// (plans détaillés, FAQ) reste sur /pricing. PREMIUM-FLOW-001C.
+const PREMIUM_BENEFITS = ['PDF illimité', 'Préparer mon itinéraire', 'Analyses illimitées'] as const;
+
+/**
+ * CTA du gate, conscient de l'état (PREMIUM-FLOW-001C).
+ *
+ *   - non connecté         → bouton qui ouvre AuthModal (onLogin → setShowAuth(true)).
+ *   - connecté non premium → lien <a href="/pricing"> ("Voir les offres Premium").
+ *                            On NE rouvre PLUS la connexion à un utilisateur déjà connecté.
+ *
+ * Aligné sur le pattern HTTP 402 de PdfExportButton/ItineraryBlock (402 → /pricing).
+ */
+function PremiumCta({ isLoggedIn, onLogin, style }: { isLoggedIn: boolean; onLogin: () => void; style: React.CSSProperties }) {
+  if (isLoggedIn) {
+    return (
+      <a
+        href="/pricing"
+        className="ctv3-mono"
+        style={{ ...style, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
+      >
+        ⚡ Voir les offres Premium →
+      </a>
+    );
+  }
+  return (
+    <button
+      onClick={onLogin}
+      className="ctv3-mono"
+      style={style}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#e4ba5a'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ctv3-reco)'; }}
+    >
+      🔐 Se connecter →
+    </button>
+  );
+}
+
 export function PremiumGate({ children, feature, description, isPremium = false, isLoggedIn = false, variant = 'overlay' }: Props) {
   const [showAuth, setShowAuth] = useState(false);
 
@@ -66,16 +104,26 @@ export function PremiumGate({ children, feature, description, isPremium = false,
             )}
           </div>
 
+          {/* Bénéfices premium — wording court (la grille complète reste sur /pricing) */}
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {PREMIUM_BENEFITS.map((b) => (
+              <li key={b} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--ctv3-muted)' }}>
+                <span style={{ color: 'var(--ctv3-reco)', fontWeight: 700, flexShrink: 0 }}>+</span>
+                {b}
+              </li>
+            ))}
+          </ul>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 320 }}>
             <div className="ctv3-mono" style={{
               fontSize: '0.55rem', color: 'var(--ctv3-faint)', letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>
-              À PARTIR DE 9€/MOIS
+              9€/MOIS · 79€/AN
             </div>
 
-            <button
-              onClick={() => setShowAuth(true)}
-              className="ctv3-mono"
+            <PremiumCta
+              isLoggedIn={isLoggedIn}
+              onLogin={() => setShowAuth(true)}
               style={{
                 width: '100%',
                 padding: '12px 16px', borderRadius: 8, cursor: 'pointer',
@@ -84,11 +132,7 @@ export function PremiumGate({ children, feature, description, isPremium = false,
                 transition: 'background 0.2s',
                 boxShadow: '0 4px 16px rgba(216,168,62,0.3)',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#e4ba5a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ctv3-reco)'; }}
-            >
-              {isLoggedIn ? '⚡ Passer à Premium →' : '🔐 Se connecter →'}
-            </button>
+            />
 
             {!isLoggedIn && (
               <div style={{ fontSize: 11, color: 'var(--ctv3-faint)' }}>
@@ -152,30 +196,34 @@ export function PremiumGate({ children, feature, description, isPremium = false,
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 220 }}>
+          {/* Bénéfices premium — wording court (la grille complète reste sur /pricing) */}
+          <div className="ctv3-mono" style={{
+            fontSize: 11, color: 'var(--ctv3-muted)', lineHeight: 1.5, maxWidth: 240,
+          }}>
+            + PDF illimité · Préparer mon itinéraire · Analyses illimitées
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 240 }}>
             {/* Pricing info */}
             <div style={{
               fontFamily: 'var(--ctv3-mono)',
               fontSize: '0.55rem', color: 'var(--ctv3-faint)', letterSpacing: '0.1em', textTransform: 'uppercase',
             }}>
-              À PARTIR DE 9€/MOIS
+              9€/MOIS · 79€/AN
             </div>
 
-            <button
-              onClick={() => setShowAuth(true)}
+            <PremiumCta
+              isLoggedIn={isLoggedIn}
+              onLogin={() => setShowAuth(true)}
               style={{
                 padding: '10px 16px', borderRadius: 8, cursor: 'pointer',
                 background: 'var(--ctv3-reco)', border: 'none', color: 'var(--ctv3-ink-950)',
                 fontFamily: 'var(--ctv3-mono)',
-                fontSize: '0.65rem', letterSpacing: '0.12em', fontWeight: 700,
+                fontSize: '0.65rem', letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase',
                 transition: 'all 0.2s',
                 boxShadow: '0 4px 16px rgba(216,168,62,0.3)',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#e4ba5a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--ctv3-reco)'; }}
-            >
-              {isLoggedIn ? '⚡ PASSER À PREMIUM →' : '🔐 SE CONNECTER →'}
-            </button>
+            />
 
             {!isLoggedIn && (
               <div style={{ fontSize: 11, color: 'var(--ctv3-faint)' }}>
