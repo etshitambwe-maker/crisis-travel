@@ -241,71 +241,55 @@ export function ResultsContent() {
         </section>
 
         {/* ── Loading overlay — neutral copy, no live-source claim ────── */}
-        {/* FRONT-017: image-based "scanning the world" experience. The real
-            reference image is the primary visual layer; lightweight animated
-            overlays (scan sweep, vector plane on orbit, soft glow) are injected
-            via a LOCAL <style> tag so app/globals.css is never touched. The
-            analysis logic (loading/elapsed/progress/fetch/status) is unchanged:
-            only the presentation of this block was restyled. */}
+        {/* LOADING-UX-001 : loader CSS-only. L'ancienne « visual stage » image
+            (asset PNG de ~1.9 MB) affichait un cadre noir le temps
+            du téléchargement → impression de plantage. Remplacée par un anneau de scan
+            ctv3 100 % CSS (langage ct021-* aligné sur app/results/loading.tsx), rendu
+            instantanément. Overlay plein écran (.ct-overlay = fixed/inset:0), annoncé
+            aux lecteurs d'écran via role=status + aria-live. Aucune image, aucune
+            dépendance. La logique (loading/elapsed/progress/fetch/status) est inchangée. */}
         {loading && (
-          <div className="ct-overlay">
+          <div className="ct-overlay" role="status" aria-live="polite" aria-busy="true">
             {/* Scoped keyframes — local to this component, no globals.css edit. */}
             <style>{`
-              @keyframes ct017-scan { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
-              @keyframes ct017-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-              @keyframes ct017-glow { 0%,100% { opacity: 0.35; } 50% { opacity: 0.7; } }
+              @keyframes ct017-spin { to { transform: rotate(360deg); } }
+              @keyframes ct017-breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
               @media (prefers-reduced-motion: reduce) {
-                .ct017-scan, .ct017-orbit-ring, .ct017-glow { animation: none !important; }
+                .ct017-spin-arc, .ct017-breathe-el, .ct017-spin-ring { animation: none !important; }
               }
             `}</style>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26, width: '100%' }}>
-              {/* Visual stage — real image base + animated overlays */}
-              <div style={{
-                position: 'relative', width: '100%', maxWidth: 460, aspectRatio: '16/9',
-                borderRadius: 14, overflow: 'hidden',
-                border: '1px solid var(--ctv3-line)',
-                boxShadow: '0 0 0 1px rgba(0,0,0,0.4), inset 0 0 50px rgba(0,0,0,0.55)',
-                background: 'var(--ctv3-ink-950)',
-              }}>
-                {/* Primary image layer */}
-                <img
-                  src="/images/analysis-loading-reference.png"
-                  alt="Analyse mondiale en cours — globe, orbites et signaux"
-                  decoding="async"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }}
-                />
-                {/* Soft glow pulse over the warm hemisphere */}
-                <div className="ct017-glow" style={{
-                  position: 'absolute', inset: 0, pointerEvents: 'none',
-                  background: 'radial-gradient(40% 50% at 62% 48%, rgba(217,116,46,0.18), transparent 70%)',
-                  animation: 'ct017-glow 3.4s ease-in-out infinite',
+              {/* Visual stage — pure-CSS scan ring (no asset). Rendu immédiat,
+                  cohérent avec results/loading.tsx, plus de cadre noir. */}
+              <div aria-hidden style={{ position: 'relative', width: 120, height: 120 }}>
+                {/* Halo doux qui respire */}
+                <div className="ct017-breathe-el" style={{
+                  position: 'absolute', inset: -18, borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(91,141,239,0.20), transparent 70%)',
+                  animation: 'ct017-breathe 3.2s ease-in-out infinite',
                 }} />
-                {/* Scanning light sweep — the "system is scanning the world" cue */}
-                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-                  <div className="ct017-scan" style={{
-                    position: 'absolute', top: 0, bottom: 0, left: 0, width: '45%',
-                    background: 'linear-gradient(90deg, transparent, rgba(91,141,239,0.22) 45%, rgba(91,141,239,0.30) 50%, rgba(91,141,239,0.22) 55%, transparent)',
-                    animation: 'ct017-scan 3.8s ease-in-out infinite',
-                  }} />
-                </div>
-                {/* Vector plane drifting on an orbit (replaces the old emoji) */}
-                <div className="ct017-orbit-ring" style={{
-                  position: 'absolute', top: '50%', left: '50%', width: '78%', height: '46%',
-                  marginTop: '-23%', marginLeft: '-39%', pointerEvents: 'none',
-                  animation: 'ct017-orbit 14s linear infinite', transformOrigin: 'center',
-                }}>
-                  <svg viewBox="0 0 24 24" width="22" height="22" style={{
-                    position: 'absolute', top: -11, left: '50%', marginLeft: -11,
-                    filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.65))',
-                  }} aria-hidden="true">
-                    <path fill="#f5f5f7" d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L11 19v-5.5z"/>
-                  </svg>
-                </div>
-                {/* Readability veil under the text block below */}
-                <div style={{
-                  position: 'absolute', insetInline: 0, bottom: 0, height: '30%', pointerEvents: 'none',
-                  background: 'linear-gradient(to top, rgba(6,6,10,0.6), transparent)',
+                {/* Anneau pointillé externe en rotation lente */}
+                <div className="ct017-spin-ring" style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%',
+                  border: '1px dashed rgba(91,141,239,0.28)',
+                  animation: 'ct017-spin 18s linear infinite reverse',
+                }} />
+                {/* Arc actif qui tourne — signal « travail en cours » */}
+                <div className="ct017-spin-arc" style={{
+                  position: 'absolute', inset: 12, borderRadius: '50%',
+                  border: '2px solid transparent',
+                  borderTopColor: 'var(--ctv3-blue)',
+                  borderRightColor: 'rgba(91,141,239,0.35)',
+                  animation: 'ct017-spin 1.15s linear infinite',
+                  boxShadow: '0 0 24px rgba(91,141,239,0.18)',
+                }} />
+                {/* Cœur — losange ctv3 (langage de marque) */}
+                <div className="ct017-breathe-el" style={{
+                  position: 'absolute', top: '50%', left: '50%', width: 15, height: 15,
+                  marginTop: -7.5, marginLeft: -7.5, background: 'var(--ctv3-blue)',
+                  transform: 'rotate(45deg)', opacity: 0.9,
+                  animation: 'ct017-breathe 2.4s ease-in-out infinite',
                 }} />
               </div>
 
