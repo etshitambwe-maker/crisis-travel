@@ -10,6 +10,10 @@ const ROUTE_PATH   = 'app/api/export-pdf/[code]/route.ts';
 const REPORT_PATH  = 'lib/pdf/report.service.tsx';
 const BTN_PATH     = 'components/crisis/PdfExportButton.tsx';
 const DEST_PATH    = 'app/destination/[country]/page.tsx';
+// PREMIUM-FLOW-001F — l'export PDF de la page destination est désormais monté
+// dans le bloc premium unifié, via le composant PremiumActions (et non plus
+// directement dans page.tsx).
+const ACTIONS_PATH = 'components/crisis/PremiumActions.tsx';
 
 // ── 1. Route export-pdf ───────────────────────────────────────────────────────
 
@@ -356,44 +360,43 @@ describe('PdfExportButton — composant client', () => {
 
 // ── 4. Intégration page destination ──────────────────────────────────────────
 
-describe('destination page — intégration PdfExportButton (PDF-UX-005)', () => {
-  it('PdfExportButton est importé', () => {
+describe('destination page — intégration PdfExportButton (PDF-UX-005 / PREMIUM-FLOW-001F)', () => {
+  it('PremiumActions est importé dans la page destination', () => {
     const src = readSource(DEST_PATH);
-    expect(src).toContain("import { PdfExportButton }");
+    expect(src).toContain("import { PremiumActions }");
   });
 
-  it('PdfExportButton est rendu dans la PremiumGate', () => {
-    const src = readSource(DEST_PATH);
+  it('PdfExportButton est monté dans PremiumActions (bloc premium unifié)', () => {
+    const src = readSource(ACTIONS_PATH);
     expect(src).toContain('<PdfExportButton');
   });
 
-  it("le lien <a href='/api/export-pdf/...'> est supprimé", () => {
+  it("le lien <a href='/api/export-pdf/...'> est supprimé de la page", () => {
     const src = readSource(DEST_PATH);
     expect(src).not.toContain("href={`/api/export-pdf/");
   });
 
-  it('PdfExportButton reçoit scoreSnapshot={score} sur la page destination (PDF-UX-005)', () => {
+  it('la page passe scoreSnapshot={score} à PremiumActions (PDF-UX-005)', () => {
     const src = readSource(DEST_PATH);
     expect(src).toContain('scoreSnapshot={score}');
   });
 
-  it('PdfExportButton reçoit narrative={narrative} sur la page destination (PDF-UX-005)', () => {
+  it('la page passe narrative={narrative} à PremiumActions (PDF-UX-005)', () => {
     const src = readSource(DEST_PATH);
     expect(src).toContain('narrative={narrative}');
   });
 
-  it('score et narrative sont disponibles avant le rendu de PdfExportButton', () => {
+  it('score et narrative sont disponibles avant le rendu du bloc premium', () => {
     const src = readSource(DEST_PATH);
     // score et narrative sont déstructurés depuis result.data dans la page
     expect(src).toContain('const { score, narrative }');
   });
 
-  it("la page destination n'appelle pas PdfExportButton sans scoreSnapshot", () => {
-    const src = readSource(DEST_PATH);
-    // Vérifier qu'il n'y a pas d'occurrence de PdfExportButton sans scoreSnapshot
-    // (le seul rendu doit contenir scoreSnapshot)
+  it('PremiumActions ne monte jamais PdfExportButton sans scoreSnapshot', () => {
+    const src = readSource(ACTIONS_PATH);
+    // Le seul rendu de PdfExportButton doit recevoir scoreSnapshot.
     const btnOccurrences = src.split('<PdfExportButton').length - 1;
-    const snapshotOccurrences = src.split('scoreSnapshot={score}').length - 1;
+    const snapshotOccurrences = src.split('scoreSnapshot={scoreSnapshot}').length - 1;
     expect(btnOccurrences).toBeGreaterThan(0);
     expect(snapshotOccurrences).toBe(btnOccurrences);
   });

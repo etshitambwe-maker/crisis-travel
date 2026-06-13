@@ -2,13 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-// PREMIUM-FLOW-001D — Hiérarchie produit de la page /destination/[country].
+// PREMIUM-FLOW-001D/E/F — Hiérarchie produit de /destination/[country].
 //
-//  - Une SYNTHÈSE GRATUITE de base est visible HORS PremiumGate.
-//  - La SYNTHÈSE IA COMPLÈTE reste premium (approfondissement), dans PremiumGate.
-//  - Un CTA "Préparer mon itinéraire" est VISIBLE et respecte 3 états :
-//       non connecté → AuthModal ; connecté non premium → /pricing ; premium → /results.
-//  - Aucun itinéraire n'est généré avec les valeurs figées (7j/1500€/solo).
+//  001D/E — La SYNTHÈSE GRATUITE de base est visible HORS PremiumGate (section 06).
+//  001F   — Le premium est regroupé en UN SEUL bloc « Aller plus loin avec Premium »
+//           (section 07) :
+//             * non-premium → un seul PremiumGate (variant card) avec les bénéfices
+//               listés UNE seule fois et un seul CTA d'état
+//               (non connecté → AuthModal ; connecté non premium → /pricing) ;
+//             * premium → la narrative complète visible immédiatement, suivie de
+//               DEUX actions réelles (PremiumActions : itinéraire → /results + PDF).
+//           Plus de trio (gate Synthèse IA + PrepareItineraryCta + gate Export PDF)
+//           qui répétait les mêmes promesses.
+//  001F   — Aucun itinéraire généré in-place avec des valeurs figées (7j/1500€/solo).
 //
 // Style source-assertion (repo sans testing-library/jsdom — env node),
 // cf. PremiumGate.test.ts / ItineraryBlock.test.ts / ResultsLoading.test.ts.
@@ -18,7 +24,7 @@ function read(rel: string): string {
 }
 
 const DEST_PAGE = 'app/destination/[country]/page.tsx';
-const CTA = 'components/crisis/PrepareItineraryCta.tsx';
+const ACTIONS = 'components/crisis/PremiumActions.tsx';
 
 describe('PREMIUM-FLOW-001D — synthèse gratuite visible hors PremiumGate', () => {
   it('la page importe et utilise buildFreeSummary (synthèse construite côté serveur)', () => {
@@ -39,15 +45,8 @@ describe('PREMIUM-FLOW-001D — synthèse gratuite visible hors PremiumGate', ()
   it('la synthèse gratuite n\'est PAS enveloppée par un PremiumGate', () => {
     const src = read(DEST_PAGE);
     const freeIdx = src.indexOf('data-testid="free-summary"');
-    // Le PremiumGate ouvert le plus proche AVANT la synthèse gratuite ne doit pas
-    // exister, OU doit avoir été refermé. On vérifie qu'entre le dernier
-    // <PremiumGate ouvert avant freeIdx et freeIdx, il y a bien un </PremiumGate>.
     const before = src.slice(0, freeIdx);
     const lastOpen = before.lastIndexOf('<PremiumGate');
-    if (lastOpen !== -1) {
-      const closeBetween = src.slice(lastOpen, freeIdx).indexOf('</PremiumGate>');
-      expect(closeBetween).toBeGreaterThan(-1);
-    }
     // Cas nominal attendu : aucun PremiumGate avant la synthèse gratuite.
     expect(lastOpen).toBe(-1);
   });
@@ -71,58 +70,92 @@ describe('PREMIUM-FLOW-001E — paragraphe de synthèse basique affiché', () =>
 
   it('la page passe le profil (travelType) à buildFreeSummary', () => {
     const src = read(DEST_PAGE);
-    // buildFreeSummary(score, narrative, { travelType }) — 3e argument profil.
     expect(src).toMatch(/buildFreeSummary\(\s*score\s*,\s*narrative\s*,/);
   });
 });
 
-describe('PREMIUM-FLOW-001D — synthèse IA complète reste premium (approfondissement)', () => {
-  it('le bloc "Synthèse IA complète" reste enveloppé dans un PremiumGate', () => {
+// ── PREMIUM-FLOW-001F — un seul bloc premium unifié (section 07) ─────────────────
+describe('PREMIUM-FLOW-001F — bloc premium unifié (anti-doublons)', () => {
+  it('la page ne monte QU\'UN SEUL PremiumGate (plus de gate Export PDF séparé)', () => {
     const src = read(DEST_PAGE);
-    const idx = src.indexOf('feature="Synthèse IA complète"');
-    expect(idx).toBeGreaterThan(-1);
-    // un <PremiumGate l'ouvre
-    const open = src.lastIndexOf('<PremiumGate', idx);
-    expect(open).toBeGreaterThan(-1);
+    const gateOpens = (src.match(/<PremiumGate/g) ?? []).length;
+    expect(gateOpens).toBe(1);
+  });
+
+  it('le PremiumGate unifié porte le titre "Aller plus loin avec Premium"', () => {
+    const src = read(DEST_PAGE);
+    expect(src).toMatch(/feature="Aller plus loin avec Premium"/);
+  });
+
+  it('la page ne contient PLUS de gate dédié "Export PDF" (fusionné dans le bloc unique)', () => {
+    const src = read(DEST_PAGE);
+    expect(src).not.toContain('feature="Export PDF"');
+  });
+
+  it('la page ne monte PLUS le composant autonome PrepareItineraryCta (fusionné)', () => {
+    const src = read(DEST_PAGE);
+    expect(src).not.toMatch(/<PrepareItineraryCta/);
+  });
+
+  it('la liste des bénéfices premium n\'est rendue qu\'une fois (un seul PremiumGate)', () => {
+    // La liste PREMIUM_BENEFITS vit dans le composant PremiumGate ; elle n'est donc
+    // rendue qu'une fois puisqu'il n'y a qu'un seul <PremiumGate sur la page.
+    const src = read(DEST_PAGE);
+    const gateOpens = (src.match(/<PremiumGate/g) ?? []).length;
+    expect(gateOpens).toBe(1);
+    // La page ne ré-énumère PAS le triptyque de bénéfices en dur (anti-doublon) :
+    // « PDF illimité » n'apparaît qu'au plus une fois, dans la description du gate.
+    const pdfUnlimited = (src.match(/PDF illimité/g) ?? []).length;
+    expect(pdfUnlimited).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('PREMIUM-FLOW-001D/F — synthèse IA complète + actions premium', () => {
+  it('le contenu premium (narrative) reste protégé par le PremiumGate unifié', () => {
+    const src = read(DEST_PAGE);
+    const gateOpen = src.indexOf('<PremiumGate');
+    const gateClose = src.indexOf('</PremiumGate>');
+    expect(gateOpen).toBeGreaterThan(-1);
+    expect(gateClose).toBeGreaterThan(gateOpen);
+    const block = src.slice(gateOpen, gateClose);
+    // La narrative premium est rendue à l'intérieur du gate.
+    expect(block).toMatch(/narrative/);
   });
 
   it('la synthèse premium est présentée comme un APPROFONDISSEMENT (wording explicite)', () => {
     const src = read(DEST_PAGE);
     expect(src).toMatch(/approfondi|approfondissement|analyse détaillée|détaillée/i);
   });
+
+  it('les deux actions premium (itinéraire + PDF) sont rendues via PremiumActions, dans le gate', () => {
+    const src = read(DEST_PAGE);
+    expect(src).toMatch(/PremiumActions/);
+    const gateOpen = src.indexOf('<PremiumGate');
+    const gateClose = src.indexOf('</PremiumGate>');
+    const block = src.slice(gateOpen, gateClose);
+    expect(block).toMatch(/<PremiumActions/);
+  });
 });
 
-describe('PREMIUM-FLOW-001D — CTA "Préparer mon itinéraire" visible + 3 états', () => {
-  it('le composant CTA existe', () => {
-    const src = read(CTA);
+describe('PREMIUM-FLOW-001F — composant PremiumActions (actions premium réelles)', () => {
+  it('expose un bouton "Préparer mon itinéraire"', () => {
+    const src = read(ACTIONS);
     expect(src).toMatch(/Préparer mon itinéraire/);
   });
 
-  it('la page destination monte le CTA "Préparer mon itinéraire"', () => {
-    const src = read(DEST_PAGE);
-    expect(src).toMatch(/PrepareItineraryCta/);
-  });
-
-  it('CTA — non connecté → ouvre AuthModal', () => {
-    const src = read(CTA);
-    expect(src).toContain('<AuthModal');
-    expect(src).toMatch(/setShowAuth\(true\)/);
-  });
-
-  it('CTA — connecté non premium → /pricing', () => {
-    const src = read(CTA);
-    expect(src).toContain('/pricing');
-  });
-
-  it('CTA — premium → redirige vers /results', () => {
-    const src = read(CTA);
+  it('le bouton itinéraire redirige vers /results (vrai flow, pas de génération in-place)', () => {
+    const src = read(ACTIONS);
     expect(src).toContain('/results');
   });
 
-  it('CTA — la décision dépend de isLoggedIn ET isPremium (3 états distincts)', () => {
-    const src = read(CTA);
-    expect(src).toMatch(/isPremium/);
-    expect(src).toMatch(/isLoggedIn/);
+  it('PremiumActions n\'appelle PAS de route itinéraire (aucune valeur figée)', () => {
+    const src = read(ACTIONS);
+    expect(src).not.toMatch(/\/api\/itinerary/);
+  });
+
+  it('PremiumActions monte PdfExportButton pour l\'export', () => {
+    const src = read(ACTIONS);
+    expect(src).toMatch(/PdfExportButton/);
   });
 });
 
@@ -130,21 +163,5 @@ describe('PREMIUM-FLOW-001D — aucun itinéraire généré avec valeurs figées
   it('la page ne monte PAS ItineraryBlock (pas de génération in-place avec profil figé)', () => {
     const src = read(DEST_PAGE);
     expect(src).not.toMatch(/<ItineraryBlock/);
-  });
-
-  it('le CTA ne construit pas de requête itinéraire avec budget/duration codés en dur', () => {
-    const src = read(CTA);
-    // Le CTA redirige seulement — il n'appelle pas /api/itinerary.
-    expect(src).not.toMatch(/\/api\/itinerary/);
-  });
-});
-
-describe('PREMIUM-FLOW-001D — non-régression export PDF', () => {
-  it('le gate "Export PDF" reste en variant card', () => {
-    const src = read(DEST_PAGE);
-    const idx = src.indexOf('feature="Export PDF"');
-    expect(idx).toBeGreaterThan(-1);
-    const gateOpen = src.slice(src.lastIndexOf('<PremiumGate', idx), idx + 400);
-    expect(gateOpen).toContain('variant="card"');
   });
 });

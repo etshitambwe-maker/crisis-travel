@@ -18,8 +18,7 @@ import { Eyebrow, SectionLabel, Chip, tierFromScore, TIER } from '@/components/d
 import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destinationImagery';
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
-import { PdfExportButton } from '@/components/crisis/PdfExportButton';
-import { PrepareItineraryCta } from '@/components/crisis/PrepareItineraryCta';
+import { PremiumActions } from '@/components/crisis/PremiumActions';
 import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
 import type { VisaType } from '@/lib/data/visa-requirements';
 
@@ -584,79 +583,62 @@ export default async function DestinationPage({ params }: Props) {
           </div>
         </div>
 
-        {/* 07 — Synthèse IA complète (PREMIUM, approfondissement — PREMIUM-FLOW-001D).
-            La synthèse de base ci-dessus reste gratuite ; le premium débloque
-            l'analyse détaillée, pas le résumé. */}
-        <SectionLabel num="07" label="Synthèse IA complète" meta="Approfondissement · Premium" />
-        <PremiumGate
-          feature="Synthèse IA complète"
-          description="Analyse narrative approfondie de Claude AI : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées — au-delà du résumé gratuit."
-          isPremium={isPremium}
-          isLoggedIn={!!user}
-        >
-          <div style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
-              <span className="ctv3-mono" style={{
-                fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ctv3-paper)',
-              }}>
-                Analyse détaillée
-              </span>
-              <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
-                Générée à partir des signaux disponibles
-              </span>
-            </div>
-            <div className="ctv3-serif" style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--ctv3-paper)', whiteSpace: 'pre-wrap' }}>
-              {isPremium
-                ? narrative
-                : 'Analyse narrative approfondie : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées. Réservé aux abonnés Premium.'}
-            </div>
-          </div>
-        </PremiumGate>
+        {/* 07 — Aller plus loin avec Premium (PREMIUM-FLOW-001F).
+            UN SEUL bloc premium unifié. La synthèse de base (06) reste gratuite ;
+            ce bloc regroupe l'approfondissement premium et ne répète plus les
+            promesses (auparavant : gate « Synthèse IA » + CTA itinéraire autonome
+            + gate « Export PDF », qui affichaient 3× les mêmes bénéfices).
 
-        {/* Préparer mon itinéraire — entrée premium VISIBLE (PREMIUM-FLOW-001D).
-            Non connecté → AuthModal ; connecté non premium → /pricing ;
-            premium → /results (le vrai flow itinéraire, pas de valeurs figées). */}
+            - Non-premium → le PremiumGate (variant card) affiche UN seul upsell :
+              bénéfices listés une fois + un CTA d'état
+              (non connecté → AuthModal ; connecté non premium → /pricing).
+            - Premium → le children est rendu : la narrative complète visible
+              immédiatement, puis les actions réelles (itinéraire + PDF) via
+              PremiumActions. Aucun upsell. */}
+        <SectionLabel num="07" label="Aller plus loin" meta="Approfondissement · Premium" />
         <div style={{ marginBottom: 36 }}>
-          <PrepareItineraryCta isLoggedIn={!!user} isPremium={isPremium} />
+          <PremiumGate
+            feature="Aller plus loin avec Premium"
+            description="Synthèse IA complète, itinéraire personnalisé et export PDF illimité — l'approfondissement au-delà du résumé gratuit."
+            isPremium={isPremium}
+            isLoggedIn={!!user}
+            variant="card"
+          >
+            {/* Premium uniquement : narrative complète + actions réelles. */}
+            <div style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
+                <span className="ctv3-mono" style={{
+                  fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ctv3-paper)',
+                }}>
+                  Analyse détaillée
+                </span>
+                <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+                  Générée à partir des signaux disponibles
+                </span>
+              </div>
+              <div className="ctv3-serif" style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--ctv3-paper)', whiteSpace: 'pre-wrap' }}>
+                {narrative}
+              </div>
+
+              {/* Actions premium réelles — itinéraire (→ /results) + export PDF.
+                  Pas de génération in-place : le CTA itinéraire oriente seulement. */}
+              <PremiumActions
+                countryCode={score.countryCode}
+                countryName={score.country}
+                scoreSnapshot={score}
+                narrative={narrative}
+              />
+            </div>
+          </PremiumGate>
         </div>
 
-        {/* Actions utilisateur (behavior unchanged) */}
-        {/* PREMIUM-UX-001 : le gate Export PDF passe en variant="card". Comme la carte
-            premium prend toute la largeur disponible, on la sort du flex partagé étroit
-            (qui la réduisait à la largeur du bouton et écrasait l'overlay). AlertButton
-            et l'export premium restent empilés proprement. */}
-        <div style={{ padding: '4px 0 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <AlertButton
-              countryCode={score.countryCode}
-              countryName={score.country}
-              isLoggedIn={!!user}
-            />
-            {isPremium && (
-              <PdfExportButton
-                countryCode={score.countryCode}
-                countryName={score.country}
-                scoreSnapshot={score}
-                narrative={narrative}
-              />
-            )}
-          </div>
-          {!isPremium && (
-            <PremiumGate
-              feature="Export PDF"
-              description="Téléchargez le rapport complet au format PDF."
-              isPremium={isPremium}
-              isLoggedIn={!!user}
-              variant="card"
-            >
-              <PdfExportButton
-                countryCode={score.countryCode}
-                countryName={score.country}
-                scoreSnapshot={score}
-                narrative={narrative}
-              />
-            </PremiumGate>
-          )}
+        {/* Alerte — action utilisateur (comportement inchangé), hors du bloc premium. */}
+        <div style={{ padding: '4px 0 32px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <AlertButton
+            countryCode={score.countryCode}
+            countryName={score.country}
+            isLoggedIn={!!user}
+          />
         </div>
 
         {/* 08 — Historique */}

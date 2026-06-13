@@ -65,23 +65,24 @@ describe('PREMIUM-UX-001 — PremiumGate supporte un variant card/overlay', () =
   });
 });
 
-describe('PREMIUM-UX-001 — page destination utilise variant="card" pour Export PDF', () => {
-  it('le PremiumGate "Export PDF" passe variant="card"', () => {
+// PREMIUM-FLOW-001F — la page destination n'a plus qu'UN SEUL PremiumGate unifié
+// (« Aller plus loin avec Premium »). Les anciens gates séparés (« Synthèse IA
+// complète » overlay + « Export PDF » card) sont fusionnés. Le bloc unique
+// regroupe la narrative premium + les actions (itinéraire + PDF). On garde le
+// variant card pour une carte premium autonome lisible côté non-premium.
+describe('PREMIUM-FLOW-001F — page destination : un seul gate premium unifié', () => {
+  it('le bloc premium unifié passe variant="card"', () => {
     const src = read(DEST_PAGE);
-    // Isole le gate Export PDF (feature="Export PDF").
-    const idx = src.indexOf('feature="Export PDF"');
+    const idx = src.indexOf('feature="Aller plus loin avec Premium"');
     expect(idx).toBeGreaterThan(-1);
-    // Cherche variant="card" dans le bloc d'ouverture du gate (avant le <PdfExportButton).
-    const gateOpen = src.slice(src.lastIndexOf('<PremiumGate', idx), idx + 400);
+    const gateOpen = src.slice(src.lastIndexOf('<PremiumGate', idx), idx + 600);
     expect(gateOpen).toContain('variant="card"');
   });
 
-  it('le gate "Synthèse IA" NE passe PAS variant="card" (reste overlay)', () => {
+  it('il n\'existe qu\'un seul PremiumGate sur la page (anti-doublon)', () => {
     const src = read(DEST_PAGE);
-    const idx = src.indexOf('feature="Synthèse IA complète"');
-    expect(idx).toBeGreaterThan(-1);
-    const gateOpen = src.slice(src.lastIndexOf('<PremiumGate', idx), idx + 400);
-    expect(gateOpen).not.toContain('variant="card"');
+    const gateOpens = (src.match(/<PremiumGate/g) ?? []).length;
+    expect(gateOpens).toBe(1);
   });
 });
 
