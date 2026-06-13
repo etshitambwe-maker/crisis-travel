@@ -19,6 +19,8 @@ import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destina
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 import { PdfExportButton } from '@/components/crisis/PdfExportButton';
+import { PrepareItineraryCta } from '@/components/crisis/PrepareItineraryCta';
+import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
 import type { VisaType } from '@/lib/data/visa-requirements';
 
 // Plafond technique : scoring + synthèse Claude en Server Component peuvent
@@ -195,6 +197,12 @@ export default async function DestinationPage({ params }: Props) {
   ].filter(Boolean) as { label: string; sub: string; val: string }[];
 
   const visaReq = VISA_REQUIREMENTS[score.countryCode] ?? null;
+
+  // PREMIUM-FLOW-001D — synthèse gratuite de base, construite sur les données
+  // structurées du score (toujours fiables) + un extrait robuste de la narrative
+  // DÉJÀ calculée (aucun appel IA supplémentaire). La narrative intégrale reste
+  // réservée à la section premium "Synthèse IA complète".
+  const freeSummary = buildFreeSummary(score, narrative);
 
   return (
     <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
@@ -480,20 +488,104 @@ export default async function DestinationPage({ params }: Props) {
           </p>
         </div>
 
-        {/* 06 — Synthèse IA (PremiumGate preserved; honest neutral header) */}
-        <SectionLabel num="06" label="Synthèse IA" meta="Analyse éditoriale" />
+        {/* 06 — Synthèse voyage (GRATUITE, hors PremiumGate — PREMIUM-FLOW-001D).
+            Toujours visible : verdict, niveau de risque, points forts / vigilance,
+            conseils essentiels, et un extrait court de narrative quand disponible.
+            La valeur de base n'est JAMAIS cachée derrière le premium. */}
+        <SectionLabel num="06" label="Synthèse voyage" meta="Résumé · Gratuit" />
+        <div
+          data-testid="free-summary"
+          style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 36 }}
+        >
+          {/* Verdict + niveau de risque */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
+            <Chip tier={tier} solid>{tierInfo.label}</Chip>
+            <span className="ctv3-mono" style={{ fontSize: 10.5, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase' }}>
+              {freeSummary.riskLevel}
+            </span>
+            <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+              Confiance {score.confidence === 'high' ? 'élevée' : score.confidence === 'medium' ? 'moyenne' : 'partielle'}
+            </span>
+          </div>
+
+          <p className="ctv3-serif" style={{ fontSize: 16, lineHeight: 1.5, color: 'var(--ctv3-paper)', marginBottom: freeSummary.lead ? 12 : 18 }}>
+            {freeSummary.verdict} pour {freeSummary.destination}.
+          </p>
+
+          {/* Extrait narrative — affiché seulement si disponible et robuste */}
+          {freeSummary.lead && (
+            <p className="ctv3-serif" style={{ fontSize: 14.5, lineHeight: 1.6, color: 'var(--ctv3-muted)', marginBottom: 18 }}>
+              {freeSummary.lead}
+            </p>
+          )}
+
+          {/* Points forts / vigilance */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
+            <div>
+              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-ideal)', marginBottom: 8 }}>
+                Points forts
+              </div>
+              {freeSummary.strengths.length > 0 ? (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {freeSummary.strengths.map((s) => (
+                    <li key={s} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
+                      <span style={{ color: 'var(--ctv3-ideal)', fontWeight: 700, flexShrink: 0 }}>+</span>{s}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point fort marqué sur ces critères.</p>
+              )}
+            </div>
+            <div>
+              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-reco)', marginBottom: 8 }}>
+                Points de vigilance
+              </div>
+              {freeSummary.watchpoints.length > 0 ? (
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {freeSummary.watchpoints.map((w) => (
+                    <li key={w} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
+                      <span style={{ color: 'var(--ctv3-reco)', fontWeight: 700, flexShrink: 0 }}>!</span>{w}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point de vigilance majeur détecté.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Conseils essentiels */}
+          <div style={{ paddingTop: 14, borderTop: '1px solid var(--ctv3-line-soft)' }}>
+            <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)', marginBottom: 8 }}>
+              Conseils essentiels
+            </div>
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {freeSummary.essentialTips.map((t) => (
+                <li key={t} className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-muted)', display: 'flex', gap: 8, lineHeight: 1.5 }}>
+                  <span style={{ color: 'var(--ctv3-faint)', flexShrink: 0 }}>·</span>{t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* 07 — Synthèse IA complète (PREMIUM, approfondissement — PREMIUM-FLOW-001D).
+            La synthèse de base ci-dessus reste gratuite ; le premium débloque
+            l'analyse détaillée, pas le résumé. */}
+        <SectionLabel num="07" label="Synthèse IA complète" meta="Approfondissement · Premium" />
         <PremiumGate
           feature="Synthèse IA complète"
-          description="Accédez à l'analyse narrative approfondie de Claude AI : contexte géopolitique, risques résiduels, recommandations personnalisées."
+          description="Analyse narrative approfondie de Claude AI : contexte géopolitique détaillé, risques résiduels et recommandations personnalisées — au-delà du résumé gratuit."
           isPremium={isPremium}
           isLoggedIn={!!user}
         >
-          <div style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 36 }}>
+          <div style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
               <span className="ctv3-mono" style={{
                 fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ctv3-paper)',
               }}>
-                Synthèse IA
+                Analyse détaillée
               </span>
               <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
                 Générée à partir des signaux disponibles
@@ -506,6 +598,13 @@ export default async function DestinationPage({ params }: Props) {
             </div>
           </div>
         </PremiumGate>
+
+        {/* Préparer mon itinéraire — entrée premium VISIBLE (PREMIUM-FLOW-001D).
+            Non connecté → AuthModal ; connecté non premium → /pricing ;
+            premium → /results (le vrai flow itinéraire, pas de valeurs figées). */}
+        <div style={{ marginBottom: 36 }}>
+          <PrepareItineraryCta isLoggedIn={!!user} isPremium={isPremium} />
+        </div>
 
         {/* Actions utilisateur (behavior unchanged) */}
         {/* PREMIUM-UX-001 : le gate Export PDF passe en variant="card". Comme la carte
@@ -546,14 +645,14 @@ export default async function DestinationPage({ params }: Props) {
           )}
         </div>
 
-        {/* 07 — Historique */}
-        <SectionLabel num="07" label="Historique" meta="6 mois" />
+        {/* 08 — Historique */}
+        <SectionLabel num="08" label="Historique" meta="6 mois" />
         <div style={{ marginBottom: 36 }}>
           <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
         </div>
 
-        {/* 08 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
-        <SectionLabel num="08" label="Pack voyage" meta="Affiliés" />
+        {/* 09 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
+        <SectionLabel num="09" label="Pack voyage" meta="Affiliés" />
         <TravelPackBlock
           countryCode={score.countryCode}
           countryName={score.country}
