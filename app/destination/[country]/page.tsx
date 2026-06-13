@@ -508,28 +508,42 @@ export default async function DestinationPage({ params }: Props) {
         </PremiumGate>
 
         {/* Actions utilisateur (behavior unchanged) */}
-        <div style={{
-          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-          padding: '4px 0 32px',
-        }}>
-          <AlertButton
-            countryCode={score.countryCode}
-            countryName={score.country}
-            isLoggedIn={!!user}
-          />
-          <PremiumGate
-            feature="Export PDF"
-            description="Téléchargez le rapport complet au format PDF."
-            isPremium={isPremium}
-            isLoggedIn={!!user}
-          >
-            <PdfExportButton
+        {/* PREMIUM-UX-001 : le gate Export PDF passe en variant="card". Comme la carte
+            premium prend toute la largeur disponible, on la sort du flex partagé étroit
+            (qui la réduisait à la largeur du bouton et écrasait l'overlay). AlertButton
+            et l'export premium restent empilés proprement. */}
+        <div style={{ padding: '4px 0 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <AlertButton
               countryCode={score.countryCode}
               countryName={score.country}
-              scoreSnapshot={score}
-              narrative={narrative}
+              isLoggedIn={!!user}
             />
-          </PremiumGate>
+            {isPremium && (
+              <PdfExportButton
+                countryCode={score.countryCode}
+                countryName={score.country}
+                scoreSnapshot={score}
+                narrative={narrative}
+              />
+            )}
+          </div>
+          {!isPremium && (
+            <PremiumGate
+              feature="Export PDF"
+              description="Téléchargez le rapport complet au format PDF."
+              isPremium={isPremium}
+              isLoggedIn={!!user}
+              variant="card"
+            >
+              <PdfExportButton
+                countryCode={score.countryCode}
+                countryName={score.country}
+                scoreSnapshot={score}
+                narrative={narrative}
+              />
+            </PremiumGate>
+          )}
         </div>
 
         {/* 07 — Historique */}
