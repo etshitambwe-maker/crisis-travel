@@ -251,3 +251,99 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
     expect(narrativeKey).toBeDefined();
   });
 });
+
+// ── PREMIUM-CONTENT-001 — richesse minimale des prompts ─────────────────────────
+
+describe('PREMIUM-CONTENT-001 — prompt narrative : 10 sections premium présentes', () => {
+  const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+  // Bloc generateDestinationNarrative uniquement (avant fetchOpportunities)
+  const narrativeBlock = src.slice(
+    src.indexOf('export async function generateDestinationNarrative'),
+    src.indexOf('async function fetchOpportunities')
+  );
+
+  it('le prompt narrative contient la section Santé', () => {
+    expect(narrativeBlock).toMatch(/[Ss]ant[eé]/);
+  });
+
+  it('le prompt narrative contient la section vaccins', () => {
+    expect(narrativeBlock).toMatch(/vaccin/i);
+  });
+
+  it('le prompt narrative contient la section consulaire ou administrative', () => {
+    expect(narrativeBlock).toMatch(/consulaire|administratif/i);
+  });
+
+  it('le prompt narrative contient la section géopolitique', () => {
+    expect(narrativeBlock).toMatch(/géopolitique/i);
+  });
+
+  it('le prompt narrative contient la section économique', () => {
+    expect(narrativeBlock).toMatch(/économique/i);
+  });
+
+  it('le prompt narrative contient la section transport ou déplacements', () => {
+    expect(narrativeBlock).toMatch(/transport|déplacements/i);
+  });
+
+  it('le prompt narrative contient la section mises en garde', () => {
+    expect(narrativeBlock).toMatch(/mises? en garde|signaux d'alerte/i);
+  });
+
+  it('le prompt narrative mentionne le profil travelType', () => {
+    expect(narrativeBlock).toMatch(/travelType|profil/i);
+  });
+
+  it('le prompt narrative demande de ne pas affirmer une obligation vaccinale', () => {
+    expect(narrativeBlock).toMatch(/médecin|vaccination|professionnel de santé/i);
+  });
+
+  it('le prompt narrative mentionne diplomatie.gouv ou Ariane', () => {
+    expect(narrativeBlock).toMatch(/diplomatie\.gouv|[Aa]riane/);
+  });
+
+  it('le max_tokens narrative est passé à 3000', () => {
+    const m = narrativeBlock.match(/max_tokens:\s*(\d+)/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBe(3000);
+  });
+});
+
+describe('PREMIUM-CONTENT-001 — prompt itinéraire : travelType injecté + logique circuit', () => {
+  const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+  // Bloc generateItinerary uniquement
+  const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
+
+  it('le prompt itinéraire injecte travelType via travelTypeContext', () => {
+    expect(itinBlock).toMatch(/travelTypeContext/);
+  });
+
+  it('le prompt itinéraire adapte le rythme selon le profil (req.travelType)', () => {
+    expect(itinBlock).toMatch(/req\.travelType/);
+  });
+
+  it('le prompt itinéraire demande une logique géographique cohérente', () => {
+    expect(itinBlock).toMatch(/géographiquement cohérent|circuit/i);
+  });
+
+  it('le prompt itinéraire demande des conseils de déplacement (transport)', () => {
+    expect(itinBlock).toMatch(/moyen de transport|transport inter/i);
+  });
+
+  it('le prompt itinéraire demande des alternatives', () => {
+    expect(itinBlock).toMatch(/alternative/i);
+  });
+
+  it('le prompt itinéraire adapte le budget par jour', () => {
+    expect(itinBlock).toMatch(/perDay|par jour/i);
+  });
+
+  it('le prompt itinéraire mentionne la vigilance selon MEAE', () => {
+    expect(itinBlock).toMatch(/meaeLevel|MEAE/);
+  });
+
+  it('le prompt itinéraire mentionne diplomatie.gouv et Ariane', () => {
+    expect(itinBlock).toMatch(/diplomatie\.gouv/);
+    expect(itinBlock).toMatch(/[Aa]riane/);
+  });
+});

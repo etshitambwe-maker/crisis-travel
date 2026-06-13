@@ -55,28 +55,53 @@ export async function generateDestinationNarrative(
       async () => {
         const t0 = Date.now();
         const msg = await client.messages.create({
-          // 1200 (vs 700) : couvre les pays verbeux sans couper la section finale
-          // "Risques résiduels" (REPORT-LENGTH-001).
+          // 3000 (vs 1200) : couvre les 10 sections de la narrative premium structurée
+          // (PREMIUM-CONTENT-001). Le guard stop_reason=max_tokens reste actif en dessous.
           model: 'claude-sonnet-4-6',
-          max_tokens: 1200,
+          max_tokens: 3000,
           messages: [
             {
               role: 'user',
-              content: `Tu es un expert en géopolitique et voyage. Analyse ${score.country} pour un voyageur ${profile.travelType}, budget ${profile.budget}€, ${profile.duration} jours.
+              content: `Tu es un expert indépendant en géopolitique, sécurité des voyages et planification pratique. Rédige une analyse premium structurée de ${score.country} pour un voyageur ${profile.travelType}, budget ${profile.budget}€, durée ${profile.duration} jours.
 
-Données actuelles :
+Données objectives disponibles :
 - CrisisScore global : ${score.total}/100 (${score.status})
-- Sécurité : ${score.security.value}/100 | Sources : ${score.security.source}
+- Sécurité : ${score.security.value}/100 | Sources officielles : ${score.security.source}
 - Géopolitique : ${score.geopolitical.value}/100 | Tendance : ${score.geopolitical.details.trend ?? 'stable'}
-- Budget : ${score.budget.value}/100 | Change EUR : ${score.budget.details.currencyVariation ?? 0}% sur 12 mois
-- Repas bon marché : ~${score.budget.details.mealCheap ?? '?'}€ | Hôtel moyen : ~${score.budget.details.hotelAvg ?? '?'}€/nuit
+- Budget : ${score.budget.value}/100 | Variation EUR/devise locale : ${score.budget.details.currencyVariation ?? 0}% sur 12 mois
+- Repas bon marché : ~${score.budget.details.mealCheap ?? 'N/A'}€ | Hôtel moyen : ~${score.budget.details.hotelAvg ?? 'N/A'}€/nuit
 
-Rédige en français 3 paragraphes courts et factuels :
-1. Pourquoi ce pays est ${score.total >= 60 ? 'recommandé' : 'déconseillé'} maintenant
-2. Contexte géopolitique concret pour le voyageur
-3. Réalité du budget sur place
+Rédige en français une analyse en 10 sections. Chaque section a un titre en gras, des paragraphes courts, des recommandations actionnables. Pas de généralités vides ; pas de promesse de sécurité absolue.
 
-Termine par : **Risques résiduels :** [3 risques concrets, une ligne chacun]`,
+**1. Résumé exécutif**
+Verdict clair en 2-3 phrases : est-ce le bon moment pour voyager en ${score.country} ? Pourquoi ?
+
+**2. Situation sécuritaire**
+Analyse du score sécurité (${score.security.value}/100). Zones à éviter, zones sûres, risques principaux (criminalité, terrorisme, instabilité). Mention des sources officielles (diplomatie.gouv.fr, Ariane).
+
+**3. Situation géopolitique**
+Contexte géopolitique actuel (score ${score.geopolitical.value}/100, tendance : ${score.geopolitical.details.trend ?? 'stable'}). Tensions régionales, relations diplomatiques, impact direct sur le voyageur.
+
+**4. Situation économique et sociale**
+Réalité budgétaire sur place : coût de la vie, pouvoir d'achat pour un Européen, variation de change (${score.budget.details.currencyVariation ?? 0}%), repas (~${score.budget.details.mealCheap ?? 'N/A'}€) et hébergement (~${score.budget.details.hotelAvg ?? 'N/A'}€/nuit). Adaptation au budget de ${profile.budget}€ sur ${profile.duration} jours.
+
+**5. Recommandations consulaires et administratives**
+Documents requis (visa, passeport), inscription Ariane recommandée, contact ambassade/consulat. Ne jamais inventer d'obligation précise : formuler avec "à vérifier auprès du consulat ou sur diplomatie.gouv.fr".
+
+**6. Santé, vaccins et prévention**
+Risques sanitaires connus. Précautions pratiques (eau, nourriture, moustiques). Ne jamais affirmer qu'un vaccin est ou n'est pas obligatoire : indiquer "à vérifier auprès d'un médecin du voyage ou du centre de vaccination international avant le départ". Mentionner les recommandations générales officielles si connues.
+
+**7. Climat, catastrophes naturelles et environnement**
+Saisons, périodes à éviter, risques naturels (séismes, cyclones, inondations) si pertinents pour la destination. Adapté à la durée de ${profile.duration} jours.
+
+**8. Déplacements et transports**
+Modes de transport disponibles, fiabilité, coût approximatif, précautions (taxis agréés, transports de nuit). Spécificités locales importantes pour un voyageur ${profile.travelType}.
+
+**9. Conseils personnalisés — profil ${profile.travelType}**
+Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo' ? 'voyageur solo (sécurité personnelle, réseaux, hébergements adaptés)' : profile.travelType === 'family' ? 'voyage en famille (logistique enfants, infrastructures médicales, activités adaptées)' : profile.travelType === 'couple' ? 'voyage en couple (lieux romantiques, sécurité, budget optimisé)' : profile.travelType === 'nomad' ? 'nomade digital (connectivité, espaces de coworking, visas longue durée)' : 'groupe ou voyage organisé'}. Budget de ${profile.budget}€ sur ${profile.duration} jours : comment l'optimiser ici.
+
+**10. Mises en garde et signaux d'alerte**
+3 à 5 points de vigilance concrets, formulés comme liste. Inclure : vérifier les alertes diplomatie.gouv.fr avant le départ, souscrire une assurance couvrant rapatriement et crise politique, s'inscrire sur Ariane.`,
             },
           ],
         });
@@ -205,27 +230,45 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
     : `Durée estimée : ${days} jours (dates non précisées).`;
 
   const prefContext = req.preferences && req.preferences.length > 0
-    ? `Préférences : ${req.preferences.join(', ')}.`
+    ? `Préférences déclarées : ${req.preferences.join(', ')}.`
     : '';
+
+  const travelTypeContext = (() => {
+    const t = req.travelType ?? 'solo';
+    if (t === 'solo') return 'Voyageur SOLO : sécurité personnelle prioritaire, hébergements sociaux ou centraux, flexibilité maximale, rencontres locales.';
+    if (t === 'family') return 'Voyage EN FAMILLE : rythme calme, activités adaptées aux enfants, hébergements spacieux, accès médical à proximité, pas de zones à risque.';
+    if (t === 'couple') return 'Voyage EN COUPLE : mix culture + détente, expériences locales authentiques, budget optimisé, quelques moments plus intimistes.';
+    if (t === 'nomad') return 'NOMADE DIGITAL : connectivité fiable (wifi, SIM locale), espaces de travail le matin, activités l\'après-midi/soir, hébergements longue durée ou coworking.';
+    return `Profil : ${t}.`;
+  })();
 
   const prompt = `Tu es un expert en planification de voyages responsables.
 
 ${safetyHeader}
 
-Planifie un itinéraire de voyage pour les données suivantes :
-- Destination : ${country}${req.cityOrRegion ? ` (région/ville : ${req.cityOrRegion})` : ''}
+Planifie un itinéraire de voyage COHÉRENT ET PERSONNALISÉ pour les données suivantes :
+- Destination : ${country}${req.cityOrRegion ? ` (région/ville ciblée : ${req.cityOrRegion})` : ''}
 - ${dateContext}
 - Budget total : ${budgetAmount} ${currency} pour ${travelers} voyageur${travelers > 1 ? 's' : ''} (soit ~${perDay} ${currency}/jour)
+- Profil voyageur : ${travelTypeContext}
 ${prefContext}
 
-RÈGLES ABSOLUES (à respecter strictement) :
+LOGIQUE DU CIRCUIT (à respecter absolument) :
+- Construis un circuit géographiquement cohérent : regroupe les villes/régions proches, évite les allers-retours inutiles.
+- Adapte le rythme au profil : ${req.travelType === 'family' ? 'max 2 activités majeures par jour, pauses déjeuner obligatoires' : req.travelType === 'nomad' ? 'matins libres pour le travail, après-midis/soirées pour les sorties' : 'rythme dynamique mais réaliste, pas plus de 3-4 lieux majeurs par jour'}.
+- Pour chaque jour, précise dans "morning"/"afternoon"/"evening" : lieu(x) visités, type d'activité, conseil pratique, moyen de transport depuis la veille si changement de ville.
+- Dans "safetyNote" : conseil sécurité spécifique au lieu de ce jour (pas une phrase générique répétée).
+- Dans "estimatedBudget" : estimation réaliste pour ce jour (transport local + activités + repas), cohérente avec ~${perDay} ${currency}/jour.
+- Dans "globalAdvice" : 4 à 6 conseils pratiques actionnables (transport inter-villes, SIM locale, paiement, alternatives si météo défavorable, zones à éviter, checklist pré-départ).
+
+RÈGLES ABSOLUES :
 1. Ne prétends PAS accéder à des données en temps réel (prix de vols, météo live, disponibilités).
 2. N'invente aucune source officielle ni chiffre de sécurité précis.
 3. Ne promets pas de sécurité absolue.
-4. Formule les activités au conditionnel ou avec "typiquement" (ex: "vous pourriez visiter", "les marchés proposent généralement").
+4. Formule les activités au conditionnel : "vous pourriez visiter", "les marchés proposent généralement".
 5. N'inclus aucun numéro de téléphone, adresse précise ou prix garantis.
-6. Si niveau MEAE ${meaeLevel} >= 3, intègre des avertissements de sécurité renforcés à chaque jour.
-7. Rappelle dans globalAdvice de vérifier diplomatie.gouv.fr avant le départ.
+6. Si niveau MEAE ${meaeLevel} >= 3, intègre des avertissements de sécurité renforcés à chaque jour et propose des alternatives aux zones sensibles.
+7. Inclus dans globalAdvice : vérifier diplomatie.gouv.fr avant le départ et s'inscrire sur Ariane.
 
 Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans backticks) :
 {
