@@ -1,18 +1,36 @@
 'use client';
 import { useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase-client';
+import { safeNext } from '@/lib/auth/safe-next';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Relative path to return to after login. Defaults to the current page
+   * (pathname + search) so the user lands back where they started.
+   * Sanitized again server-side in /auth/callback.
+   */
+  next?: string;
 }
 
-export function AuthModal({ isOpen, onClose }: Props) {
+export function AuthModal({ isOpen, onClose, next }: Props) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
+
+  /** Build the auth callback URL carrying a safe relative `next`. */
+  function callbackUrl(): string {
+    const fallback =
+      typeof window !== 'undefined'
+        ? window.location.pathname + window.location.search
+        : '/';
+    const target = safeNext(next ?? fallback);
+    const base = `${window.location.origin}/auth/callback`;
+    return target === '/' ? base : `${base}?next=${encodeURIComponent(target)}`;
+  }
 
   async function handleMagicLink() {
     if (!email || !email.includes('@')) {
@@ -24,7 +42,7 @@ export function AuthModal({ isOpen, onClose }: Props) {
     const { error: authError } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl(),
       },
     });
     setLoading(false);
@@ -39,7 +57,7 @@ export function AuthModal({ isOpen, onClose }: Props) {
     setLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl() },
     });
   }
 

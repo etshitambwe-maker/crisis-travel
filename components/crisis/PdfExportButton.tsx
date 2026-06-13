@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 interface PdfExportButtonProps {
   countryCode: string;
@@ -28,6 +29,7 @@ type ExportStatus = 'idle' | 'loading' | 'error' | 'error_401' | 'error_402';
 
 export function PdfExportButton({ countryCode, countryName, profile, itinerary, scoreSnapshot, narrative }: PdfExportButtonProps) {
   const [status, setStatus] = useState<ExportStatus>('idle');
+  const [showAuth, setShowAuth] = useState(false);
 
   async function handleExport() {
     if (status === 'loading') return;
@@ -70,18 +72,22 @@ export function PdfExportButton({ countryCode, countryName, profile, itinerary, 
         <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-muted)' }}>
           Connexion requise pour exporter.
         </span>
-        <a
-          href="/login"
+        <button
+          type="button"
+          data-testid="pdf-export-login-btn"
+          onClick={() => setShowAuth(true)}
           className="ctv3-mono"
           style={{
-            padding: '8px 14px', textDecoration: 'none',
+            padding: '8px 14px', cursor: 'pointer',
             border: '1px solid var(--ctv3-line-bright)',
             color: 'var(--ctv3-paper)', background: 'var(--ctv3-ink-750)',
             fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
           }}
         >
           Se connecter →
-        </a>
+        </button>
+        {/* Local AuthModal — returns the user to the current page after login. */}
+        <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
       </div>
     );
   }

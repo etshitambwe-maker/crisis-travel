@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { safeNext } from '@/lib/auth/safe-next';
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
+  // `next` is attacker-controllable — only honor internal relative paths.
+  const next = safeNext(searchParams.get('next'));
 
   if (!code) {
     return NextResponse.redirect(`${origin}/?error=no_code`);

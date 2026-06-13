@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest } from '@/types/crisis.types';
 import { PdfExportButton } from './PdfExportButton';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
   const [status, setStatus] = useState<ItineraryStatus>('idle');
   const [result, setResult] = useState<ItineraryApiResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
 
   const destination = props.countryName ?? props.countryCode ?? 'cette destination';
   const hasDestination = Boolean(props.countryCode || props.countryName);
@@ -259,18 +261,22 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           <p className="ctv3-mono" style={{ fontSize: 12, color: 'var(--ctv3-muted)', marginBottom: 10 }}>
             Connexion requise pour générer un itinéraire.
           </p>
-          <a
-            href="/login"
+          <button
+            type="button"
+            data-testid="itinerary-login-btn"
+            onClick={() => setShowAuth(true)}
             className="ctv3-mono"
             style={{
-              display: 'inline-block', padding: '9px 16px', textDecoration: 'none',
+              display: 'inline-block', padding: '9px 16px', cursor: 'pointer',
               background: 'var(--ctv3-ink-750)',
               border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-paper)',
               fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
             }}
           >
             Se connecter →
-          </a>
+          </button>
+          {/* Local AuthModal — returns the user to this destination after login. */}
+          <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />
         </div>
       )}
 

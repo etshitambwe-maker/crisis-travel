@@ -111,15 +111,20 @@ describe('ItineraryBlock — gestion auth et premium', () => {
     expect(src).toContain('Connexion requise');
   });
 
-  it('le bouton 401 est un lien href="/login" et ne rappelle pas generate()', () => {
+  it('le bouton 401 ouvre AuthModal (pas de lien mort /login) et ne rappelle pas generate()', () => {
     const src = readSource(BLOCK_PATH);
-    // Doit contenir un lien vers /login dans le bloc 401
-    expect(src).toContain('href="/login"');
+    // PREMIUM-FLOW-001A : plus aucun lien mort vers /login (page inexistante).
+    expect(src).not.toContain('href="/login"');
+    // Le CTA 401 ouvre la modale d'auth locale, qui ramène l'utilisateur ici après login.
+    expect(src).toContain('data-testid="itinerary-login-btn"');
+    expect(src).toContain('setShowAuth(true)');
+    expect(src).toContain("import { AuthModal }");
     // Dans le bloc error_401, il ne doit pas y avoir onClick={generate}
     const block401Start = src.indexOf('data-testid="itinerary-error-401"');
-    const block401End = src.indexOf('</div>', block401Start + 1);
+    const block401End = src.indexOf('{/* ── Error 402', block401Start);
     const block401 = src.slice(block401Start, block401End);
     expect(block401).not.toContain('onClick={generate}');
+    expect(block401).toContain('AuthModal');
   });
 
   it('le message 500/400 permet de réessayer', () => {
