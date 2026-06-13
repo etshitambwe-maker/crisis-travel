@@ -11,6 +11,11 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries
 /** Budget dur (ms) pour detectOpportunities — au-delà, on renvoie [] et on rend la main. */
 const OPPORTUNITIES_HARD_TIMEOUT_MS = 8000;
 
+// 25s : laisse le temps à Claude de générer ~3000 tokens tout en restant sous le
+// timeout Vercel de 30s (maxDuration=60 est le plafond du plan, pas une garantie).
+// En cas de dépassement, le fallback déterministe est renvoyé — jamais de crash.
+const NARRATIVE_HARD_TIMEOUT_MS = 25000;
+
 function buildFallbackNarrative(score: CrisisScore): string {
   const status = score.status === 'ideal' ? 'idéale' :
     score.status === 'recommended' ? 'recommandée' :
@@ -54,15 +59,24 @@ export async function generateDestinationNarrative(
       key,
       async () => {
         const t0 = Date.now();
-        const msg = await client.messages.create({
-          // 3000 (vs 1200) : couvre les 10 sections de la narrative premium structurée
-          // (PREMIUM-CONTENT-001). Le guard stop_reason=max_tokens reste actif en dessous.
-          model: 'claude-sonnet-4-6',
-          max_tokens: 3000,
-          messages: [
-            {
-              role: 'user',
-              content: `Tu es un expert indépendant en géopolitique, sécurité des voyages et planification pratique. Rédige une analyse premium structurée de ${score.country} pour un voyageur ${profile.travelType}, budget ${profile.budget}€, durée ${profile.duration} jours.
+        let narrativeTimer: ReturnType<typeof setTimeout> | undefined;
+        const narrativeHardTimeout = new Promise<never>((_, reject) => {
+          narrativeTimer = setTimeout(
+            () => reject(new Error(`narrative hard timeout ${NARRATIVE_HARD_TIMEOUT_MS}ms`)),
+            NARRATIVE_HARD_TIMEOUT_MS
+          );
+        });
+        try {
+          const msg = await Promise.race([
+            client.messages.create({
+              // 3000 (vs 1200) : couvre les 10 sections de la narrative premium structurée
+              // (PREMIUM-CONTENT-001). Le guard stop_reason=max_tokens reste actif en dessous.
+              model: 'claude-sonnet-4-6',
+              max_tokens: 3000,
+              messages: [
+                {
+                  role: 'user',
+                  content: `Tu es un expert indépendant en géopolitique, sécurité des voyages et planification pratique. Rédige une analyse premium structurée de ${score.country} pour un voyageur ${profile.travelType}, budget ${profile.budget}€, durée ${profile.duration} jours.
 
 Données objectives disponibles :
 - CrisisScore global : ${score.total}/100 (${score.status})
@@ -102,17 +116,22 @@ Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo'
 
 **10. Mises en garde et signaux d'alerte**
 3 à 5 points de vigilance concrets, formulés comme liste. Inclure : vérifier les alertes diplomatie.gouv.fr avant le départ, souscrire une assurance couvrant rapatriement et crise politique, s'inscrire sur Ariane.`,
-            },
-          ],
-        });
-        // Garde anti-troncature (REPORT-LENGTH-001) : si Claude est coupé au plafond,
-        // on lève AVANT le retour — withCache ne mettra donc JAMAIS en cache une
-        // narrative tronquée, et le catch ci-dessous renverra le fallback complet.
-        if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
-          throw new Error('narrative: réponse tronquée (stop_reason=max_tokens)');
+                },
+              ],
+            }),
+            narrativeHardTimeout,
+          ]);
+          // Garde anti-troncature (REPORT-LENGTH-001) : si Claude est coupé au plafond,
+          // on lève AVANT le retour — withCache ne mettra donc JAMAIS en cache une
+          // narrative tronquée, et le catch ci-dessous renverra le fallback complet.
+          if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
+            throw new Error('narrative: réponse tronquée (stop_reason=max_tokens)');
+          }
+          logger.api('Claude', score.countryCode, Date.now() - t0, false);
+          return (msg.content[0] as { text: string }).text;
+        } finally {
+          if (narrativeTimer) clearTimeout(narrativeTimer);
         }
-        logger.api('Claude', score.countryCode, Date.now() - t0, false);
-        return (msg.content[0] as { text: string }).text;
       },
       3600
     );
