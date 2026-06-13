@@ -90,6 +90,52 @@ describe('PREMIUM-FLOW-001D — buildFreeSummary (synthèse gratuite robuste)', 
   });
 });
 
+// ── PREMIUM-FLOW-001E — vraie synthèse basique en PARAGRAPHE ───────────────────
+// La synthèse gratuite doit comporter un paragraphe narratif lisible et
+// auto-suffisant (pas une liste), construit en priorité sur les données
+// structurées et DISPONIBLE même sans narrative Claude.
+describe('PREMIUM-FLOW-001E — buildFreeSummary expose un paragraphe basicSynthesis', () => {
+  it('produit un paragraphe de synthèse basique non vide et suffisamment long', () => {
+    const s = buildFreeSummary(makeScore(), null);
+    expect(typeof s.basicSynthesis).toBe('string');
+    // un vrai paragraphe, pas une phrase de 3 mots
+    expect(s.basicSynthesis.length).toBeGreaterThanOrEqual(120);
+    // mentionne la destination et est une vraie phrase (ponctuation)
+    expect(s.basicSynthesis).toContain('Portugal');
+    expect(s.basicSynthesis).toMatch(/\.\s*$|\./);
+  });
+
+  it('le paragraphe EXISTE même si la narrative Claude est absente (indépendance)', () => {
+    const withNarr = buildFreeSummary(makeScore(), 'Para narrative.\n\nSuite.').basicSynthesis;
+    const without = buildFreeSummary(makeScore(), null).basicSynthesis;
+    // sans narrative, le paragraphe reste complet et long
+    expect(without.length).toBeGreaterThanOrEqual(120);
+    // le contenu structurel ne disparaît pas en l'absence de narrative
+    expect(without).toContain('Portugal');
+    expect(withNarr.length).toBeGreaterThanOrEqual(120);
+  });
+
+  it('reflète la SITUATION selon le score (favorable / à surveiller / déconseillée)', () => {
+    const good = buildFreeSummary(makeScore({ total: 85, status: 'ideal' }), null).basicSynthesis;
+    const bad = buildFreeSummary(
+      makeScore({ total: 28, status: 'discouraged', security: sub(20, { meaeLevel: 4 }) }),
+      null,
+    ).basicSynthesis;
+    expect(good).toMatch(/favorable|sûr|propice|recommandé/i);
+    expect(bad).toMatch(/déconseill|risqué|élevé|prudence|éviter/i);
+  });
+
+  it('intègre le profil voyageur quand il est fourni', () => {
+    const s = buildFreeSummary(makeScore(), null, { travelType: 'family' });
+    expect(s.basicSynthesis).toMatch(/famille|familial/i);
+  });
+
+  it('reste lisible sans profil (pas de "undefined" dans le texte)', () => {
+    const s = buildFreeSummary(makeScore(), null);
+    expect(s.basicSynthesis).not.toMatch(/undefined|null|NaN/);
+  });
+});
+
 // ── Source-assertions : le helper doit exister et rester pur (pas de fetch) ────
 describe('PREMIUM-FLOW-001D — freeSummary reste pur (aucun appel réseau)', () => {
   const SRC = 'lib/services/summary/freeSummary.ts';

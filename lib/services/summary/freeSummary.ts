@@ -18,12 +18,24 @@
 import type { CrisisScore, SubScore } from '@/types/crisis.types';
 import { tierFromScore, TIER } from '@/components/design/atoms';
 
+/** Profil voyageur minimal pour personnaliser la synthèse (optionnel). */
+export interface SummaryProfile {
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+}
+
 export interface FreeSummary {
   destination: string;
   /** Verdict éditorial court dérivé du tier (ex. "Recommandée avec vigilance normale"). */
   verdict: string;
   /** Niveau de risque général lisible (ex. "Risque faible · MEAE 1/4"). */
   riskLevel: string;
+  /**
+   * PREMIUM-FLOW-001E — vraie synthèse basique en PARAGRAPHE narratif, lisible et
+   * auto-suffisante. Construit à partir des données structurées (toujours présent,
+   * même sans narrative Claude) ; enrichi par l'extrait narrative quand disponible.
+   * C'est la valeur gratuite obligatoire affichée en évidence.
+   */
+  basicSynthesis: string;
   /** Sous-scores élevés présentés comme points forts. */
   strengths: string[];
   /** Sous-scores bas présentés comme points de vigilance. */
@@ -78,9 +90,71 @@ function riskLevelLabel(score: CrisisScore): string {
     : band;
 }
 
+// Profil voyageur → tournure lisible insérée dans le paragraphe.
+const PROFILE_PHRASE: Record<NonNullable<SummaryProfile['travelType']>, string> = {
+  solo: 'un voyage en solo',
+  couple: 'un séjour en couple',
+  family: 'un voyage en famille',
+  nomad: 'un séjour de nomade digital',
+};
+
+/**
+ * PREMIUM-FLOW-001E — construit le PARAGRAPHE de synthèse basique.
+ * Pur, sans réseau. Toujours non vide, même sans narrative : la situation, le
+ * conseil principal et les points de vigilance sont dérivés des données
+ * structurées. La narrative ne fait qu'enrichir une phrase finale optionnelle.
+ */
+function buildBasicSynthesis(
+  score: CrisisScore,
+  strongLabels: string[],
+  weakLabels: string[],
+  profile?: SummaryProfile,
+): string {
+  const dest = score.country;
+
+  // 1) Situation générale selon le score (lexique aligné sur les tests/UX).
+  const situation =
+    score.total >= 80 ? 'globalement favorable' :
+    score.total >= 60 ? 'plutôt favorable mais demande de la vigilance' :
+    score.total >= 40 ? 'à surveiller de près' : 'défavorable et déconseillée pour le moment';
+
+  // 2) Tournure profil (si connu).
+  const profilePhrase = profile?.travelType ? PROFILE_PHRASE[profile.travelType] : null;
+
+  // 3) Conseil principal selon le maillon faible dominant.
+  const mainAdvice =
+    score.total < 40 ? "n'y partir qu'en cas d'impératif et en suivant les consignes officielles" :
+    score.security.value < 60 ? 'rester attentif aux zones recommandées et aux consignes locales' :
+    score.budget.value < WATCH_THRESHOLD ? 'prévoir une marge confortable dans votre budget' :
+    'préparer votre séjour sans précaution inhabituelle au-delà du bon sens';
+
+  // 4) Atouts / points de vigilance (en mots, pas en scores bruts).
+  const strongWords = strongLabels.map((l) => l.split(' · ')[0].toLowerCase());
+  const weakWords = weakLabels.map((l) => l.split(' · ')[0].toLowerCase());
+
+  const parts: string[] = [];
+  parts.push(
+    `Pour ${profilePhrase ? `${profilePhrase} à ${dest}` : `un voyage à ${dest}`}, la situation est ${situation} (CrisisScore ${score.total}/100).`,
+  );
+  if (strongWords.length > 0) {
+    parts.push(`Vos meilleurs atouts ici : ${strongWords.join(', ')}.`);
+  }
+  if (weakWords.length > 0) {
+    parts.push(`Les principaux points de vigilance concernent ${weakWords.join(', ')}.`);
+  } else if (score.total >= 60) {
+    parts.push('Aucun point de vigilance majeur ne ressort sur les critères analysés.');
+  }
+  parts.push(
+    `Avant de partir, pensez à ${mainAdvice}, à vérifier les consignes officielles sur Diplomatie.gouv et à garder une marge dans votre programme.`,
+  );
+
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 export function buildFreeSummary(
   score: CrisisScore,
   narrative: string | null | undefined,
+  profile?: SummaryProfile,
 ): FreeSummary {
   const tier = TIER[tierFromScore(score.total)];
 
@@ -118,6 +192,7 @@ export function buildFreeSummary(
     destination: score.country,
     verdict: tier.verdict,
     riskLevel: riskLevelLabel(score),
+    basicSynthesis: buildBasicSynthesis(score, strengths, watchpoints, profile),
     strengths,
     watchpoints,
     essentialTips: essentialTips.slice(0, 3),

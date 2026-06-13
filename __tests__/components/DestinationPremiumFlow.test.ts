@@ -53,6 +53,29 @@ describe('PREMIUM-FLOW-001D — synthèse gratuite visible hors PremiumGate', ()
   });
 });
 
+// ── PREMIUM-FLOW-001E — le PARAGRAPHE de synthèse basique est rendu dans la page ─
+describe('PREMIUM-FLOW-001E — paragraphe de synthèse basique affiché', () => {
+  it('la page rend freeSummary.basicSynthesis (vrai paragraphe, pas seulement le verdict)', () => {
+    const src = read(DEST_PAGE);
+    expect(src).toMatch(/freeSummary\.basicSynthesis/);
+  });
+
+  it('le paragraphe basicSynthesis est rendu DANS le bloc free-summary (hors gate)', () => {
+    const src = read(DEST_PAGE);
+    const freeIdx = src.indexOf('data-testid="free-summary"');
+    const paraIdx = src.indexOf('freeSummary.basicSynthesis');
+    const firstGateIdx = src.indexOf('<PremiumGate');
+    expect(paraIdx).toBeGreaterThan(freeIdx);
+    expect(paraIdx).toBeLessThan(firstGateIdx);
+  });
+
+  it('la page passe le profil (travelType) à buildFreeSummary', () => {
+    const src = read(DEST_PAGE);
+    // buildFreeSummary(score, narrative, { travelType }) — 3e argument profil.
+    expect(src).toMatch(/buildFreeSummary\(\s*score\s*,\s*narrative\s*,/);
+  });
+});
+
 describe('PREMIUM-FLOW-001D — synthèse IA complète reste premium (approfondissement)', () => {
   it('le bloc "Synthèse IA complète" reste enveloppé dans un PremiumGate', () => {
     const src = read(DEST_PAGE);

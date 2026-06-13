@@ -198,11 +198,13 @@ export default async function DestinationPage({ params }: Props) {
 
   const visaReq = VISA_REQUIREMENTS[score.countryCode] ?? null;
 
-  // PREMIUM-FLOW-001D — synthèse gratuite de base, construite sur les données
+  // PREMIUM-FLOW-001D/E — synthèse gratuite de base, construite sur les données
   // structurées du score (toujours fiables) + un extrait robuste de la narrative
-  // DÉJÀ calculée (aucun appel IA supplémentaire). La narrative intégrale reste
-  // réservée à la section premium "Synthèse IA complète".
-  const freeSummary = buildFreeSummary(score, narrative);
+  // DÉJÀ calculée (aucun appel IA supplémentaire). Inclut un vrai PARAGRAPHE de
+  // synthèse basique (basicSynthesis). Le profil voyageur est passé pour
+  // personnaliser le texte (figé 'solo' aujourd'hui, prêt pour un profil dynamique).
+  // La narrative intégrale reste réservée à la section premium "Synthèse IA complète".
+  const freeSummary = buildFreeSummary(score, narrative, { travelType: 'solo' });
 
   return (
     <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
@@ -508,16 +510,28 @@ export default async function DestinationPage({ params }: Props) {
             </span>
           </div>
 
-          <p className="ctv3-serif" style={{ fontSize: 16, lineHeight: 1.5, color: 'var(--ctv3-paper)', marginBottom: freeSummary.lead ? 12 : 18 }}>
-            {freeSummary.verdict} pour {freeSummary.destination}.
+          {/* PREMIUM-FLOW-001E — vrai PARAGRAPHE de synthèse basique, mis en
+              évidence. Toujours présent (dérivé des données structurées), même
+              sans narrative Claude. C'est la valeur gratuite obligatoire. */}
+          <p
+            data-testid="basic-synthesis"
+            className="ctv3-serif"
+            style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--ctv3-paper)', marginBottom: freeSummary.lead ? 12 : 20 }}
+          >
+            {freeSummary.basicSynthesis}
           </p>
 
-          {/* Extrait narrative — affiché seulement si disponible et robuste */}
+          {/* Extrait narrative — enrichissement optionnel, affiché seulement si dispo */}
           {freeSummary.lead && (
-            <p className="ctv3-serif" style={{ fontSize: 14.5, lineHeight: 1.6, color: 'var(--ctv3-muted)', marginBottom: 18 }}>
+            <p className="ctv3-serif" style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--ctv3-muted)', marginBottom: 20, paddingLeft: 12, borderLeft: '2px solid var(--ctv3-line-soft)' }}>
               {freeSummary.lead}
             </p>
           )}
+
+          {/* Détail structuré — complément secondaire sous le paragraphe (PREMIUM-FLOW-001E) */}
+          <div className="ctv3-mono" style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ctv3-faint)', marginBottom: 10 }}>
+            En détail
+          </div>
 
           {/* Points forts / vigilance */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
