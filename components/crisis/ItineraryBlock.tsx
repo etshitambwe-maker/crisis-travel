@@ -242,6 +242,13 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
   return (
     <div
       data-testid="itinerary-block"
+      // MARQUEUR DE BUILD (PREMIUM-GUIDE-001B stabilisation) : preuve in-DOM que le code
+      // de stabilisation est réellement servi. Si la page affiche encore les vieilles
+      // cartes « À planifier » MAIS que cet attribut vaut bien « 001B-stab2 », c'est un
+      // bug de rendu à corriger. S'il est ABSENT ou différent, c'est un build/déploiement
+      // périmé — on teste le mauvais déploiement, pas le code. À inspecter dans DevTools
+      // (élément racine du bloc) ou via Playwright. Bumper à chaque passe de stabilisation.
+      data-itinerary-build="001B-stab2"
       style={{
         border: '1px solid var(--ctv3-line)',
         borderTop: '2px solid var(--ctv3-blue)',

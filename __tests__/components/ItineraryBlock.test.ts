@@ -42,6 +42,13 @@ describe('ItineraryBlock — présence et structure', () => {
     expect(src).toContain('data-testid="itinerary-block"');
   });
 
+  it('le conteneur racine porte un marqueur de build (preuve in-DOM du code servi)', () => {
+    const src = readSource(BLOCK_PATH);
+    // Permet de vérifier sur l'écran réel (DevTools / Playwright) quel code est déployé,
+    // pour distinguer un bug de rendu d'un build périmé (PREMIUM-GUIDE-001B stabilisation).
+    expect(src).toMatch(/data-itinerary-build="001B-stab2"/);
+  });
+
   it('le résultat a un data-testid', () => {
     const src = readSource(BLOCK_PATH);
     expect(src).toContain('data-testid="itinerary-result"');
