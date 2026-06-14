@@ -501,13 +501,13 @@ describe('PREMIUM-GUIDE-001B — clé cache itinéraire versionnée (anti ancien
     officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
   });
 
-  it('la clé itinéraire inclut un segment de version narrative-v1', async () => {
+  it('la clé itinéraire inclut un segment de version narrative-v2 (bump anti-legacy)', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
     const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
     expect(itinKey).toBeDefined();
-    expect(itinKey).toContain('narrative-v1');
+    expect(itinKey).toContain('narrative-v2');
   });
 
   it('le segment de version est présent dans la clé EFFECTIVEMENT stockée', async () => {
@@ -516,7 +516,38 @@ describe('PREMIUM-GUIDE-001B — clé cache itinéraire versionnée (anti ancien
     await generateItinerary(itinReq);
     const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
     expect(storedKey).toBeDefined();
-    expect(storedKey).toContain('narrative-v1');
+    expect(storedKey).toContain('narrative-v2');
+  });
+
+  it('la clé ne contient PLUS l\'ancien segment narrative-v1 (l\'ancien cache ne peut plus matcher)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    await generateItinerary(itinReq);
+    const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(itinKey).toBeDefined();
+    expect(itinKey).not.toContain('narrative-v1');
+  });
+
+  // Le fallback (catch) ne doit JAMAIS être mis en cache : il est construit HORS withCache.
+  it('le fallback (JSON malformé) n\'est PAS mis en cache', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'pas du json' }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeUndefined();
+  });
+
+  it('le fallback (timeout) n\'est PAS mis en cache', async () => {
+    vi.useFakeTimers();
+    createImpl = () => new Promise(() => {}); // ne résout jamais
+    const { generateItinerary } = await load();
+    const p = generateItinerary(itinReq);
+    await vi.advanceTimersByTimeAsync(45000);
+    const result = await p;
+    expect(result.isFallback).toBe(true);
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeUndefined();
   });
 });
 

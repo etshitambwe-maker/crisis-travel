@@ -146,7 +146,14 @@ Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo'
     logger.api('Claude', score.countryCode, 0, fromCache);
     return data;
   } catch (error) {
+    // Fallback narrative construit ICI, HORS withCache → jamais mis en cache (même
+    // discipline que l'itinéraire). Sur timeout/troncature/erreur, le narratif déterministe
+    // est renvoyé pour ce rendu seulement ; le prochain appel retente Claude.
     logger.error('Claude', error);
+    logger.warn(
+      'Claude',
+      `narrative fallback retourné (NON caché) pour ${score.countryCode} — cause: ${error instanceof Error ? error.message : 'inconnue'}`,
+    );
     return buildFallbackNarrative(score);
   }
 }
@@ -258,20 +265,21 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
     return buildItineraryFallback(req, days);
   }
 
-  // Segment de version 'narrative-v1' (PREMIUM-GUIDE-001B) : le contrat de génération
-  // inclut désormais un narrativeText (rendu PRINCIPAL côté lecteur). Les itinéraires
-  // mis en cache AVANT ce GOAL ne contiennent pas ce champ ; sans versionner la clé, ils
+  // Segment de version 'narrative-v2' (PREMIUM-GUIDE-001B, stabilisation) : le contrat de
+  // génération inclut un narrativeText (rendu PRINCIPAL côté lecteur). Les itinéraires mis
+  // en cache AVANT ce GOAL ne contiennent pas ce champ ; sans versionner la clé, ils
   // restaient resservis tels quels pendant tout le TTL (7200s = 2h) → le rendu retombait
   // sur l'ancienne pile de cartes jour/jour alors que le code sait afficher le narratif.
-  // Calquer la pratique de la clé narrative ('v2') : bumper ce segment à chaque refonte
-  // du contrat force une régénération propre, sans purge manuelle de Redis.
+  // Bump v1 → v2 (stabilisation) : invalide d'un coup TOUS les itinéraires « pauvres »
+  // cachés sous l'ancienne clé (anciens JSON sans narrativeText, ou résultats générés avant
+  // le passage au streaming) — ils ne peuvent plus ressortir. Aucune purge manuelle de Redis.
   const cacheKey = buildCacheKey(
     'itinerary',
     req.countryCode ?? req.countryName ?? 'unknown',
     String(days),
     String(Math.floor(budgetAmount / 100) * 100),
     req.travelType ?? 'solo',
-    'narrative-v1',
+    'narrative-v2',
   );
 
   const safetyHeader = meaeLevel >= 3
@@ -433,8 +441,19 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
           if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
             throw new Error('itinerary: réponse tronquée (stop_reason=max_tokens)');
           }
+          const text = (msg.content[0] as { text: string }).text;
+          // VALIDATION AVANT CACHE (PREMIUM-GUIDE-001B stabilisation) : on parse et on
+          // vérifie la structure ICI, dans le fetcher. Si le JSON est malformé ou sans
+          // `days`, on throw AVANT le return → withCache ne stocke RIEN (le catch renverra
+          // un fallback honnête NON caché). Sans ça, une string non-JSON (« pas du json »)
+          // était mise en cache 2h : chaque appel suivant la relisait, re-throwait au parse
+          // et reservait le fallback pendant 2h au lieu de retenter un appel Claude frais.
+          const parsedInFetcher = JSON.parse(text) as { days?: unknown };
+          if (!Array.isArray(parsedInFetcher.days) || parsedInFetcher.days.length === 0) {
+            throw new Error('itinerary: malformed response — no days array');
+          }
           logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', Date.now() - t0, false);
-          return (msg.content[0] as { text: string }).text;
+          return text;
         } finally {
           if (timer) clearTimeout(timer);
         }
@@ -442,6 +461,9 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
       7200 // 2h cache
     );
 
+    // `data` est garanti parsable et muni d'un `days` non vide (validé dans le fetcher
+    // ci-dessus AVANT toute mise en cache) : ce JSON.parse ne peut donc plus empoisonner
+    // le cache. On re-parse simplement pour extraire les champs typés.
     const parsed = JSON.parse(data) as {
       narrativeText?: string;
       days: ItineraryResult['days'];
@@ -449,10 +471,6 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
       safetyDisclaimer: string;
       officialSourceReminder: string;
     };
-
-    if (!Array.isArray(parsed.days) || parsed.days.length === 0) {
-      throw new Error('itinerary: malformed response — no days array');
-    }
 
     // narrativeText (PREMIUM-GUIDE-001B) : champ optionnel CÔTÉ TYPE (rétro-compat), mais
     // ATTENDU comme substantiel pour toute génération fraîche — c'est le rendu PRINCIPAL.
@@ -496,7 +514,18 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {
+    // REPLI HONNÊTE NON CACHÉ (PREMIUM-GUIDE-001B, stabilisation) : on arrive ici sur
+    // timeout (le hard timeout a déjà aborté le stream), réponse tronquée (stop_reason
+    // max_tokens), JSON malformé/sans days, ou erreur réseau. Le fallback est construit
+    // ICI, HORS du `withCache` ci-dessus → il n'est JAMAIS mis en cache : aucun « faux
+    // itinéraire » ne peut être resservi pendant 2h. La prochaine génération réessaie un
+    // appel Claude frais. Le flag isFallback (posé par buildItineraryFallback) permet à
+    // l'UI d'afficher un état honnête « génération trop longue » au lieu des fausses cartes.
     logger.error('Claude-Itinerary', error);
+    logger.warn(
+      'Claude-Itinerary',
+      `fallback honnête retourné (NON caché) pour ${req.countryCode ?? req.countryName ?? 'unknown'} — cause: ${error instanceof Error ? error.message : 'inconnue'}`,
+    );
     return buildItineraryFallback(req, days);
   }
 }

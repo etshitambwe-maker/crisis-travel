@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest } from '@/types/crisis.types';
+import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest, ItineraryResult } from '@/types/crisis.types';
 import { PdfExportButton } from './PdfExportButton';
 import { NarrativeRenderer } from './NarrativeRenderer';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -46,6 +46,38 @@ function buildRequest(props: ItineraryBlockProps): ItineraryRequest {
     req.riskContext = { meaeLevel: props.meaeLevel, source: 'static' };
   }
   return req;
+}
+
+// Marqueurs de l'ANCIEN fallback déterministe (buildItineraryFallback côté service).
+// Un résultat « legacy » mis en cache AVANT le flag isFallback peut ressortir SANS ce
+// flag : on le reconnaît à ces phrases, qui ne vivent QUE dans le fallback du service.
+// Doit rester rigoureusement synchronisé avec buildItineraryFallback.
+const LEGACY_FALLBACK_MARKERS = [
+  'Itinéraire temporairement indisponible',
+  'À planifier selon vos préférences',
+  'Estimation non disponible',
+] as const;
+
+/**
+ * Vrai si l'itinéraire doit être traité comme un REPLI honnête plutôt que comme un
+ * itinéraire premium réel. Deux sources de vérité, dans cet ordre :
+ *   1. le flag first-class `isFallback` (générations récentes) ;
+ *   2. à défaut, la présence des marqueurs de l'ancien fallback dans les jours — protège
+ *      contre les résultats legacy cachés avant l'introduction du flag (PREMIUM-GUIDE-001B
+ *      stabilisation). Sans cette détection, un legacy retombait dans la branche
+ *      « itinéraire réel » et affichait les fausses cartes « À planifier… ».
+ * Helper PUR (aucun état, aucun effet) : testable et réutilisable.
+ */
+export function isFallbackItinerary(
+  it: Pick<ItineraryResult, 'isFallback' | 'days'> | null | undefined,
+): boolean {
+  if (!it) return false;
+  if (it.isFallback) return true;
+  const days = Array.isArray(it.days) ? it.days : [];
+  return days.some((d) => {
+    const haystack = `${d.summary ?? ''} ${d.morning ?? ''} ${d.afternoon ?? ''} ${d.evening ?? ''} ${d.estimatedBudget ?? ''}`;
+    return LEGACY_FALLBACK_MARKERS.some((marker) => haystack.includes(marker));
+  });
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -161,6 +193,12 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
 
   const destination = props.countryName ?? props.countryCode ?? 'cette destination';
   const hasDestination = Boolean(props.countryCode || props.countryName);
+
+  // Source de vérité UNIQUE pour décider repli vs itinéraire réel (PREMIUM-GUIDE-001B
+  // stabilisation) : flag isFallback OU marqueurs legacy détectés. Les deux branches de
+  // rendu (repli honnête / itinéraire réel) sont strictement exclusives sur cette valeur,
+  // donc les fausses cartes « À planifier… » ne peuvent JAMAIS s'afficher comme un parcours.
+  const isFallbackResult = isFallbackItinerary(result?.itinerary);
 
   async function generate() {
     if (status === 'loading') return;
@@ -330,7 +368,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           déterministe marqué `isFallback`. On NE l'affiche PAS comme un itinéraire
           (fini les fausses cartes génériques qui se faisaient passer pour un parcours) :
           on montre un message honnête + un bouton Réessayer. Disclaimers conservés. */}
-      {status === 'success' && result && result.itinerary.isFallback && (
+      {status === 'success' && result && isFallbackResult && (
         <div data-testid="itinerary-result-fallback">
           <div
             style={{
@@ -389,7 +427,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
       )}
 
       {/* ── Success — itinéraire réel ── */}
-      {status === 'success' && result && !result.itinerary.isFallback && (
+      {status === 'success' && result && !isFallbackResult && (
         <div data-testid="itinerary-result">
           {/* Meta strip */}
           <div

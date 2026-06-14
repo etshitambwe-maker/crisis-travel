@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { isFallbackItinerary } from '@/components/crisis/ItineraryBlock';
+import type { ItineraryResult } from '@/types/crisis.types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -559,15 +561,18 @@ describe('ItineraryBlock — repli honnête quand la génération échoue (PREMI
     expect(src).toContain('data-testid="itinerary-result-fallback"');
   });
 
-  it('le bloc de repli est conditionné sur result.itinerary.isFallback', () => {
+  it('le bloc de repli est conditionné sur isFallbackResult (flag OU legacy)', () => {
     const src = readSource(BLOCK_PATH);
-    expect(src).toMatch(/result\.itinerary\.isFallback/);
+    // La décision passe par une variable unique dérivée du helper isFallbackItinerary,
+    // qui couvre à la fois le flag isFallback et les marqueurs legacy.
+    expect(src).toMatch(/&&\s*isFallbackResult\s*&&/);
+    expect(src).toMatch(/const isFallbackResult = isFallbackItinerary\(result\?\.itinerary\)/);
   });
 
-  it('l\'itinéraire réel n\'est rendu QUE si !isFallback (les deux branches sont exclusives)', () => {
+  it('l\'itinéraire réel n\'est rendu QUE si !isFallbackResult (les deux branches sont exclusives)', () => {
     const src = readSource(BLOCK_PATH);
-    // La branche "itinéraire réel" (itinerary-result) est gardée par !...isFallback
-    expect(src).toMatch(/!result\.itinerary\.isFallback/);
+    // La branche "itinéraire réel" (itinerary-result) est gardée par !isFallbackResult.
+    expect(src).toMatch(/!isFallbackResult/);
   });
 
   it('le repli affiche un message honnête de génération trop longue (pas un faux itinéraire)', () => {
@@ -600,10 +605,14 @@ describe('ItineraryBlock — repli honnête quand la génération échoue (PREMI
     expect(fallbackBlock).toContain('itinerary-official-reminder');
   });
 
-  it('le fallback ne réintroduit pas le wording trompeur "À planifier selon vos préférences" en dur', () => {
+  it('le fallback ne réintroduit pas le wording trompeur "À planifier selon vos préférences" dans le rendu', () => {
     const src = readSource(BLOCK_PATH);
-    // Ce texte ne vit QUE dans buildItineraryFallback (service), jamais codé en dur dans l'UI.
-    expect(src).not.toContain('À planifier selon vos préférences');
+    // Ce texte ne doit jamais être AFFICHÉ par l'UI (il appartient au service).
+    // Il est toutefois listé une fois dans LEGACY_FALLBACK_MARKERS (constante de DÉTECTION
+    // d'anciens fallbacks cachés) — légitime. On scope donc l'assertion au CORPS du
+    // composant (le JSX rendu), à l'exclusion des helpers/constantes en tête de fichier.
+    const componentBody = src.slice(src.indexOf('export function ItineraryBlock'));
+    expect(componentBody).not.toContain('À planifier selon vos préférences');
   });
 });
 
@@ -623,5 +632,69 @@ describe('PremiumActions — itinéraire toujours in-place ciblé pays (non-rég
     const src = readSource(PREMIUM_ACTIONS_PATH);
     expect(src).not.toContain('/results');
     expect(src).not.toContain('router.push');
+  });
+});
+
+// ── 11. PREMIUM-GUIDE-001B stabilisation — détection legacy fallback (helper PUR) ──
+
+function makeDay(over: Partial<ItineraryResult['days'][number]> = {}): ItineraryResult['days'][number] {
+  return {
+    day: 1, title: 'Jour 1', summary: 's', morning: 'm', afternoon: 'a',
+    evening: 'e', estimatedBudget: '~80€', safetyNote: 'ok', ...over,
+  };
+}
+
+function makeItinerary(over: Partial<ItineraryResult> = {}): ItineraryResult {
+  return {
+    countryCode: 'JP', countryName: 'Japon', durationDays: 3,
+    budget: { amount: 1500, currency: 'EUR', level: 'medium' },
+    days: [makeDay(), makeDay({ day: 2 }), makeDay({ day: 3 })],
+    globalAdvice: ['conseil'],
+    safetyDisclaimer: 'disclaimer', officialSourceReminder: 'rappel',
+    generatedAt: new Date().toISOString(), ...over,
+  };
+}
+
+describe('isFallbackItinerary — détection repli (flag OU marqueurs legacy)', () => {
+  it('vrai itinéraire (flag absent, pas de marqueur legacy) → false', () => {
+    expect(isFallbackItinerary(makeItinerary())).toBe(false);
+  });
+
+  it('flag isFallback=true → true', () => {
+    expect(isFallbackItinerary(makeItinerary({ isFallback: true }))).toBe(true);
+  });
+
+  it('legacy SANS flag — "À planifier selon vos préférences" dans morning → true', () => {
+    const legacy = makeItinerary({
+      isFallback: undefined,
+      days: [makeDay({ morning: 'À planifier selon vos préférences.' })],
+    });
+    expect(isFallbackItinerary(legacy)).toBe(true);
+  });
+
+  it('legacy SANS flag — "Itinéraire temporairement indisponible" dans summary → true', () => {
+    const legacy = makeItinerary({
+      isFallback: undefined,
+      days: [makeDay({ summary: 'Itinéraire temporairement indisponible. Consultez un guide.' })],
+    });
+    expect(isFallbackItinerary(legacy)).toBe(true);
+  });
+
+  it('legacy SANS flag — "Estimation non disponible" dans estimatedBudget → true', () => {
+    const legacy = makeItinerary({
+      isFallback: undefined,
+      days: [makeDay({ estimatedBudget: 'Estimation non disponible.' })],
+    });
+    expect(isFallbackItinerary(legacy)).toBe(true);
+  });
+
+  it('null/undefined → false (pas de crash)', () => {
+    expect(isFallbackItinerary(null)).toBe(false);
+    expect(isFallbackItinerary(undefined)).toBe(false);
+  });
+
+  it('days absent/non-array → false (robustesse)', () => {
+    // @ts-expect-error — on force un days invalide pour prouver la robustesse runtime
+    expect(isFallbackItinerary({ isFallback: false, days: undefined })).toBe(false);
   });
 });
