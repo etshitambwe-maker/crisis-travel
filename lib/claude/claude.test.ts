@@ -2,16 +2,28 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-// Pilote le comportement de client.messages.create().
+// Pilote le comportement de client.messages.create() ET de client.messages.stream().
+// createImpl résout le « message final » (mêmes objets { content:[{text}], stop_reason }).
 let createImpl: () => Promise<unknown>;
 let capturedClientOpts: Record<string, unknown> | undefined;
+// Compte les abort() déclenchés par le hard timeout (PREMIUM-GUIDE-001B-timeout).
+let abortCount = 0;
 
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
     constructor(opts: Record<string, unknown>) {
       capturedClientOpts = opts;
     }
-    messages = { create: () => createImpl() };
+    messages = {
+      // generateItinerary / generateDestinationNarrative passent au streaming :
+      // stream() renvoie un objet dont finalMessage() résout createImpl(), et un
+      // abort() espionné. detectOpportunities utilise toujours create() — conservé.
+      create: () => createImpl(),
+      stream: () => ({
+        finalMessage: () => createImpl(),
+        abort: () => { abortCount++; },
+      }),
+    };
   },
 }));
 
@@ -53,6 +65,7 @@ beforeEach(() => {
   capturedCacheKeys.length = 0;
   storedCacheKeys.length = 0;
   capturedWarns.length = 0;
+  abortCount = 0;
 });
 
 afterEach(() => {
@@ -622,5 +635,105 @@ describe('PREMIUM-GUIDE-001B — diagnostic dev quand narrativeText absent/trop 
     // Pas de narrativeText, mais les days du payload sont là et l'appel n'a pas throw.
     expect(result.narrativeText).toBeUndefined();
     expect(result.days).toHaveLength(dayPayload.days.length);
+  });
+});
+
+// ── PREMIUM-GUIDE-001B-timeout — streaming + timeouts relevés + repli marqué ──────
+
+describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', () => {
+  const itinReq = {
+    countryCode: 'JP', countryName: 'Japon',
+    from: '2026-09-01', to: '2026-09-08',
+    budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
+  } as never;
+
+  const validJson = JSON.stringify({
+    narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée, je te conseille de commencer doucement.',
+    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
+    globalAdvice: ['conseil'],
+    safetyDisclaimer: 'disclaimer',
+    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
+  });
+
+  // ── Le service appelle bien stream() (pas create non-streamé) ──────────────────
+
+  it('generateItinerary utilise client.messages.stream().finalMessage() (source)', () => {
+    const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+    const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
+    expect(itinBlock).toMatch(/client\.messages\.stream\(/);
+    expect(itinBlock).toMatch(/\.finalMessage\(\)/);
+  });
+
+  it('generateDestinationNarrative utilise client.messages.stream() (source)', () => {
+    const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+    const narrativeBlock = src.slice(
+      src.indexOf('export async function generateDestinationNarrative'),
+      src.indexOf('async function fetchOpportunities'),
+    );
+    expect(narrativeBlock).toMatch(/client\.messages\.stream\(/);
+    expect(narrativeBlock).toMatch(/\.finalMessage\(\)/);
+  });
+
+  // ── Timeouts internes relevés ──────────────────────────────────────────────────
+
+  it('le hard timeout itinéraire est relevé à 45000ms', () => {
+    const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+    expect(src).toMatch(/ITINERARY_HARD_TIMEOUT_MS\s*=\s*45000/);
+  });
+
+  it('le hard timeout narrative est relevé à 40000ms', () => {
+    const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+    expect(src).toMatch(/NARRATIVE_HARD_TIMEOUT_MS\s*=\s*40000/);
+  });
+
+  // ── Cas nominal : streaming réussit ──────────────────────────────────────────────
+
+  it('streaming nominal : itinéraire réel, narrativeText présent, PAS isFallback', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toContain('fil conducteur');
+    expect(result.isFallback).toBeFalsy();
+    expect(result.days).toHaveLength(1);
+  });
+
+  // ── Cas timeout : abort + repli marqué isFallback ────────────────────────────────
+
+  it('timeout itinéraire : abort() appelé + repli marqué isFallback (pas de fausses cartes silencieuses)', async () => {
+    vi.useFakeTimers();
+    // finalMessage() ne résout jamais → seul le hard timeout tranche.
+    createImpl = () => new Promise(() => {});
+    const { generateItinerary } = await load();
+
+    const p = generateItinerary(itinReq);
+    await vi.advanceTimersByTimeAsync(45000);
+    const result = await p;
+
+    expect(abortCount).toBeGreaterThanOrEqual(1); // le stream a été aborté proprement
+    expect(result.isFallback).toBe(true);          // repli marqué → UI honnête
+    expect(result.narrativeText).toBeUndefined();  // pas de faux narratif
+    expect(result.days.length).toBeGreaterThan(0); // structure de repli présente
+  });
+
+  it('le repli déterministe porte le marqueur isFallback (source + runtime)', async () => {
+    // Réponse JSON malformée → buildItineraryFallback.
+    createImpl = () => Promise.resolve({ content: [{ text: 'pas du json' }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
+  });
+
+  // ── Garde anti-troncature toujours active via le stream ──────────────────────────
+
+  it('stop_reason="max_tokens" via stream → repli marqué isFallback (jamais le JSON tronqué)', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: '{"days":[{"day":1,"title":"J1' }],
+      stop_reason: 'max_tokens',
+    });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
+    const itinKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(itinKey).toBeUndefined(); // tronqué → jamais mis en cache
   });
 });

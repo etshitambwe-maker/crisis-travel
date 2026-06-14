@@ -14,7 +14,9 @@ const OPPORTUNITIES_HARD_TIMEOUT_MS = 8000;
 // 25s : laisse le temps à Claude de générer ~3000 tokens tout en restant sous le
 // timeout Vercel de 30s (maxDuration=60 est le plafond du plan, pas une garantie).
 // En cas de dépassement, le fallback déterministe est renvoyé — jamais de crash.
-const NARRATIVE_HARD_TIMEOUT_MS = 25000;
+// 40s (PREMIUM-GUIDE-001B-timeout) : relevé de 25s, en cohérence avec le passage au
+// streaming (évite le timeout HTTP). Reste sous le plafond Vercel maxDuration=60.
+const NARRATIVE_HARD_TIMEOUT_MS = 40000;
 
 function buildFallbackNarrative(score: CrisisScore): string {
   const status = score.status === 'ideal' ? 'idéale' :
@@ -66,17 +68,11 @@ export async function generateDestinationNarrative(
       async () => {
         const t0 = Date.now();
         let narrativeTimer: ReturnType<typeof setTimeout> | undefined;
-        const narrativeHardTimeout = new Promise<never>((_, reject) => {
-          narrativeTimer = setTimeout(
-            () => reject(new Error(`narrative hard timeout ${NARRATIVE_HARD_TIMEOUT_MS}ms`)),
-            NARRATIVE_HARD_TIMEOUT_MS
-          );
-        });
-        try {
-          const msg = await Promise.race([
-            client.messages.create({
-              // 3000 (vs 1200) : couvre les 10 sections de la narrative premium structurée
-              // (PREMIUM-CONTENT-001). Le guard stop_reason=max_tokens reste actif en dessous.
+        // STREAMING (PREMIUM-GUIDE-001B-timeout) : même raison que generateItinerary —
+        // en non-streamé, l'appel narrative (3000 tokens, 10 sections) dépassait les ~25s
+        // et tombait dans buildFallbackNarrative (logs : « narrative hard timeout 25000ms »).
+        // Le streaming évite le timeout HTTP. Modèle et max_tokens (3000) inchangés.
+        const narrativeStream = client.messages.stream({
               model: 'claude-sonnet-4-6',
               max_tokens: 3000,
               messages: [
@@ -124,9 +120,15 @@ Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo'
 3 à 5 points de vigilance concrets, formulés comme liste. Inclure : vérifier les alertes diplomatie.gouv.fr avant le départ, souscrire une assurance couvrant rapatriement et crise politique, s'inscrire sur Ariane.`,
                 },
               ],
-            }),
-            narrativeHardTimeout,
-          ]);
+        });
+        const narrativeHardTimeout = new Promise<never>((_, reject) => {
+          narrativeTimer = setTimeout(() => {
+            narrativeStream.abort();
+            reject(new Error(`narrative hard timeout ${NARRATIVE_HARD_TIMEOUT_MS}ms`));
+          }, NARRATIVE_HARD_TIMEOUT_MS);
+        });
+        try {
+          const msg = await Promise.race([narrativeStream.finalMessage(), narrativeHardTimeout]);
           // Garde anti-troncature (REPORT-LENGTH-001) : si Claude est coupé au plafond,
           // on lève AVANT le retour — withCache ne mettra donc JAMAIS en cache une
           // narrative tronquée, et le catch ci-dessous renverra le fallback complet.
@@ -179,7 +181,10 @@ Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
 
 // ── Itinerary generation (ITINERARY-002) ─────────────────────────────────────
 
-const ITINERARY_HARD_TIMEOUT_MS = 30000;
+// 45s (PREMIUM-GUIDE-001B-timeout) : relevé de 30s. Avec le streaming (qui évite le
+// timeout HTTP), ce garde-fou interne ne coupe plus que les générations anormalement
+// lentes — on lui laisse plus de marge sous le plafond Vercel maxDuration=60.
+const ITINERARY_HARD_TIMEOUT_MS = 45000;
 
 // Plancher de diagnostic (PREMIUM-GUIDE-001B) : en dessous, le narrativeText est trop
 // maigre pour tenir lieu de « guide » → on logge un warn serveur (jamais d'erreur UI).
@@ -224,6 +229,10 @@ function buildItineraryFallback(req: ItineraryRequest, days: number): ItineraryR
     officialSourceReminder:
       "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.",
     generatedAt: now,
+    // Marqueur de repli (PREMIUM-GUIDE-001B-timeout) : ItineraryBlock s'en sert pour
+    // rendre un état honnête « génération trop longue + Réessayer » au lieu d'afficher
+    // ces jours génériques comme s'ils étaient un itinéraire premium.
+    isFallback: true,
   };
 }
 
@@ -394,24 +403,30 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
         const t0 = Date.now();
         let timer: ReturnType<typeof setTimeout> | undefined;
 
+        // STREAMING (PREMIUM-GUIDE-001B-timeout) : en NON-streamé, un appel de 8000 tokens
+        // de JSON dépasse régulièrement les ~30s et heurte le timeout HTTP du SDK → la prod
+        // tombait systématiquement dans buildItineraryFallback (logs : « itinerary hard
+        // timeout 30000ms »). Le SDK Anthropic recommande explicitement le streaming pour
+        // tout gros max_tokens : il évite les timeouts de requête. On garde le MÊME modèle
+        // et le MÊME max_tokens (8000) — seul le transport change.
+        const stream = client.messages.stream({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8000,
+          messages: [{ role: 'user', content: prompt }],
+        });
+
+        // Hard timeout INTERNE relevé à 45s (plafond Vercel maxDuration=60). Le streaming
+        // évite le timeout HTTP ; ce garde-fou coupe seulement une génération anormalement
+        // lente, en abortant proprement le stream pour ne pas laisser fuir la connexion.
         const hardTimeout = new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`itinerary hard timeout ${ITINERARY_HARD_TIMEOUT_MS}ms`)),
-            ITINERARY_HARD_TIMEOUT_MS
-          );
+          timer = setTimeout(() => {
+            stream.abort();
+            reject(new Error(`itinerary hard timeout ${ITINERARY_HARD_TIMEOUT_MS}ms`));
+          }, ITINERARY_HARD_TIMEOUT_MS);
         });
 
         try {
-          const msg = await Promise.race([
-            client.messages.create({
-              // 8000 (vs 4000) : un itinéraire 14 jours en JSON dépassait 4000 tokens
-              // et était coupé en plein milieu → JSON.parse échouait (REPORT-LENGTH-001).
-              model: 'claude-sonnet-4-6',
-              max_tokens: 8000,
-              messages: [{ role: 'user', content: prompt }],
-            }),
-            hardTimeout,
-          ]);
+          const msg = await Promise.race([stream.finalMessage(), hardTimeout]);
           // Garde anti-troncature : si la réponse est coupée au plafond, on lève AVANT
           // le retour. withCache ne mettra donc PAS en cache un JSON tronqué (qui serait
           // resservi cassé pendant 2h), et le catch renverra le fallback contrôlé loggué.

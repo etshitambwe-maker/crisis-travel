@@ -325,8 +325,71 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
         </div>
       )}
 
-      {/* ── Success ── */}
-      {status === 'success' && result && (
+      {/* ── Success — repli honnête (PREMIUM-GUIDE-001B-timeout) ──────────────────
+          Si la génération Claude a échoué/time-out, le service renvoie un repli
+          déterministe marqué `isFallback`. On NE l'affiche PAS comme un itinéraire
+          (fini les fausses cartes génériques qui se faisaient passer pour un parcours) :
+          on montre un message honnête + un bouton Réessayer. Disclaimers conservés. */}
+      {status === 'success' && result && result.itinerary.isFallback && (
+        <div data-testid="itinerary-result-fallback">
+          <div
+            style={{
+              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line-bright)',
+              borderLeft: '2px solid var(--ctv3-reco)', padding: '16px 18px',
+            }}
+          >
+            <div className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-reco)', marginBottom: 8 }}>
+              Génération incomplète
+            </div>
+            <p className="ctv3-serif" style={{ fontSize: 14, color: 'var(--ctv3-paper)', lineHeight: 1.55, margin: '0 0 6px' }}>
+              La génération complète de votre itinéraire a pris trop de temps et n&apos;a pas pu aboutir cette fois-ci.
+            </p>
+            <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '0 0 14px' }}>
+              Ce n&apos;est pas un itinéraire définitif. Relancez la génération — elle aboutit généralement à la seconde tentative.
+            </p>
+            <button
+              data-testid="itinerary-fallback-retry"
+              onClick={generate}
+              className="ctv3-mono"
+              style={{
+                padding: '10px 18px', cursor: 'pointer',
+                background: 'var(--ctv3-blue)', border: 'none', color: '#fff',
+                fontSize: 11, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase',
+              }}
+            >
+              Réessayer →
+            </button>
+          </div>
+
+          {/* Disclaimers — toujours visibles, y compris en repli */}
+          <div
+            data-testid="itinerary-safety-disclaimer"
+            style={{
+              marginTop: 14, padding: '10px 14px',
+              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
+              borderLeft: '2px solid var(--ctv3-reco)',
+            }}
+          >
+            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
+              ⚠ {result.itinerary.safetyDisclaimer}
+            </p>
+          </div>
+          <div
+            data-testid="itinerary-official-reminder"
+            style={{
+              marginTop: 8, padding: '10px 14px',
+              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
+            }}
+          >
+            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
+              {result.itinerary.officialSourceReminder}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Success — itinéraire réel ── */}
+      {status === 'success' && result && !result.itinerary.isFallback && (
         <div data-testid="itinerary-result">
           {/* Meta strip */}
           <div

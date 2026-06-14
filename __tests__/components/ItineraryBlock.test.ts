@@ -522,9 +522,12 @@ describe('ItineraryBlock — rendu narratif prioritaire (PREMIUM-GUIDE-001B)', (
     const src = readSource(BLOCK_PATH);
     // safetyDisclaimer + officialSourceReminder doivent apparaître APRÈS la fermeture
     // du ternaire narrative/days, donc indépendamment du chemin choisi.
+    // NB (001B-timeout) : un repli honnête a SES propres disclaimers en amont. On scope
+    // donc la vérification à la branche "itinéraire réel" (après itinerary-days), en
+    // prenant les DERNIÈRES occurrences (celles de la branche réelle, pas du repli).
     const daysFallbackIdx = src.indexOf('data-testid="itinerary-days"');
-    const safetyIdx = src.indexOf('data-testid="itinerary-safety-disclaimer"');
-    const officialIdx = src.indexOf('data-testid="itinerary-official-reminder"');
+    const safetyIdx = src.lastIndexOf('data-testid="itinerary-safety-disclaimer"');
+    const officialIdx = src.lastIndexOf('data-testid="itinerary-official-reminder"');
     expect(safetyIdx).toBeGreaterThan(daysFallbackIdx);
     expect(officialIdx).toBeGreaterThan(daysFallbackIdx);
   });
@@ -545,6 +548,62 @@ describe('ItineraryBlock — rendu narratif prioritaire (PREMIUM-GUIDE-001B)', (
     const src = readSource(BLOCK_PATH);
     expect(src).not.toContain('sécurité garantie');
     expect(src).not.toContain('sécurité absolue');
+  });
+});
+
+// ── 9b. PREMIUM-GUIDE-001B-timeout — repli honnête (pas de fausses cartes) ────────
+
+describe('ItineraryBlock — repli honnête quand la génération échoue (PREMIUM-GUIDE-001B-timeout)', () => {
+  it('un bloc de repli dédié existe (data-testid="itinerary-result-fallback")', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('data-testid="itinerary-result-fallback"');
+  });
+
+  it('le bloc de repli est conditionné sur result.itinerary.isFallback', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toMatch(/result\.itinerary\.isFallback/);
+  });
+
+  it('l\'itinéraire réel n\'est rendu QUE si !isFallback (les deux branches sont exclusives)', () => {
+    const src = readSource(BLOCK_PATH);
+    // La branche "itinéraire réel" (itinerary-result) est gardée par !...isFallback
+    expect(src).toMatch(/!result\.itinerary\.isFallback/);
+  });
+
+  it('le repli affiche un message honnête de génération trop longue (pas un faux itinéraire)', () => {
+    const src = readSource(BLOCK_PATH);
+    const start = src.indexOf('data-testid="itinerary-result-fallback"');
+    const end = src.indexOf('data-testid="itinerary-result"', start);
+    const fallbackBlock = src.slice(start, end > start ? end : start + 2000);
+    expect(fallbackBlock).toMatch(/trop de temps|n['’]a pas (pu|abouti)/i);
+    // Le repli ne doit PAS présenter les fausses cases comme un itinéraire premium :
+    // il ne contient ni DayCard ni narrative.
+    expect(fallbackBlock).not.toContain('<DayCard');
+    expect(fallbackBlock).not.toContain('itinerary-narrative');
+  });
+
+  it('le repli offre un bouton Réessayer qui relance generate()', () => {
+    const src = readSource(BLOCK_PATH);
+    const start = src.indexOf('data-testid="itinerary-result-fallback"');
+    const end = src.indexOf('data-testid="itinerary-result"', start);
+    const fallbackBlock = src.slice(start, end > start ? end : start + 2000);
+    expect(fallbackBlock).toContain('data-testid="itinerary-fallback-retry"');
+    expect(fallbackBlock).toContain('onClick={generate}');
+  });
+
+  it('les disclaimers restent visibles dans le repli (safety + official)', () => {
+    const src = readSource(BLOCK_PATH);
+    const start = src.indexOf('data-testid="itinerary-result-fallback"');
+    const end = src.indexOf('data-testid="itinerary-result"', start);
+    const fallbackBlock = src.slice(start, end > start ? end : start + 2000);
+    expect(fallbackBlock).toContain('itinerary-safety-disclaimer');
+    expect(fallbackBlock).toContain('itinerary-official-reminder');
+  });
+
+  it('le fallback ne réintroduit pas le wording trompeur "À planifier selon vos préférences" en dur', () => {
+    const src = readSource(BLOCK_PATH);
+    // Ce texte ne vit QUE dans buildItineraryFallback (service), jamais codé en dur dans l'UI.
+    expect(src).not.toContain('À planifier selon vos préférences');
   });
 });
 

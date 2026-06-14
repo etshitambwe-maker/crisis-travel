@@ -119,6 +119,15 @@ export interface ItineraryResult {
    * crash. S'appuie sur les `days` déjà générés : AUCUN appel API supplémentaire.
    */
   narrativeText?: string;
+  /**
+   * PREMIUM-GUIDE-001B-timeout — `true` UNIQUEMENT pour le repli déterministe
+   * (buildItineraryFallback), produit quand la génération Claude échoue ou time-out.
+   * Permet à ItineraryBlock d'afficher un état honnête (« la génération a pris trop
+   * de temps » + Réessayer) AU LIEU des fausses cartes « À planifier selon vos
+   * préférences » qui se faisaient passer pour un itinéraire premium. Champ
+   * optionnel : absent (ou false) = vrai itinéraire généré. Le PDF l'ignore (Zod strip).
+   */
+  isFallback?: boolean;
 }
 
 export interface ItineraryRiskContext {
