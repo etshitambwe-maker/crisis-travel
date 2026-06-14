@@ -260,6 +260,28 @@ describe('itinerary response — structure de données', () => {
     expect(() => new Date(result.generatedAt)).not.toThrow();
     expect(new Date(result.generatedAt).toISOString()).toBe(result.generatedAt);
   });
+
+  // ── PREMIUM-GUIDE-001B — narrativeText optionnel ────────────────────────────
+
+  it('narrativeText est optionnel : un ItineraryResult sans narrativeText reste valide', () => {
+    const result = makeItineraryResult();
+    // makeItineraryResult n'inclut PAS narrativeText → l'absence compile et n'invalide rien.
+    expect(result.narrativeText).toBeUndefined();
+    expect(result.days.length).toBeGreaterThan(0);
+    expect(result.safetyDisclaimer.length).toBeGreaterThan(0);
+  });
+
+  it('narrativeText peut être fourni sans casser les champs jour/jour existants', () => {
+    const result: ItineraryResult = {
+      ...makeItineraryResult(3),
+      narrativeText: '**Le fil conducteur du séjour**\n\nÀ ton arrivée, prends tes repères en douceur…',
+    };
+    expect(result.narrativeText).toContain('fil conducteur');
+    // Le JSON jour/jour reste la source d'autorité, toujours présent.
+    expect(result.days).toHaveLength(3);
+    expect(result.globalAdvice.length).toBeGreaterThan(0);
+    expect(result.officialSourceReminder).toContain('diplomatie.gouv.fr');
+  });
 });
 
 // ── 3. Isolation scoring / quota ──────────────────────────────────────────────

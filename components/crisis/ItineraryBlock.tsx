@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest } from '@/types/crisis.types';
 import { PdfExportButton } from './PdfExportButton';
+import { NarrativeRenderer } from './NarrativeRenderer';
 import { AuthModal } from '@/components/auth/AuthModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -346,12 +347,49 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             <span style={{ color: 'var(--ctv3-faint)' }}>Données officielles statiques intégrées</span>
           </div>
 
-          {/* Days */}
-          <div>
-            {result.itinerary.days.map((day) => (
-              <DayCard key={day.day} day={day} />
-            ))}
-          </div>
+          {/* ── Rendu principal ──────────────────────────────────────────────
+              PREMIUM-GUIDE-001B : si `narrativeText` est présent, c'est LUI le
+              rendu principal (parcours de guide fluide en paragraphes aérés), et
+              le détail jour/jour passe dans un bloc <details> replié « secondaire ».
+              S'il est absent (ancien itinéraire, fallback, JSON sans narrative), on
+              retombe sur l'ancien rendu jour/jour déplié — aucun crash, aucun bloc
+              vide. Les disclaimers et conseils ci-dessous restent hors de cette
+              branche : ils sont donc TOUJOURS visibles dans les deux cas. */}
+          {result.itinerary.narrativeText ? (
+            <>
+              <div data-testid="itinerary-narrative">
+                <NarrativeRenderer narrative={result.itinerary.narrativeText} />
+              </div>
+
+              <details data-testid="itinerary-days-details" style={{ marginTop: 18 }}>
+                <summary
+                  data-testid="itinerary-days-toggle"
+                  className="ctv3-mono"
+                  style={{
+                    cursor: 'pointer', listStyle: 'none',
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
+                    color: 'var(--ctv3-muted)', padding: '9px 0',
+                    borderTop: '1px solid var(--ctv3-line)', width: '100%',
+                  }}
+                >
+                  <span aria-hidden style={{ color: 'var(--ctv3-blue)' }}>▸</span>
+                  Voir le détail jour par jour
+                </summary>
+                <div style={{ marginTop: 10 }}>
+                  {result.itinerary.days.map((day) => (
+                    <DayCard key={day.day} day={day} />
+                  ))}
+                </div>
+              </details>
+            </>
+          ) : (
+            <div data-testid="itinerary-days">
+              {result.itinerary.days.map((day) => (
+                <DayCard key={day.day} day={day} />
+              ))}
+            </div>
+          )}
 
           {/* Global advice */}
           {result.itinerary.globalAdvice.length > 0 && (

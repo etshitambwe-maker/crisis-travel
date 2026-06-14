@@ -358,3 +358,103 @@ describe('PREMIUM-CONTENT-001 — prompt itinéraire : travelType injecté + log
     expect(itinBlock).toMatch(/[Aa]riane/);
   });
 });
+
+// ── PREMIUM-GUIDE-001B — itinéraire narratif (texte de guide) ─────────────────
+
+describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText de guide demandé', () => {
+  const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+  const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
+
+  it('le prompt demande explicitement un champ narrativeText', () => {
+    expect(itinBlock).toContain('narrativeText');
+  });
+
+  it('le narrativeText est décrit comme un texte de guide / parcours fluide', () => {
+    expect(itinBlock).toMatch(/guide/i);
+    expect(itinBlock).toMatch(/fil conducteur/i);
+  });
+
+  it('le prompt narrativeText couvre rythme, vigilance et conseil final', () => {
+    expect(itinBlock).toMatch(/rythme/i);
+    expect(itinBlock).toMatch(/vigilance|précautions/i);
+    expect(itinBlock).toMatch(/conseil final/i);
+  });
+
+  it('le narrativeText doit s\'appuyer sur les jours structurés (ne pas les remplacer)', () => {
+    // Le prompt précise que la narrative DÉCOULE des jours et ne les répète pas en liste.
+    expect(itinBlock).toMatch(/DÉCOULE des jours|découle des jours/i);
+  });
+
+  it('le narrativeText reste dans le contrat de sécurité (pas de sécurité absolue, diplomatie.gouv.fr)', () => {
+    // Ces garde-fous globaux du prompt s'appliquent aussi au texte narratif.
+    expect(itinBlock).toContain('Ne promets pas de sécurité absolue');
+    expect(itinBlock).toContain('diplomatie.gouv.fr');
+  });
+
+  it('le plafond max_tokens couvre le narratif additionnel sans augmentation (reste à 8000)', () => {
+    // Aucun nouvel appel ni hausse de tokens : le narratif est produit dans le MÊME appel.
+    const m = itinBlock.match(/max_tokens:\s*(\d+)/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBe(8000);
+  });
+});
+
+describe('PREMIUM-GUIDE-001B — parsing narrativeText (optionnel, rétro-compatible)', () => {
+  const itinReq = {
+    countryCode: 'MA', countryName: 'Maroc',
+    from: '2026-07-10', to: '2026-07-15',
+    budget: 900, currency: 'EUR', travelers: 1, travelType: 'solo', preferences: [],
+  } as never;
+
+  const dayPayload = {
+    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
+    globalAdvice: ['conseil'],
+    safetyDisclaimer: 'disclaimer',
+    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
+  };
+
+  it('extrait narrativeText quand Claude le renvoie', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: JSON.stringify({ narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée…', ...dayPayload }) }],
+      stop_reason: 'end_turn',
+    });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toBeDefined();
+    expect(result.narrativeText).toContain('fil conducteur');
+    // Les jours structurés restent présents en parallèle (source d'autorité).
+    expect(result.days).toHaveLength(1);
+    expect(result.days[0].title).toBe('J1');
+  });
+
+  it('narrativeText absent → result.narrativeText undefined, days intacts (rétro-compatible)', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: JSON.stringify(dayPayload) }], // pas de narrativeText
+      stop_reason: 'end_turn',
+    });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toBeUndefined();
+    expect(result.days).toHaveLength(1);
+    expect(result.globalAdvice).toContain('conseil');
+  });
+
+  it('narrativeText vide ou whitespace → traité comme absent (undefined)', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: JSON.stringify({ narrativeText: '   ', ...dayPayload }) }],
+      stop_reason: 'end_turn',
+    });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toBeUndefined();
+  });
+
+  it('le fallback déterministe n\'a pas de narrativeText (rendu jour/jour assuré)', async () => {
+    // Réponse JSON malformée → buildItineraryFallback, qui ne fournit pas de narrative.
+    createImpl = () => Promise.resolve({ content: [{ text: 'pas du json' }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toBeUndefined();
+    expect(result.days.length).toBeGreaterThan(0);
+  });
+});

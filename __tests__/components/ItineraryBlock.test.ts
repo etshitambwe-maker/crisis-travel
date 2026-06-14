@@ -467,3 +467,102 @@ describe('ItineraryBlock — données transmises à /api/itinerary', () => {
     expect(src).not.toContain("source: 'live'");
   });
 });
+
+// ── 9. PREMIUM-GUIDE-001B — itinéraire narratif (rendu guide) ────────────────
+
+describe('ItineraryBlock — rendu narratif prioritaire (PREMIUM-GUIDE-001B)', () => {
+  it('importe NarrativeRenderer pour rendre le texte de guide en paragraphes aérés', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain("import { NarrativeRenderer }");
+  });
+
+  it('rend narrativeText en priorité quand il est présent (data-testid="itinerary-narrative")', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('data-testid="itinerary-narrative"');
+    expect(src).toContain('result.itinerary.narrativeText');
+    expect(src).toContain('<NarrativeRenderer narrative={result.itinerary.narrativeText}');
+  });
+
+  it('le rendu narratif est branché sur la présence de narrativeText (ternaire)', () => {
+    const src = readSource(BLOCK_PATH);
+    // Structure attendue : `result.itinerary.narrativeText ? ( ... ) : ( ... )`
+    expect(src).toMatch(/result\.itinerary\.narrativeText\s*\?/);
+  });
+
+  it('le narratif apparaît AVANT le détail jour par jour (rendu principal)', () => {
+    const src = readSource(BLOCK_PATH);
+    const narrativeIdx = src.indexOf('data-testid="itinerary-narrative"');
+    const daysDetailsIdx = src.indexOf('data-testid="itinerary-days-details"');
+    expect(narrativeIdx).toBeGreaterThan(-1);
+    expect(daysDetailsIdx).toBeGreaterThan(-1);
+    expect(narrativeIdx).toBeLessThan(daysDetailsIdx);
+  });
+
+  it('le détail jour par jour passe en bloc <details> replié et secondaire', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('data-testid="itinerary-days-details"');
+    expect(src).toContain('<details');
+    expect(src).toContain('Voir le détail jour par jour');
+    // Le bloc replié n'est PAS ouvert par défaut (pas d'attribut `open` sur ce <details>).
+    const detailsIdx = src.indexOf('data-testid="itinerary-days-details"');
+    const summaryIdx = src.indexOf('<summary', detailsIdx);
+    const detailsTag = src.slice(src.lastIndexOf('<details', detailsIdx), summaryIdx);
+    expect(detailsTag).not.toMatch(/\sopen[\s/>]/);
+  });
+
+  it('fallback : sans narrativeText, le rendu jour/jour déplié est conservé (data-testid="itinerary-days")', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('data-testid="itinerary-days"');
+    // Les DayCard sont rendus dans les DEUX branches (replié si narrative, déplié sinon).
+    const dayCardCount = (src.match(/<DayCard/g) ?? []).length;
+    expect(dayCardCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('les disclaimers restent rendus hors de la branche narrative/days (toujours visibles)', () => {
+    const src = readSource(BLOCK_PATH);
+    // safetyDisclaimer + officialSourceReminder doivent apparaître APRÈS la fermeture
+    // du ternaire narrative/days, donc indépendamment du chemin choisi.
+    const daysFallbackIdx = src.indexOf('data-testid="itinerary-days"');
+    const safetyIdx = src.indexOf('data-testid="itinerary-safety-disclaimer"');
+    const officialIdx = src.indexOf('data-testid="itinerary-official-reminder"');
+    expect(safetyIdx).toBeGreaterThan(daysFallbackIdx);
+    expect(officialIdx).toBeGreaterThan(daysFallbackIdx);
+  });
+
+  it('aucune redirection vers /results n\'est réintroduite', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).not.toContain('/results');
+    expect(src).not.toContain('router.push');
+  });
+
+  it('countryCode et countryName restent transmis (pas de perte de contexte pays)', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toContain('countryCode: props.countryCode');
+    expect(src).toContain('countryName: props.countryName');
+  });
+
+  it('le wording sécurité du narratif ne promet pas de sécurité absolue', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).not.toContain('sécurité garantie');
+    expect(src).not.toContain('sécurité absolue');
+  });
+});
+
+// ── 10. PREMIUM-GUIDE-001B — PremiumActions toujours in-place et ciblé pays ──
+
+describe('PremiumActions — itinéraire toujours in-place ciblé pays (non-régression 001B)', () => {
+  const PREMIUM_ACTIONS_PATH = 'components/crisis/PremiumActions.tsx';
+
+  it('PremiumActions monte ItineraryBlock in-place avec le pays de la fiche', () => {
+    const src = readSource(PREMIUM_ACTIONS_PATH);
+    expect(src).toContain('<ItineraryBlock');
+    expect(src).toContain('countryCode={countryCode}');
+    expect(src).toContain('countryName={countryName}');
+  });
+
+  it('PremiumActions ne redirige pas vers /results', () => {
+    const src = readSource(PREMIUM_ACTIONS_PATH);
+    expect(src).not.toContain('/results');
+    expect(src).not.toContain('router.push');
+  });
+});

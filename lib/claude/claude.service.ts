@@ -286,6 +286,19 @@ LOGIQUE DU CIRCUIT (à respecter absolument) :
 - Dans "estimatedBudget" : estimation réaliste pour ce jour (transport local + activités + repas), cohérente avec ~${perDay} ${currency}/jour.
 - Dans "globalAdvice" : 4 à 6 conseils pratiques actionnables (transport inter-villes, SIM locale, paiement, alternatives si météo défavorable, zones à éviter, checklist pré-départ).
 
+TEXTE DE GUIDE NARRATIF (champ "narrativeText" — c'est le rendu PRINCIPAL côté lecteur) :
+- Rédige un texte FLUIDE et HUMAIN, comme si tu étais un guide de voyage expérimenté qui parle directement au voyageur (tutoiement, ton chaleureux mais sobre, jamais marketing ni administratif).
+- Le texte DÉCOULE des jours structurés ci-dessus (mêmes étapes, même circuit) mais ne les répète PAS en liste : il les raconte en paragraphes, avec des transitions entre les journées, des justifications de choix et des conseils de rythme.
+- Intègre explicitement : le pays (${country}), la durée (${days} jours), le budget (~${perDay} ${currency}/jour), le profil ${req.travelType ?? 'solo'}, le niveau de vigilance MEAE ${meaeLevel}/4 et les points de sécurité.
+- Structure attendue (titres en gras markdown "**Titre**", paragraphes courts séparés par une ligne vide) :
+  **Le fil conducteur du séjour** — 2-3 phrases d'introduction : l'esprit du voyage, la logique du circuit.
+  **Comment organiser les premiers jours** — conseille un démarrage en douceur (prendre ses repères, limiter les transports au début), enchaînement logique.
+  **Le bon rythme à adopter** — adapté au profil ${req.travelType ?? 'solo'} : où ralentir, où densifier.
+  **Les étapes à ne pas trop charger** — où alléger, alternatives si fatigue, météo défavorable ou budget serré.
+  **Les précautions à garder en tête** — points de vigilance sécurité concrets (cohérents avec MEAE ${meaeLevel}/4), sans dramatiser ni promettre une sécurité absolue, en rappelant de vérifier diplomatie.gouv.fr.
+  **Mon conseil final de guide** — 2-3 phrases de conclusion pratique et encourageante.
+- Le texte doit faire au minimum ~250 mots, formulé au conditionnel ("tu pourrais", "je te conseille de"), sans inventer prix garantis, numéros, adresses précises ni sources officielles fictives.
+
 RÈGLES ABSOLUES :
 1. Ne prétends PAS accéder à des données en temps réel (prix de vols, météo live, disponibilités).
 2. N'invente aucune source officielle ni chiffre de sécurité précis.
@@ -297,6 +310,7 @@ RÈGLES ABSOLUES :
 
 Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans backticks) :
 {
+  "narrativeText": "**Le fil conducteur du séjour**\n\n... (texte de guide narratif fluide, paragraphes séparés par \\n\\n, titres en gras)",
   "days": [
     {
       "day": 1,
@@ -314,7 +328,7 @@ Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans backticks) :
   "officialSourceReminder": "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ."
 }
 
-Génère exactement ${days} jours dans le tableau "days".`;
+Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeText" est OBLIGATOIRE et constitue le rendu principal lu par le voyageur.`;
 
   try {
     const { data } = await withCache(
@@ -357,6 +371,7 @@ Génère exactement ${days} jours dans le tableau "days".`;
     );
 
     const parsed = JSON.parse(data) as {
+      narrativeText?: string;
       days: ItineraryResult['days'];
       globalAdvice: string[];
       safetyDisclaimer: string;
@@ -366,6 +381,15 @@ Génère exactement ${days} jours dans le tableau "days".`;
     if (!Array.isArray(parsed.days) || parsed.days.length === 0) {
       throw new Error('itinerary: malformed response — no days array');
     }
+
+    // narrativeText (PREMIUM-GUIDE-001B) : champ optionnel. On ne le retient que
+    // s'il s'agit d'une string non vide — sinon `undefined`, et ItineraryBlock
+    // retombe proprement sur le rendu jour/jour. Le JSON `days` reste la source
+    // d'autorité (PDF, compatibilité), donc un narrativeText absent n'invalide rien.
+    const narrativeText =
+      typeof parsed.narrativeText === 'string' && parsed.narrativeText.trim().length > 0
+        ? parsed.narrativeText.trim()
+        : undefined;
 
     return {
       countryCode: req.countryCode ?? '',
@@ -377,6 +401,7 @@ Génère exactement ${days} jours dans le tableau "days".`;
         currency,
         level: classifyBudget(budgetAmount, days),
       },
+      narrativeText,
       days: parsed.days,
       globalAdvice: Array.isArray(parsed.globalAdvice) ? parsed.globalAdvice : [],
       safetyDisclaimer: parsed.safetyDisclaimer ??

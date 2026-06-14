@@ -108,6 +108,17 @@ export interface ItineraryResult {
   safetyDisclaimer: string;
   officialSourceReminder: string;
   generatedAt: string;
+  /**
+   * PREMIUM-GUIDE-001B — Texte de guide narratif (le voyageur lit un parcours
+   * conseillé comme si un guide humain lui parlait : fil conducteur, organisation
+   * des premiers jours, rythme, étapes à ne pas charger, points de vigilance,
+   * conseil final). Devient le rendu PRINCIPAL de l'itinéraire ; le tableau `days`
+   * structuré reste la source d'autorité (PDF, compatibilité, fallback) et passe en
+   * détail secondaire repliable. Champ first-class OPTIONNEL : son absence reste
+   * compatible — `ItineraryBlock` retombe alors sur l'ancien rendu jour/jour, sans
+   * crash. S'appuie sur les `days` déjà générés : AUCUN appel API supplémentaire.
+   */
+  narrativeText?: string;
 }
 
 export interface ItineraryRiskContext {
