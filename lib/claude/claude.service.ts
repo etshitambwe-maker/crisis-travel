@@ -181,6 +181,12 @@ Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
 
 const ITINERARY_HARD_TIMEOUT_MS = 30000;
 
+// Plancher de diagnostic (PREMIUM-GUIDE-001B) : en dessous, le narrativeText est trop
+// maigre pour tenir lieu de « guide » → on logge un warn serveur (jamais d'erreur UI).
+// Réglé sous le minimum demandé au prompt (~250 mots) pour ne signaler que les vrais
+// déficits, pas les textes correctement longs mais légèrement en deçà de la cible.
+const MIN_NARRATIVE_WORDS = 200;
+
 function classifyBudget(amount: number, days: number): BudgetLevel {
   const perDay = amount / days;
   if (perDay < 60) return 'low';
@@ -232,16 +238,31 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
   const meaeLevel = req.riskContext?.meaeLevel ?? 1;
   const perDay = Math.round(budgetAmount / days);
 
+  // Cible du narratif mise à l'échelle de la durée (PREMIUM-GUIDE-001B) : un séjour long
+  // ne doit PAS se contenter de ~250 mots. On exige plus de paragraphes et de mots quand
+  // le voyage s'allonge — le narrativeText est le cœur de l'expérience premium, pas une
+  // intro. Bornes : court séjour ≈ 6 paragraphes / 280 mots ; long séjour ≈ 10 / 550.
+  const narrativeParagraphTarget = days <= 4 ? 6 : days <= 8 ? 7 : days <= 12 ? 8 : 10;
+  const narrativeWordTarget = Math.min(600, 250 + days * 30);
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return buildItineraryFallback(req, days);
   }
 
+  // Segment de version 'narrative-v1' (PREMIUM-GUIDE-001B) : le contrat de génération
+  // inclut désormais un narrativeText (rendu PRINCIPAL côté lecteur). Les itinéraires
+  // mis en cache AVANT ce GOAL ne contiennent pas ce champ ; sans versionner la clé, ils
+  // restaient resservis tels quels pendant tout le TTL (7200s = 2h) → le rendu retombait
+  // sur l'ancienne pile de cartes jour/jour alors que le code sait afficher le narratif.
+  // Calquer la pratique de la clé narrative ('v2') : bumper ce segment à chaque refonte
+  // du contrat force une régénération propre, sans purge manuelle de Redis.
   const cacheKey = buildCacheKey(
     'itinerary',
     req.countryCode ?? req.countryName ?? 'unknown',
     String(days),
     String(Math.floor(budgetAmount / 100) * 100),
-    req.travelType ?? 'solo'
+    req.travelType ?? 'solo',
+    'narrative-v1',
   );
 
   const safetyHeader = meaeLevel >= 3
@@ -286,18 +307,54 @@ LOGIQUE DU CIRCUIT (à respecter absolument) :
 - Dans "estimatedBudget" : estimation réaliste pour ce jour (transport local + activités + repas), cohérente avec ~${perDay} ${currency}/jour.
 - Dans "globalAdvice" : 4 à 6 conseils pratiques actionnables (transport inter-villes, SIM locale, paiement, alternatives si météo défavorable, zones à éviter, checklist pré-départ).
 
-TEXTE DE GUIDE NARRATIF (champ "narrativeText" — c'est le rendu PRINCIPAL côté lecteur) :
-- Rédige un texte FLUIDE et HUMAIN, comme si tu étais un guide de voyage expérimenté qui parle directement au voyageur (tutoiement, ton chaleureux mais sobre, jamais marketing ni administratif).
-- Le texte DÉCOULE des jours structurés ci-dessus (mêmes étapes, même circuit) mais ne les répète PAS en liste : il les raconte en paragraphes, avec des transitions entre les journées, des justifications de choix et des conseils de rythme.
-- Intègre explicitement : le pays (${country}), la durée (${days} jours), le budget (~${perDay} ${currency}/jour), le profil ${req.travelType ?? 'solo'}, le niveau de vigilance MEAE ${meaeLevel}/4 et les points de sécurité.
-- Structure attendue (titres en gras markdown "**Titre**", paragraphes courts séparés par une ligne vide) :
-  **Le fil conducteur du séjour** — 2-3 phrases d'introduction : l'esprit du voyage, la logique du circuit.
-  **Comment organiser les premiers jours** — conseille un démarrage en douceur (prendre ses repères, limiter les transports au début), enchaînement logique.
-  **Le bon rythme à adopter** — adapté au profil ${req.travelType ?? 'solo'} : où ralentir, où densifier.
-  **Les étapes à ne pas trop charger** — où alléger, alternatives si fatigue, météo défavorable ou budget serré.
-  **Les précautions à garder en tête** — points de vigilance sécurité concrets (cohérents avec MEAE ${meaeLevel}/4), sans dramatiser ni promettre une sécurité absolue, en rappelant de vérifier diplomatie.gouv.fr.
+═══════════════════════════════════════════════════════════════════════════════
+TEXTE DE GUIDE NARRATIF — champ "narrativeText" : C'EST LE LIVRABLE PRINCIPAL.
+═══════════════════════════════════════════════════════════════════════════════
+C'est CE texte que le voyageur lit en premier et qui justifie le caractère premium de
+l'itinéraire. Les "days" structurés plus bas sont SECONDAIRES (un détail repliable) :
+ne bâcle JAMAIS le narrativeText pour soigner les "days". Mets-y le meilleur de ton
+expertise de guide.
+
+Voix et ton :
+- Écris comme un conseiller de voyage humain et expérimenté qui parle DIRECTEMENT au
+  voyageur : tutoiement, ton chaleureux mais sobre, jamais marketing ni administratif.
+- Emploie naturellement des formulations de guide qui prend position, par exemple :
+  « je te conseille de… », « j'éviterais… », « le bon compromis, c'est… »,
+  « le rythme le plus intelligent ici… », « si tu voyages ${req.travelType === 'family' ? 'en famille' : req.travelType === 'couple' ? 'en couple' : req.travelType === 'nomad' ? 'en nomade' : 'en solo'}… ».
+- Reste au conditionnel pour les activités (« tu pourrais », « les marchés proposent
+  généralement ») : n'invente ni prix garantis, ni horaires, ni adresses précises, ni
+  numéros, ni sources officielles fictives.
+
+Contenu OBLIGATOIRE (le texte DÉCOULE des jours ci-dessous — mêmes étapes, même circuit —
+mais les RACONTE en prose, sans les recopier en liste matin/après-midi/soir) :
+- Nomme les VILLES / RÉGIONS / QUARTIERS réels du circuit quand c'est pertinent, et
+  EXPLIQUE POURQUOI chaque étape est recommandée (ce qu'on y gagne, à qui ça convient).
+- Soigne les TRANSITIONS entre étapes : comment et pourquoi on passe de l'une à l'autre,
+  dans quel ordre, à quel moment basculer.
+- Donne un vrai conseil de RYTHME adapté au profil ${req.travelType ?? 'solo'} : où ralentir,
+  où densifier, ce qu'il ne faut PAS surcharger.
+- Propose des ALTERNATIVES concrètes selon les aléas : fatigue, météo défavorable, budget
+  serré${req.travelType === 'family' ? ', enfants fatigués' : ''}, transports compliqués.
+- Intègre les PRÉCAUTIONS sécurité cohérentes avec le niveau MEAE ${meaeLevel}/4, sans
+  dramatiser ni promettre une sécurité absolue, en rappelant de vérifier diplomatie.gouv.fr.
+- Intègre explicitement le pays (${country}), la durée (${days} jours), le budget
+  (~${perDay} ${currency}/jour) et le profil ${req.travelType ?? 'solo'}.
+
+Longueur et structure (NON négociables — adaptées à un séjour de ${days} jours) :
+- AU MOINS ${narrativeParagraphTarget} paragraphes nourris, soit environ ${narrativeWordTarget} mots minimum.
+  Un séjour long EXIGE plus de matière : ne te contente pas d'une intro courte.
+- Titres en gras markdown "**Titre**", paragraphes séparés par une LIGNE VIDE. Tu peux
+  réutiliser/adapter cette ossature et la développer (un titre peut couvrir plusieurs
+  paragraphes si le séjour est long) :
+  **Le fil conducteur du séjour** — l'esprit du voyage et la logique d'ensemble du circuit.
+  **Comment démarrer** — un premier ou deux jours en douceur (prendre ses repères, limiter
+  les transports au début), et pourquoi.
+  **Le bon rythme à adopter** — spécifique au profil ${req.travelType ?? 'solo'}.
+  **Les grandes étapes, et pourquoi** — le cœur du parcours, étape par étape, avec les
+  raisons de chaque choix et les transitions.
+  **Si ça se complique** — alternatives en cas de fatigue, météo, budget${req.travelType === 'family' ? ', enfants' : ''} ou transport.
+  **Les précautions à garder en tête** — vigilance sécurité concrète (MEAE ${meaeLevel}/4).
   **Mon conseil final de guide** — 2-3 phrases de conclusion pratique et encourageante.
-- Le texte doit faire au minimum ~250 mots, formulé au conditionnel ("tu pourrais", "je te conseille de"), sans inventer prix garantis, numéros, adresses précises ni sources officielles fictives.
 
 RÈGLES ABSOLUES :
 1. Ne prétends PAS accéder à des données en temps réel (prix de vols, météo live, disponibilités).
@@ -328,7 +385,7 @@ Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans backticks) :
   "officialSourceReminder": "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ."
 }
 
-Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeText" est OBLIGATOIRE et constitue le rendu principal lu par le voyageur.`;
+Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeText" est le LIVRABLE PRINCIPAL : OBLIGATOIRE, au moins ${narrativeParagraphTarget} paragraphes (~${narrativeWordTarget} mots minimum), ton de guide humain. Un narrativeText court, générique ou réduit à une intro est un échec : c'est lui que le voyageur lit en premier.`;
 
   try {
     const { data } = await withCache(
@@ -382,14 +439,27 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
       throw new Error('itinerary: malformed response — no days array');
     }
 
-    // narrativeText (PREMIUM-GUIDE-001B) : champ optionnel. On ne le retient que
-    // s'il s'agit d'une string non vide — sinon `undefined`, et ItineraryBlock
-    // retombe proprement sur le rendu jour/jour. Le JSON `days` reste la source
-    // d'autorité (PDF, compatibilité), donc un narrativeText absent n'invalide rien.
-    const narrativeText =
-      typeof parsed.narrativeText === 'string' && parsed.narrativeText.trim().length > 0
-        ? parsed.narrativeText.trim()
-        : undefined;
+    // narrativeText (PREMIUM-GUIDE-001B) : champ optionnel CÔTÉ TYPE (rétro-compat), mais
+    // ATTENDU comme substantiel pour toute génération fraîche — c'est le rendu PRINCIPAL.
+    // On ne le retient que si c'est une string non vide ; sinon `undefined`, et
+    // ItineraryBlock retombe proprement sur le rendu jour/jour. Le JSON `days` reste la
+    // source d'autorité (PDF, compatibilité), donc un narrativeText absent n'invalide rien.
+    const rawNarrative =
+      typeof parsed.narrativeText === 'string' ? parsed.narrativeText.trim() : '';
+    const narrativeText = rawNarrative.length > 0 ? rawNarrative : undefined;
+
+    // Diagnostic dev (PREMIUM-GUIDE-001B, point 5) : une génération fraîche qui revient
+    // SANS narrativeText, ou avec un texte trop court pour un vrai guide, est un échec
+    // produit silencieux (le lecteur ne verra que les cartes). On le SIGNALE côté serveur
+    // (logger.warn) pour le détecter en dev/test/logs — JAMAIS d'erreur anxiogène à
+    // l'utilisateur, JAMAIS d'exception : le rendu jour/jour reste un repli gracieux.
+    const narrativeWordCount = narrativeText ? narrativeText.split(/\s+/).length : 0;
+    if (narrativeWordCount < MIN_NARRATIVE_WORDS) {
+      logger.warn(
+        'Claude-Itinerary',
+        `narrativeText insuffisant (${narrativeWordCount} mots < ${MIN_NARRATIVE_WORDS}) pour ${req.countryCode ?? req.countryName ?? 'unknown'} — rendu jour/jour en repli. Vérifier le prompt/modèle.`,
+      );
+    }
 
     return {
       countryCode: req.countryCode ?? '',

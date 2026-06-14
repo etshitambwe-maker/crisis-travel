@@ -30,6 +30,17 @@ vi.mock('@/lib/cache/redis', () => ({
   buildCacheKey: (...p: string[]) => { const k = p.join(':'); capturedCacheKeys.push(k); return k; },
 }));
 
+// Capture les warns émis par le service — permet de prouver le diagnostic
+// narrativeText insuffisant (PREMIUM-GUIDE-001B, point 5) sans dépendre de la console.
+const capturedWarns: string[] = [];
+vi.mock('@/lib/utils/logger', () => ({
+  logger: {
+    api: () => {},
+    error: () => {},
+    warn: (_service: string, message: string) => { capturedWarns.push(message); },
+  },
+}));
+
 const scores = [
   { countryCode: 'PT', country: 'Portugal', total: 80, budget: { value: 70, details: { currencyVariation: 0 } } },
   { countryCode: 'GE', country: 'Géorgie', total: 78, budget: { value: 85, details: { currencyVariation: 0 } } },
@@ -41,6 +52,7 @@ beforeEach(() => {
   capturedClientOpts = undefined;
   capturedCacheKeys.length = 0;
   storedCacheKeys.length = 0;
+  capturedWarns.length = 0;
 });
 
 afterEach(() => {
@@ -456,5 +468,159 @@ describe('PREMIUM-GUIDE-001B — parsing narrativeText (optionnel, rétro-compat
     const result = await generateItinerary(itinReq);
     expect(result.narrativeText).toBeUndefined();
     expect(result.days.length).toBeGreaterThan(0);
+  });
+});
+
+// ── PREMIUM-GUIDE-001B (réouverture) — cache itinéraire versionné (H1) ──────────
+
+describe('PREMIUM-GUIDE-001B — clé cache itinéraire versionnée (anti anciens JSON sans narrativeText)', () => {
+  const itinReq = {
+    countryCode: 'JP', countryName: 'Japon',
+    from: '2026-09-01', to: '2026-09-08',
+    budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
+  } as never;
+
+  const validJson = JSON.stringify({
+    narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée au Japon, je te conseille de commencer doucement.',
+    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
+    globalAdvice: ['conseil'],
+    safetyDisclaimer: 'disclaimer',
+    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
+  });
+
+  it('la clé itinéraire inclut un segment de version narrative-v1', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    await generateItinerary(itinReq);
+    const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(itinKey).toBeDefined();
+    expect(itinKey).toContain('narrative-v1');
+  });
+
+  it('le segment de version est présent dans la clé EFFECTIVEMENT stockée', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    await generateItinerary(itinReq);
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeDefined();
+    expect(storedKey).toContain('narrative-v1');
+  });
+});
+
+// ── PREMIUM-GUIDE-001B (réouverture) — prompt : narrativeText = livrable principal ──
+
+describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText substantiel et prioritaire', () => {
+  const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
+  const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
+
+  it('le prompt désigne narrativeText comme le LIVRABLE PRINCIPAL', () => {
+    expect(itinBlock).toMatch(/LIVRABLE PRINCIPAL/);
+  });
+
+  it('le prompt impose un nombre de paragraphes mis à l\'échelle de la durée', () => {
+    // La cible de paragraphes est interpolée depuis narrativeParagraphTarget.
+    expect(itinBlock).toMatch(/narrativeParagraphTarget/);
+    expect(itinBlock).toMatch(/paragraphes/i);
+  });
+
+  it('le prompt impose une cible de mots mise à l\'échelle de la durée', () => {
+    expect(itinBlock).toMatch(/narrativeWordTarget/);
+  });
+
+  it('la cible de paragraphes croît avec la durée (court < long séjour)', () => {
+    // Le service exporte la logique via une expression : court séjour 6, long séjour 10.
+    expect(itinBlock).toMatch(/days <= 4 \? 6/);
+    expect(itinBlock).toMatch(/: 10/);
+  });
+
+  it('le prompt emploie des formulations de guide humain (je te conseille / j\'éviterais)', () => {
+    expect(itinBlock).toMatch(/je te conseille/i);
+    expect(itinBlock).toMatch(/j'éviterais/i);
+    expect(itinBlock).toMatch(/le bon compromis/i);
+    expect(itinBlock).toMatch(/rythme le plus intelligent/i);
+  });
+
+  it('le prompt demande des transitions entre étapes et des alternatives (fatigue/météo/budget)', () => {
+    expect(itinBlock).toMatch(/TRANSITIONS/i);
+    expect(itinBlock).toMatch(/ALTERNATIVES/i);
+    expect(itinBlock).toMatch(/fatigue/i);
+    expect(itinBlock).toMatch(/météo/i);
+  });
+
+  it('le prompt demande d\'expliquer POURQUOI chaque étape est recommandée', () => {
+    expect(itinBlock).toMatch(/POURQUOI/);
+  });
+
+  it('le prompt marque les days comme SECONDAIRES par rapport au narratif', () => {
+    expect(itinBlock).toMatch(/SECONDAIRES/i);
+  });
+
+  it('le narratif reste dans le MÊME appel (max_tokens inchangé à 8000)', () => {
+    const m = itinBlock.match(/max_tokens:\s*(\d+)/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBe(8000);
+  });
+});
+
+// ── PREMIUM-GUIDE-001B (réouverture) — diagnostic narrativeText insuffisant (point 5) ──
+
+describe('PREMIUM-GUIDE-001B — diagnostic dev quand narrativeText absent/trop court', () => {
+  const itinReq = {
+    countryCode: 'JP', countryName: 'Japon',
+    from: '2026-09-01', to: '2026-09-08',
+    budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
+  } as never;
+
+  const dayPayload = {
+    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
+    globalAdvice: ['conseil'],
+    safetyDisclaimer: 'disclaimer',
+    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
+  };
+
+  // Narratif réaliste > 200 mots (le plancher MIN_NARRATIVE_WORDS).
+  const longNarrative =
+    '**Le fil conducteur du séjour**\n\n' +
+    Array.from({ length: 60 }, (_, i) => `phrase${i} de guide détaillée pour le voyageur`).join(' ') +
+    '\n\n**Mon conseil final de guide**\n\nProfite bien et vérifie diplomatie.gouv.fr.';
+
+  it('émet un warn quand une génération fraîche revient SANS narrativeText', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: JSON.stringify(dayPayload) }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    await generateItinerary(itinReq);
+    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
+    expect(warn).toBeDefined();
+  });
+
+  it('émet un warn quand le narrativeText est trop court', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: JSON.stringify({ narrativeText: 'Trop court.', ...dayPayload }) }],
+      stop_reason: 'end_turn',
+    });
+    const { generateItinerary } = await load();
+    await generateItinerary(itinReq);
+    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
+    expect(warn).toBeDefined();
+  });
+
+  it('n\'émet PAS de warn quand le narrativeText est substantiel', async () => {
+    createImpl = () => Promise.resolve({
+      content: [{ text: JSON.stringify({ narrativeText: longNarrative, ...dayPayload }) }],
+      stop_reason: 'end_turn',
+    });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    expect(result.narrativeText).toBeDefined();
+    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
+    expect(warn).toBeUndefined();
+  });
+
+  it('le diagnostic ne lève JAMAIS d\'exception (rendu jour/jour reste un repli gracieux)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: JSON.stringify(dayPayload) }], stop_reason: 'end_turn' });
+    const { generateItinerary } = await load();
+    const result = await generateItinerary(itinReq);
+    // Pas de narrativeText, mais les days du payload sont là et l'appel n'a pas throw.
+    expect(result.narrativeText).toBeUndefined();
+    expect(result.days).toHaveLength(dayPayload.days.length);
   });
 });
