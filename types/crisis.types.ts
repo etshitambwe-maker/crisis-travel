@@ -27,6 +27,19 @@ export interface CrisisScore {
   confidence: 'high' | 'medium' | 'low';
   calculatedAt: string;
   opportunities?: string[];
+  /**
+   * PREMIUM-GUIDE-001A — Risques terrain actuels remontés par Perplexity (champ
+   * `mainRisks`), conservés ici au lieu d'être jetés par le scoring. Champ
+   * first-class optionnel (et non enfoui dans `geopolitical.details`, typé
+   * `Record<string, number | string>` qui ne peut pas porter de `string[]`).
+   * Alimente le bloc « guide » premium ; absent/[] si Perplexity n'est pas live.
+   */
+  liveRisks?: string[];
+  /**
+   * PREMIUM-GUIDE-001A — Événements récents à surveiller remontés par Perplexity
+   * (champ `recentEvents`). Même logique que `liveRisks`.
+   */
+  recentEvents?: string[];
 }
 
 export interface OpportunityWindow {

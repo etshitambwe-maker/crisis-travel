@@ -70,7 +70,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   ]);
 }
 
-async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
+/**
+ * PREMIUM-GUIDE-001A — calcGeopolitical retourne désormais, en plus du SubScore,
+ * les `mainRisks`/`recentEvents` bruts de Perplexity. Avant ce GOAL ils étaient
+ * produits (et payés) puis jetés ici : seuls stabilityScore/trend/summary
+ * survivaient. Les tableaux ne peuvent pas vivre dans `details`
+ * (Record<string, number | string>), donc ils remontent à part jusqu'au
+ * CrisisScore (champs first-class liveRisks/recentEvents).
+ */
+type GeopoliticalResult = { sub: SubScore; liveRisks: string[]; recentEvents: string[] };
+
+async function calcGeopolitical(c: CountryInfo): Promise<GeopoliticalResult> {
   const PERP_FALLBACK: ServiceResult<PerplexityGeoAnalysis> = {
     data: { stabilityScore: 50, summary: '', mainRisks: [], recentEvents: [], trend: 'stable' },
     source: 'fallback',
@@ -86,7 +96,7 @@ async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
 
   // Perplexity 40% · WorldBank 25% · GDELT 20% · base 15%
   const value = perp.data.stabilityScore * 0.40 + wb.data.score * 0.25 + gdelt.data.score * 0.20 + 70 * 0.15;
-  return buildSubScore(value, [perp.source, wb.source, gdelt.source], {
+  const sub = buildSubScore(value, [perp.source, wb.source, gdelt.source], {
     perplexityScore: perp.data.stabilityScore,
     trend:           perp.data.trend,
     worldBankScore:  wb.data.score,
@@ -94,6 +104,11 @@ async function calcGeopolitical(c: CountryInfo): Promise<SubScore> {
     gdeltArticles:   gdelt.data.articles,
     summary:         perp.data.summary,
   });
+  return {
+    sub,
+    liveRisks:    Array.isArray(perp.data.mainRisks)    ? perp.data.mainRisks    : [],
+    recentEvents: Array.isArray(perp.data.recentEvents) ? perp.data.recentEvents : [],
+  };
 }
 
 type TeleportSR = ServiceResult<{ score: number; costIndex: number; safetyScore: number; healthcareScore: number }>;
@@ -165,12 +180,14 @@ export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile)
     () => ({ data: { score: 50, costIndex: 55, safetyScore: 50, healthcareScore: 50 }, source: 'fallback' as const }),
   );
 
-  const [security, geopolitical, budget, practicality] = await Promise.all([
+  const [security, geo, budget, practicality] = await Promise.all([
     calcSecurity(c),
     calcGeopolitical(c),
     calcBudget(c, profile, teleportPromise),
     calcPracticality(c, teleportPromise, profile),
   ]);
+  // calcGeopolitical remonte le SubScore + les tableaux terrain (PREMIUM-GUIDE-001A).
+  const geopolitical = geo.sub;
 
   const total = clamp(Math.round(
     security.value * 0.40 + geopolitical.value * 0.30 + budget.value * 0.20 + practicality.value * 0.10
@@ -192,5 +209,9 @@ export async function calculateCrisisScore(c: CountryInfo, profile: UserProfile)
     status: getScoreStatus(total),
     confidence,
     calculatedAt: new Date().toISOString(),
+    // PREMIUM-GUIDE-001A — risques/événements terrain Perplexity, conservés au
+    // lieu d'être jetés. Toujours définis (au pire []), pour un accès direct côté UI.
+    liveRisks:    geo.liveRisks,
+    recentEvents: geo.recentEvents,
   };
 }

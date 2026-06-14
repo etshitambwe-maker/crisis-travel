@@ -20,6 +20,7 @@ import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 import { PremiumActions } from '@/components/crisis/PremiumActions';
 import { NarrativeRenderer } from '@/components/crisis/NarrativeRenderer';
+import { LiveRisksBlock } from '@/components/crisis/LiveRisksBlock';
 import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
 import type { VisaType } from '@/lib/data/visa-requirements';
 
@@ -626,6 +627,12 @@ export default async function DestinationPage({ params }: Props) {
               {/* PREMIUM-EXPERIENCE-001 (A) — narrative rendue en sections lisibles
                   (titres, paragraphes aérés, listes) au lieu d'un bloc markdown brut. */}
               <NarrativeRenderer narrative={narrative} />
+
+              {/* PREMIUM-GUIDE-001A — risques/événements terrain remontés par Perplexity
+                  (mainRisks/recentEvents), auparavant produits puis jetés par le scoring.
+                  Aucun appel API supplémentaire : ces tableaux voyagent déjà dans `score`.
+                  Ne s'affiche que si du contenu terrain existe (sinon rien). */}
+              <LiveRisksBlock liveRisks={score.liveRisks} recentEvents={score.recentEvents} />
 
               {/* PREMIUM-EXPERIENCE-001 (D) — actions premium : itinéraire IN-PLACE
                   ciblé sur le pays de la fiche (countryCode/countryName + meaeLevel),
