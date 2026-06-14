@@ -1,9 +1,12 @@
 'use client';
 import { useState } from 'react';
-import type { ItineraryApiResponse, ItineraryRequest, ItineraryResult } from '@/types/crisis.types';
-import { PdfExportButton } from './PdfExportButton';
-import { NarrativeRenderer } from './NarrativeRenderer';
+import type { ItineraryApiResponse, ItineraryRequest } from '@/types/crisis.types';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { GuideItinerarySection, isFallbackItinerary } from './GuideItinerarySection';
+
+// Ré-export pour compatibilité des imports existants (la source de vérité vit désormais
+// dans GuideItinerarySection, au plus près du rendu qu'elle gouverne).
+export { isFallbackItinerary };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,38 +51,6 @@ function buildRequest(props: ItineraryBlockProps): ItineraryRequest {
   return req;
 }
 
-// Marqueurs de l'ANCIEN fallback déterministe (buildItineraryFallback côté service).
-// Un résultat « legacy » mis en cache AVANT le flag isFallback peut ressortir SANS ce
-// flag : on le reconnaît à ces phrases, qui ne vivent QUE dans le fallback du service.
-// Doit rester rigoureusement synchronisé avec buildItineraryFallback.
-const LEGACY_FALLBACK_MARKERS = [
-  'Itinéraire temporairement indisponible',
-  'À planifier selon vos préférences',
-  'Estimation non disponible',
-] as const;
-
-/**
- * Vrai si l'itinéraire doit être traité comme un REPLI honnête plutôt que comme un
- * itinéraire premium réel. Deux sources de vérité, dans cet ordre :
- *   1. le flag first-class `isFallback` (générations récentes) ;
- *   2. à défaut, la présence des marqueurs de l'ancien fallback dans les jours — protège
- *      contre les résultats legacy cachés avant l'introduction du flag (PREMIUM-GUIDE-001B
- *      stabilisation). Sans cette détection, un legacy retombait dans la branche
- *      « itinéraire réel » et affichait les fausses cartes « À planifier… ».
- * Helper PUR (aucun état, aucun effet) : testable et réutilisable.
- */
-export function isFallbackItinerary(
-  it: Pick<ItineraryResult, 'isFallback' | 'days'> | null | undefined,
-): boolean {
-  if (!it) return false;
-  if (it.isFallback) return true;
-  const days = Array.isArray(it.days) ? it.days : [];
-  return days.some((d) => {
-    const haystack = `${d.summary ?? ''} ${d.morning ?? ''} ${d.afternoon ?? ''} ${d.evening ?? ''} ${d.estimatedBudget ?? ''}`;
-    return LEGACY_FALLBACK_MARKERS.some((marker) => haystack.includes(marker));
-  });
-}
-
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function ItinerarySkeleton() {
@@ -118,12 +89,6 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
 
   const destination = props.countryName ?? props.countryCode ?? 'cette destination';
   const hasDestination = Boolean(props.countryCode || props.countryName);
-
-  // Source de vérité UNIQUE pour décider repli vs itinéraire réel (PREMIUM-GUIDE-001B
-  // stabilisation) : flag isFallback OU marqueurs legacy détectés. Les deux branches de
-  // rendu (repli honnête / itinéraire réel) sont strictement exclusives sur cette valeur,
-  // donc les fausses cartes « À planifier… » ne peuvent JAMAIS s'afficher comme un parcours.
-  const isFallbackResult = isFallbackItinerary(result?.itinerary);
 
   async function generate() {
     if (status === 'loading') return;
@@ -167,13 +132,12 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
   return (
     <div
       data-testid="itinerary-block"
-      // MARQUEUR DE BUILD (PREMIUM-GUIDE-001B stabilisation) : preuve in-DOM que le code
-      // de stabilisation est réellement servi. Si la page affiche encore les vieilles
-      // cartes « À planifier » MAIS que cet attribut vaut bien « 001B-stab2 », c'est un
-      // bug de rendu à corriger. S'il est ABSENT ou différent, c'est un build/déploiement
-      // périmé — on teste le mauvais déploiement, pas le code. À inspecter dans DevTools
-      // (élément racine du bloc) ou via Playwright. Bumper à chaque passe de stabilisation.
-      data-itinerary-build="guide-v1"
+      // MARQUEUR DE BUILD : preuve in-DOM du code réellement servi. « guide-v1-no-cards »
+      // = la section premium est un TEXTE de guide, sans aucune carte jour/jour. Si l'écran
+      // montre encore des cartes mais que ce marqueur vaut bien « guide-v1-no-cards », c'est
+      // un bug de rendu ; s'il est absent/différent, c'est un build/déploiement périmé.
+      // À inspecter dans DevTools (élément racine du bloc) ou via Playwright.
+      data-itinerary-build="guide-v1-no-cards"
       style={{
         border: '1px solid var(--ctv3-line)',
         borderTop: '2px solid var(--ctv3-blue)',
@@ -190,16 +154,16 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           color: 'var(--ctv3-blue)',
         }}>
           <span style={{ width: 14, height: 1, background: 'currentColor', opacity: 0.6 }} />
-          Premium · Itinéraire IA
+          Premium · Parcours guide
         </span>
         <h2 style={{
           fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 19,
           letterSpacing: '-0.02em', color: 'var(--ctv3-paper)', margin: '8px 0 4px',
         }}>
-          Suggestion d&apos;itinéraire {hasDestination ? `· ${destination}` : ''}
+          Parcours conseillé {hasDestination ? `· ${destination}` : ''}
         </h2>
         <p className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-muted)', lineHeight: 1.45, marginBottom: 0 }}>
-          Itinéraire indicatif généré par IA. À vérifier avec les sources officielles avant le départ.
+          Parcours indicatif généré par IA, sous forme de guide. À vérifier avec les sources officielles avant le départ.
         </p>
       </div>
 
@@ -219,7 +183,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             width: '100%', maxWidth: 320,
           }}
         >
-          Générer mon itinéraire →
+          Générer mon parcours →
         </button>
       )}
 
@@ -295,165 +259,25 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
         </div>
       )}
 
-      {/* ── Success — repli honnête (PREMIUM-GUIDE-001B-timeout) ──────────────────
-          Si la génération Claude a échoué/time-out, le service renvoie un repli
-          déterministe marqué `isFallback`. On NE l'affiche PAS comme un itinéraire
-          (fini les fausses cartes génériques qui se faisaient passer pour un parcours) :
-          on montre un message honnête + un bouton Réessayer. Disclaimers conservés. */}
-      {status === 'success' && result && isFallbackResult && (
-        <div data-testid="itinerary-result-fallback">
-          <div
-            style={{
-              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line-bright)',
-              borderLeft: '2px solid var(--ctv3-reco)', padding: '16px 18px',
-            }}
-          >
-            <div className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-reco)', marginBottom: 8 }}>
-              Génération incomplète
-            </div>
-            <p className="ctv3-serif" style={{ fontSize: 14, color: 'var(--ctv3-paper)', lineHeight: 1.55, margin: '0 0 6px' }}>
-              La génération complète de votre itinéraire a pris trop de temps et n&apos;a pas pu aboutir cette fois-ci.
-            </p>
-            <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '0 0 14px' }}>
-              Ce n&apos;est pas un itinéraire définitif. Relancez la génération — elle aboutit généralement à la seconde tentative.
-            </p>
-            <button
-              data-testid="itinerary-fallback-retry"
-              onClick={generate}
-              className="ctv3-mono"
-              style={{
-                padding: '10px 18px', cursor: 'pointer',
-                background: 'var(--ctv3-blue)', border: 'none', color: '#fff',
-                fontSize: 11, letterSpacing: '0.12em', fontWeight: 700, textTransform: 'uppercase',
-              }}
-            >
-              Réessayer →
-            </button>
-          </div>
-
-          {/* Disclaimers — toujours visibles, y compris en repli */}
-          <div
-            data-testid="itinerary-safety-disclaimer"
-            style={{
-              marginTop: 14, padding: '10px 14px',
-              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-              borderLeft: '2px solid var(--ctv3-reco)',
-            }}
-          >
-            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
-              ⚠ {result.itinerary.safetyDisclaimer}
-            </p>
-          </div>
-          <div
-            data-testid="itinerary-official-reminder"
-            style={{
-              marginTop: 8, padding: '10px 14px',
-              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-            }}
-          >
-            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
-              {result.itinerary.officialSourceReminder}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Success — itinéraire réel ── */}
-      {status === 'success' && result && !isFallbackResult && (
-        <div data-testid="itinerary-result">
-          {/* Meta strip */}
-          <div
-            className="ctv3-mono"
-            style={{
-              display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16, rowGap: 6,
-              fontSize: 10, letterSpacing: '0.1em', color: 'var(--ctv3-faint)', textTransform: 'uppercase',
-            }}
-          >
-            <span>{result.itinerary.durationDays} jour{result.itinerary.durationDays > 1 ? 's' : ''}</span>
-            {result.itinerary.budget.amount > 0 && (
-              <>
-                <span style={{ width: 12, height: 1, background: 'var(--ctv3-line)', alignSelf: 'center' }} />
-                <span>Budget : {result.itinerary.budget.amount} {result.itinerary.budget.currency}</span>
-              </>
-            )}
-            <span style={{ width: 12, height: 1, background: 'var(--ctv3-line)', alignSelf: 'center' }} />
-            <span style={{ color: 'var(--ctv3-faint)' }}>Données officielles statiques intégrées</span>
-          </div>
-
-          {/* ── Rendu principal : TEXTE DE GUIDE (GUIDE-V1) ───────────────────
-              L'itinéraire premium est UNIQUEMENT un texte de guide narratif rendu
-              en paragraphes aérés (NarrativeRenderer). Plus AUCUNE carte jour/jour,
-              plus de matin/après-midi/soir : ce format poussait le modèle à remplir
-              des cases avec du vide. Un résultat sans texte exploitable est traité en
-              amont comme un fallback honnête (isFallbackResult) — cette branche n'est
-              donc atteinte qu'avec un narrativeText substantiel. Garde défensive : si
-              narrativeText venait à manquer ici, on n'affiche RIEN plutôt que des
-              cartes (les disclaimers ci-dessous restent visibles). */}
-          {result.itinerary.narrativeText && (
-            <div data-testid="itinerary-narrative">
-              <NarrativeRenderer narrative={result.itinerary.narrativeText} />
-            </div>
-          )}
-
-          {/* Safety disclaimer — always visible, non-suppressible */}
-          <div
-            data-testid="itinerary-safety-disclaimer"
-            style={{
-              marginTop: 14, padding: '10px 14px',
-              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-              borderLeft: '2px solid var(--ctv3-reco)',
-            }}
-          >
-            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
-              ⚠ {result.itinerary.safetyDisclaimer}
-            </p>
-          </div>
-
-          {/* Official source reminder — always visible, non-suppressible */}
-          <div
-            data-testid="itinerary-official-reminder"
-            style={{
-              marginTop: 8, padding: '10px 14px',
-              background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-            }}
-          >
-            <p className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.55, margin: 0 }}>
-              {result.itinerary.officialSourceReminder}
-            </p>
-          </div>
-
-          {/* PDF export — uses already-generated itinerary, no extra Claude call */}
-          <div
-            data-testid="itinerary-pdf-export"
-            style={{ marginTop: 14 }}
-          >
-            <PdfExportButton
-              countryCode={props.countryCode ?? ''}
-              countryName={props.countryName ?? props.countryCode ?? ''}
-              profile={{
-                budget:     props.budget,
-                travelType: props.travelType,
-                from:       props.dateFrom,
-                to:         props.dateTo,
-              }}
-              itinerary={result.itinerary}
-            />
-          </div>
-
-          {/* Regenerate */}
-          <button
-            onClick={generate}
-            className="ctv3-mono"
-            style={{
-              marginTop: 10, padding: '9px 16px', cursor: 'pointer',
-              background: 'none', border: '1px solid var(--ctv3-line)',
-              color: 'var(--ctv3-muted)', fontSize: 10, letterSpacing: '0.1em',
-              fontWeight: 700, textTransform: 'uppercase',
-            }}
-          >
-            Regénérer l&apos;itinéraire
-          </button>
-        </div>
+      {/* ── Success — section parcours guide (GUIDE-V1 NO CARDS) ──────────────────
+          GuideItinerarySection ne rend QUE deux états : texte de guide (succès) ou
+          message honnête + Réessayer (échec). Elle ignore totalement `itinerary.days` :
+          aucune carte jour/matin/après-midi/soir ne peut apparaître, par construction. */}
+      {status === 'success' && result && (
+        <GuideItinerarySection
+          itinerary={result.itinerary}
+          onRetry={generate}
+          pdf={{
+            countryCode: props.countryCode ?? '',
+            countryName: props.countryName ?? props.countryCode ?? '',
+            profile: {
+              budget:     props.budget,
+              travelType: props.travelType,
+              from:       props.dateFrom,
+              to:         props.dateTo,
+            },
+          }}
+        />
       )}
 
       {/* Footer note — visible sauf en success où safetyDisclaimer prend le relais */}
@@ -462,7 +286,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
           fontSize: 9.5, color: 'var(--ctv3-dim)', marginTop: 14, lineHeight: 1.5,
           letterSpacing: '0.02em', borderTop: '1px solid var(--ctv3-line)', paddingTop: 10,
         }}>
-          Suggestion d&apos;itinéraire générée par IA à titre indicatif uniquement. Adaptez toujours votre trajet selon les recommandations locales et officielles.
+          Parcours conseillé généré par IA à titre indicatif uniquement. Adaptez toujours votre trajet selon les recommandations locales et officielles.
         </p>
       )}
     </div>
