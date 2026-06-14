@@ -25,11 +25,15 @@ const profileSchema = z.object({
 }).optional();
 
 // ItineraryResult accepté tel quel depuis le client — validation minimale de shape.
+// GUIDE-V1 : l'itinéraire est désormais un TEXTE de guide (narrativeText). `days` devient
+// optionnel (vide pour une génération guide-v1, encore présent pour d'anciens itinéraires).
+// narrativeText DOIT être accepté ici, sinon Zod le strip et le PDF perdrait le texte guide.
 const itinerarySchema = z.object({
   countryCode:   z.string(),
   countryName:   z.string(),
   durationDays:  z.number(),
   budget:        z.object({ amount: z.number(), currency: z.string(), level: z.string() }),
+  narrativeText: z.string().optional(),
   days:          z.array(z.object({
     day:             z.number(),
     title:           z.string(),
@@ -39,8 +43,8 @@ const itinerarySchema = z.object({
     evening:         z.string(),
     estimatedBudget: z.string(),
     safetyNote:      z.string(),
-  })),
-  globalAdvice:           z.array(z.string()),
+  })).optional().default([]),
+  globalAdvice:           z.array(z.string()).optional().default([]),
   safetyDisclaimer:       z.string(),
   officialSourceReminder: z.string(),
   generatedAt:            z.string(),

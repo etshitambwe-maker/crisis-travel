@@ -46,7 +46,7 @@ describe('ItineraryBlock — présence et structure', () => {
     const src = readSource(BLOCK_PATH);
     // Permet de vérifier sur l'écran réel (DevTools / Playwright) quel code est déployé,
     // pour distinguer un bug de rendu d'un build périmé (PREMIUM-GUIDE-001B stabilisation).
-    expect(src).toMatch(/data-itinerary-build="001B-stab2"/);
+    expect(src).toMatch(/data-itinerary-build="guide-v1"/);
   });
 
   it('le résultat a un data-testid', () => {
@@ -492,53 +492,41 @@ describe('ItineraryBlock — rendu narratif prioritaire (PREMIUM-GUIDE-001B)', (
     expect(src).toContain('<NarrativeRenderer narrative={result.itinerary.narrativeText}');
   });
 
-  it('le rendu narratif est branché sur la présence de narrativeText (ternaire)', () => {
+  it('GUIDE-V1 : le rendu réel est UNIQUEMENT le texte de guide (aucune carte jour/jour)', () => {
     const src = readSource(BLOCK_PATH);
-    // Structure attendue : `result.itinerary.narrativeText ? ( ... ) : ( ... )`
-    expect(src).toMatch(/result\.itinerary\.narrativeText\s*\?/);
+    // Plus de DayCard, plus de bloc <details> jour/jour, plus de rendu itinerary-days.
+    expect(src).not.toContain('<DayCard');
+    expect(src).not.toContain('function DayCard');
+    expect(src).not.toContain('data-testid="itinerary-days-details"');
+    expect(src).not.toContain('data-testid="itinerary-days"');
+    expect(src).not.toContain('Voir le détail jour par jour');
   });
 
-  it('le narratif apparaît AVANT le détail jour par jour (rendu principal)', () => {
+  it('GUIDE-V1 : aucun label Matin/Après-midi/Soir dans le composant', () => {
     const src = readSource(BLOCK_PATH);
+    // Ces labels n'existaient que dans DayCard (supprimé).
+    const body = src.slice(src.indexOf('export function ItineraryBlock'));
+    expect(body).not.toContain('Après-midi');
+    expect(body).not.toMatch(/label: 'Matin'/);
+  });
+
+  it('GUIDE-V1 : le rendu narratif est gardé par la présence de narrativeText', () => {
+    const src = readSource(BLOCK_PATH);
+    // `result.itinerary.narrativeText && ( <NarrativeRenderer .../> )`
+    expect(src).toMatch(/result\.itinerary\.narrativeText\s*&&/);
+  });
+
+  it('les disclaimers restent rendus hors de la branche narrative (toujours visibles)', () => {
+    const src = readSource(BLOCK_PATH);
+    // safetyDisclaimer + officialSourceReminder doivent apparaître APRÈS le bloc narratif,
+    // donc visibles même si narrativeText venait à manquer. On prend les DERNIÈRES
+    // occurrences (branche "itinéraire réel", pas celles du repli honnête en amont).
     const narrativeIdx = src.indexOf('data-testid="itinerary-narrative"');
-    const daysDetailsIdx = src.indexOf('data-testid="itinerary-days-details"');
-    expect(narrativeIdx).toBeGreaterThan(-1);
-    expect(daysDetailsIdx).toBeGreaterThan(-1);
-    expect(narrativeIdx).toBeLessThan(daysDetailsIdx);
-  });
-
-  it('le détail jour par jour passe en bloc <details> replié et secondaire', () => {
-    const src = readSource(BLOCK_PATH);
-    expect(src).toContain('data-testid="itinerary-days-details"');
-    expect(src).toContain('<details');
-    expect(src).toContain('Voir le détail jour par jour');
-    // Le bloc replié n'est PAS ouvert par défaut (pas d'attribut `open` sur ce <details>).
-    const detailsIdx = src.indexOf('data-testid="itinerary-days-details"');
-    const summaryIdx = src.indexOf('<summary', detailsIdx);
-    const detailsTag = src.slice(src.lastIndexOf('<details', detailsIdx), summaryIdx);
-    expect(detailsTag).not.toMatch(/\sopen[\s/>]/);
-  });
-
-  it('fallback : sans narrativeText, le rendu jour/jour déplié est conservé (data-testid="itinerary-days")', () => {
-    const src = readSource(BLOCK_PATH);
-    expect(src).toContain('data-testid="itinerary-days"');
-    // Les DayCard sont rendus dans les DEUX branches (replié si narrative, déplié sinon).
-    const dayCardCount = (src.match(/<DayCard/g) ?? []).length;
-    expect(dayCardCount).toBeGreaterThanOrEqual(2);
-  });
-
-  it('les disclaimers restent rendus hors de la branche narrative/days (toujours visibles)', () => {
-    const src = readSource(BLOCK_PATH);
-    // safetyDisclaimer + officialSourceReminder doivent apparaître APRÈS la fermeture
-    // du ternaire narrative/days, donc indépendamment du chemin choisi.
-    // NB (001B-timeout) : un repli honnête a SES propres disclaimers en amont. On scope
-    // donc la vérification à la branche "itinéraire réel" (après itinerary-days), en
-    // prenant les DERNIÈRES occurrences (celles de la branche réelle, pas du repli).
-    const daysFallbackIdx = src.indexOf('data-testid="itinerary-days"');
     const safetyIdx = src.lastIndexOf('data-testid="itinerary-safety-disclaimer"');
     const officialIdx = src.lastIndexOf('data-testid="itinerary-official-reminder"');
-    expect(safetyIdx).toBeGreaterThan(daysFallbackIdx);
-    expect(officialIdx).toBeGreaterThan(daysFallbackIdx);
+    expect(narrativeIdx).toBeGreaterThan(-1);
+    expect(safetyIdx).toBeGreaterThan(narrativeIdx);
+    expect(officialIdx).toBeGreaterThan(narrativeIdx);
   });
 
   it('aucune redirection vers /results n\'est réintroduite', () => {

@@ -193,10 +193,10 @@ Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
 // lentes — on lui laisse plus de marge sous le plafond Vercel maxDuration=60.
 const ITINERARY_HARD_TIMEOUT_MS = 45000;
 
-// Plancher de diagnostic (PREMIUM-GUIDE-001B) : en dessous, le narrativeText est trop
-// maigre pour tenir lieu de « guide » → on logge un warn serveur (jamais d'erreur UI).
-// Réglé sous le minimum demandé au prompt (~250 mots) pour ne signaler que les vrais
-// déficits, pas les textes correctement longs mais légèrement en deçà de la cible.
+// Plancher du guide (GUIDE-V1) : en dessous, le texte est trop maigre pour tenir lieu de
+// « guide » premium → on rejette (throw dans le fetcher) AVANT toute mise en cache, et le
+// catch renvoie un fallback honnête. Réglé sous le minimum demandé au prompt pour ne
+// rejeter que les vrais déficits, pas les textes corrects légèrement en deçà de la cible.
 const MIN_NARRATIVE_WORDS = 200;
 
 function classifyBudget(amount: number, days: number): BudgetLevel {
@@ -209,7 +209,6 @@ function classifyBudget(amount: number, days: number): BudgetLevel {
 
 function buildItineraryFallback(req: ItineraryRequest, days: number): ItineraryResult {
   const now = new Date().toISOString();
-  const country = req.countryName ?? req.countryCode ?? 'cette destination';
   return {
     countryCode: req.countryCode ?? '',
     countryName: req.countryName ?? req.countryCode ?? '',
@@ -220,25 +219,19 @@ function buildItineraryFallback(req: ItineraryRequest, days: number): ItineraryR
       currency: req.currency ?? 'EUR',
       level: req.budget ? classifyBudget(req.budget, days) : 'medium',
     },
-    days: Array.from({ length: days }, (_, i) => ({
-      day: i + 1,
-      title: `Jour ${i + 1} à ${country}`,
-      summary: "Itinéraire temporairement indisponible. Consultez un guide de voyage local.",
-      morning: "À planifier selon vos préférences.",
-      afternoon: "À planifier selon vos préférences.",
-      evening: "À planifier selon vos préférences.",
-      estimatedBudget: "Estimation non disponible.",
-      safetyNote: "Vérifiez les recommandations officielles sur diplomatie.gouv.fr avant votre départ.",
-    })),
-    globalAdvice: ["Service temporairement indisponible. Réessayez dans quelques instants."],
+    // GUIDE-V1 : l'itinéraire premium est un TEXTE guide (narrativeText), plus une grille
+    // jour/matin/après-midi/soir. Le repli ne fabrique donc PLUS de fausses cartes « À
+    // planifier » : days reste vide, narrativeText absent. ItineraryBlock détecte ce repli
+    // via isFallback et rend un état honnête « génération trop longue » + Réessayer.
+    days: [],
+    globalAdvice: [],
     safetyDisclaimer:
       "Cet itinéraire est généré à titre indicatif uniquement. Crisis Travel ne garantit pas l'exactitude ni la sécurité des informations. Consultez diplomatie.gouv.fr et vérifiez les conditions locales avant tout départ.",
     officialSourceReminder:
       "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.",
     generatedAt: now,
     // Marqueur de repli (PREMIUM-GUIDE-001B-timeout) : ItineraryBlock s'en sert pour
-    // rendre un état honnête « génération trop longue + Réessayer » au lieu d'afficher
-    // ces jours génériques comme s'ils étaient un itinéraire premium.
+    // rendre un état honnête « génération trop longue + Réessayer ».
     isFallback: true,
   };
 }
@@ -265,28 +258,25 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
     return buildItineraryFallback(req, days);
   }
 
-  // Segment de version 'narrative-v2' (PREMIUM-GUIDE-001B, stabilisation) : le contrat de
-  // génération inclut un narrativeText (rendu PRINCIPAL côté lecteur). Les itinéraires mis
-  // en cache AVANT ce GOAL ne contiennent pas ce champ ; sans versionner la clé, ils
-  // restaient resservis tels quels pendant tout le TTL (7200s = 2h) → le rendu retombait
-  // sur l'ancienne pile de cartes jour/jour alors que le code sait afficher le narratif.
-  // Bump v1 → v2 (stabilisation) : invalide d'un coup TOUS les itinéraires « pauvres »
-  // cachés sous l'ancienne clé (anciens JSON sans narrativeText, ou résultats générés avant
-  // le passage au streaming) — ils ne peuvent plus ressortir. Aucune purge manuelle de Redis.
+  // Segment de version 'guide-v1' (PREMIUM-GUIDE-001B, refonte produit) : l'itinéraire
+  // premium n'est PLUS un JSON jour/matin/après-midi/soir mais un TEXTE de guide narratif
+  // (narrativeText). Bump 'narrative-v2' → 'guide-v1' : invalide d'un coup tous les anciens
+  // itinéraires cachés (JSON lourd, cartes vides) — ils ne peuvent plus ressortir. Aucune
+  // purge manuelle de Redis.
   const cacheKey = buildCacheKey(
     'itinerary',
     req.countryCode ?? req.countryName ?? 'unknown',
     String(days),
     String(Math.floor(budgetAmount / 100) * 100),
     req.travelType ?? 'solo',
-    'narrative-v2',
+    'guide-v1',
   );
 
   const safetyHeader = meaeLevel >= 3
-    ? `⚠️ NIVEAU DE VIGILANCE ÉLEVÉ (MEAE ${meaeLevel}/4) : Renforce les avertissements de sécurité à chaque jour. Évite les zones explicitement déconseillées. Rappelle systématiquement les précautions officielles.`
+    ? `⚠️ NIVEAU DE VIGILANCE ÉLEVÉ (MEAE ${meaeLevel}/4) : renforce les avertissements de sécurité, évite les zones explicitement déconseillées, rappelle systématiquement les précautions officielles.`
     : meaeLevel === 2
-    ? `ℹ️ Vigilance normale (MEAE ${meaeLevel}/4) : Inclure des notes de sécurité pratiques sans dramatisation.`
-    : `✅ Destination globalement sûre (MEAE ${meaeLevel}/4) : Rappels sécurité standards.`;
+    ? `ℹ️ Vigilance normale (MEAE ${meaeLevel}/4) : intègre des notes de sécurité pratiques sans dramatisation.`
+    : `✅ Destination globalement sûre (MEAE ${meaeLevel}/4) : rappels sécurité standards.`;
 
   const dateContext = req.from && req.to
     ? `Dates : du ${req.from} au ${req.to} (${days} jours).`
@@ -305,104 +295,45 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
     return `Profil : ${t}.`;
   })();
 
-  const prompt = `Tu es un expert en planification de voyages responsables.
+  // PROMPT GUIDE-V1 (refonte produit) : on demande UNIQUEMENT un texte de guide en markdown
+  // (titres en gras + paragraphes), PAS de JSON, PAS de grille jour/matin/après-midi/soir.
+  // Bénéfices : (1) sortie plus courte → moins de risque de timeout / troncature ;
+  // (2) plus aucune « case » que le modèle remplit avec du vide (« À planifier… ») ;
+  // (3) plus de JSON à parser → toute une classe de bugs (JSON malformé/tronqué) disparaît.
+  const prompt = `Tu es un conseiller de voyage humain et expérimenté. Rédige, EN TEXTE (pas de JSON, pas de code), un GUIDE de voyage narratif, fluide et concret, pour ce séjour :
 
-${safetyHeader}
-
-Planifie un itinéraire de voyage COHÉRENT ET PERSONNALISÉ pour les données suivantes :
 - Destination : ${country}${req.cityOrRegion ? ` (région/ville ciblée : ${req.cityOrRegion})` : ''}
 - ${dateContext}
-- Budget total : ${budgetAmount} ${currency} pour ${travelers} voyageur${travelers > 1 ? 's' : ''} (soit ~${perDay} ${currency}/jour)
-- Profil voyageur : ${travelTypeContext}
+- Budget : ${budgetAmount} ${currency} pour ${travelers} voyageur${travelers > 1 ? 's' : ''} (~${perDay} ${currency}/jour)
+- Profil : ${travelTypeContext}
 ${prefContext}
+${safetyHeader}
 
-LOGIQUE DU CIRCUIT (à respecter absolument) :
-- Construis un circuit géographiquement cohérent : regroupe les villes/régions proches, évite les allers-retours inutiles.
-- Adapte le rythme au profil : ${req.travelType === 'family' ? 'max 2 activités majeures par jour, pauses déjeuner obligatoires' : req.travelType === 'nomad' ? 'matins libres pour le travail, après-midis/soirées pour les sorties' : 'rythme dynamique mais réaliste, pas plus de 3-4 lieux majeurs par jour'}.
-- Pour chaque jour, précise dans "morning"/"afternoon"/"evening" : lieu(x) visités, type d'activité, conseil pratique, moyen de transport depuis la veille si changement de ville.
-- Dans "safetyNote" : conseil sécurité spécifique au lieu de ce jour (pas une phrase générique répétée).
-- Dans "estimatedBudget" : estimation réaliste pour ce jour (transport local + activités + repas), cohérente avec ~${perDay} ${currency}/jour.
-- Dans "globalAdvice" : 4 à 6 conseils pratiques actionnables (transport inter-villes, SIM locale, paiement, alternatives si météo défavorable, zones à éviter, checklist pré-départ).
+CE QUE TU ÉCRIS — un texte de guide, comme si tu parlais directement au voyageur :
+- Tutoiement, ton chaleureux mais sobre, jamais marketing ni administratif.
+- Prends position : « je te conseille de… », « j'éviterais… », « le bon compromis, c'est… », « le rythme le plus intelligent ici… ».
+- Organise une LOGIQUE DE PARCOURS : 2-3 bases/zones principales, regroupées géographiquement, sans allers-retours inutiles. Nomme les villes/régions/quartiers réels et EXPLIQUE POURQUOI chaque étape, dans quel ordre, quand basculer de l'une à l'autre.
+- Donne un vrai conseil de RYTHME pour un profil ${req.travelType ?? 'solo'} : où ralentir, où densifier, ce qu'il ne faut PAS surcharger. Insiste sur le fait de ne pas vouloir tout faire.
+- Propose des ALTERNATIVES concrètes selon les aléas : fatigue, météo défavorable, budget serré${req.travelType === 'family' ? ', enfants fatigués' : ''}, transports compliqués.
+- Signale les ERREURS À ÉVITER (pièges classiques, zones surcotées, mauvais timing).
+- Intègre les PRÉCAUTIONS de sécurité cohérentes avec MEAE ${meaeLevel}/4, sans dramatiser ni promettre une sécurité absolue, et rappelle de vérifier diplomatie.gouv.fr avant le départ et de s'inscrire sur Ariane.
+- Intègre explicitement le pays, la durée (${days} jours), le budget (~${perDay} ${currency}/jour) et le profil.
 
-═══════════════════════════════════════════════════════════════════════════════
-TEXTE DE GUIDE NARRATIF — champ "narrativeText" : C'EST LE LIVRABLE PRINCIPAL.
-═══════════════════════════════════════════════════════════════════════════════
-C'est CE texte que le voyageur lit en premier et qui justifie le caractère premium de
-l'itinéraire. Les "days" structurés plus bas sont SECONDAIRES (un détail repliable) :
-ne bâcle JAMAIS le narrativeText pour soigner les "days". Mets-y le meilleur de ton
-expertise de guide.
-
-Voix et ton :
-- Écris comme un conseiller de voyage humain et expérimenté qui parle DIRECTEMENT au
-  voyageur : tutoiement, ton chaleureux mais sobre, jamais marketing ni administratif.
-- Emploie naturellement des formulations de guide qui prend position, par exemple :
-  « je te conseille de… », « j'éviterais… », « le bon compromis, c'est… »,
-  « le rythme le plus intelligent ici… », « si tu voyages ${req.travelType === 'family' ? 'en famille' : req.travelType === 'couple' ? 'en couple' : req.travelType === 'nomad' ? 'en nomade' : 'en solo'}… ».
-- Reste au conditionnel pour les activités (« tu pourrais », « les marchés proposent
-  généralement ») : n'invente ni prix garantis, ni horaires, ni adresses précises, ni
-  numéros, ni sources officielles fictives.
-
-Contenu OBLIGATOIRE (le texte DÉCOULE des jours ci-dessous — mêmes étapes, même circuit —
-mais les RACONTE en prose, sans les recopier en liste matin/après-midi/soir) :
-- Nomme les VILLES / RÉGIONS / QUARTIERS réels du circuit quand c'est pertinent, et
-  EXPLIQUE POURQUOI chaque étape est recommandée (ce qu'on y gagne, à qui ça convient).
-- Soigne les TRANSITIONS entre étapes : comment et pourquoi on passe de l'une à l'autre,
-  dans quel ordre, à quel moment basculer.
-- Donne un vrai conseil de RYTHME adapté au profil ${req.travelType ?? 'solo'} : où ralentir,
-  où densifier, ce qu'il ne faut PAS surcharger.
-- Propose des ALTERNATIVES concrètes selon les aléas : fatigue, météo défavorable, budget
-  serré${req.travelType === 'family' ? ', enfants fatigués' : ''}, transports compliqués.
-- Intègre les PRÉCAUTIONS sécurité cohérentes avec le niveau MEAE ${meaeLevel}/4, sans
-  dramatiser ni promettre une sécurité absolue, en rappelant de vérifier diplomatie.gouv.fr.
-- Intègre explicitement le pays (${country}), la durée (${days} jours), le budget
-  (~${perDay} ${currency}/jour) et le profil ${req.travelType ?? 'solo'}.
-
-Longueur et structure (NON négociables — adaptées à un séjour de ${days} jours) :
-- AU MOINS ${narrativeParagraphTarget} paragraphes nourris, soit environ ${narrativeWordTarget} mots minimum.
-  Un séjour long EXIGE plus de matière : ne te contente pas d'une intro courte.
-- Titres en gras markdown "**Titre**", paragraphes séparés par une LIGNE VIDE. Tu peux
-  réutiliser/adapter cette ossature et la développer (un titre peut couvrir plusieurs
-  paragraphes si le séjour est long) :
-  **Le fil conducteur du séjour** — l'esprit du voyage et la logique d'ensemble du circuit.
-  **Comment démarrer** — un premier ou deux jours en douceur (prendre ses repères, limiter
-  les transports au début), et pourquoi.
-  **Le bon rythme à adopter** — spécifique au profil ${req.travelType ?? 'solo'}.
-  **Les grandes étapes, et pourquoi** — le cœur du parcours, étape par étape, avec les
-  raisons de chaque choix et les transitions.
-  **Si ça se complique** — alternatives en cas de fatigue, météo, budget${req.travelType === 'family' ? ', enfants' : ''} ou transport.
-  **Les précautions à garder en tête** — vigilance sécurité concrète (MEAE ${meaeLevel}/4).
-  **Mon conseil final de guide** — 2-3 phrases de conclusion pratique et encourageante.
+FORMAT (markdown léger) :
+- Titres courts en gras "**Titre**", paragraphes séparés par une LIGNE VIDE. Quelques titres seulement (4 à 7), pas une liste de cases.
+- AU MOINS ${narrativeParagraphTarget} paragraphes nourris (~${narrativeWordTarget} mots minimum). Un séjour long EXIGE plus de matière.
+- Ossature conseillée (adapte-la, ne la recopie pas mécaniquement) :
+  **Le fil conducteur du séjour** · **Comment démarrer** · **Le bon rythme à adopter** · **Les grandes étapes, et pourquoi** · **Si ça se complique** · **Les précautions à garder en tête** · **Mon conseil final**
 
 RÈGLES ABSOLUES :
 1. Ne prétends PAS accéder à des données en temps réel (prix de vols, météo live, disponibilités).
 2. N'invente aucune source officielle ni chiffre de sécurité précis.
 3. Ne promets pas de sécurité absolue.
-4. Formule les activités au conditionnel : "vous pourriez visiter", "les marchés proposent généralement".
-5. N'inclus aucun numéro de téléphone, adresse précise ou prix garantis.
-6. Si niveau MEAE ${meaeLevel} >= 3, intègre des avertissements de sécurité renforcés à chaque jour et propose des alternatives aux zones sensibles.
-7. Inclus dans globalAdvice : vérifier diplomatie.gouv.fr avant le départ et s'inscrire sur Ariane.
+4. Conditionnel pour les activités : « tu pourrais visiter », « les marchés proposent généralement ».
+5. Aucun numéro de téléphone, adresse précise ou prix garanti.
+6. NE PRODUIS PAS de découpage jour 1 / jour 2 / matin / après-midi / soir, NI de JSON : écris un texte de guide continu, en prose.
 
-Réponds UNIQUEMENT avec ce JSON valide (sans markdown, sans backticks) :
-{
-  "narrativeText": "**Le fil conducteur du séjour**\n\n... (texte de guide narratif fluide, paragraphes séparés par \\n\\n, titres en gras)",
-  "days": [
-    {
-      "day": 1,
-      "title": "...",
-      "summary": "...",
-      "morning": "...",
-      "afternoon": "...",
-      "evening": "...",
-      "estimatedBudget": "...",
-      "safetyNote": "..."
-    }
-  ],
-  "globalAdvice": ["...", "..."],
-  "safetyDisclaimer": "...",
-  "officialSourceReminder": "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ."
-}
-
-Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeText" est le LIVRABLE PRINCIPAL : OBLIGATOIRE, au moins ${narrativeParagraphTarget} paragraphes (~${narrativeWordTarget} mots minimum), ton de guide humain. Un narrativeText court, générique ou réduit à une intro est un échec : c'est lui que le voyageur lit en premier.`;
+Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragraphes). Commence directement par le premier titre.`;
 
   try {
     const { data } = await withCache(
@@ -411,21 +342,17 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
         const t0 = Date.now();
         let timer: ReturnType<typeof setTimeout> | undefined;
 
-        // STREAMING (PREMIUM-GUIDE-001B-timeout) : en NON-streamé, un appel de 8000 tokens
-        // de JSON dépasse régulièrement les ~30s et heurte le timeout HTTP du SDK → la prod
-        // tombait systématiquement dans buildItineraryFallback (logs : « itinerary hard
-        // timeout 30000ms »). Le SDK Anthropic recommande explicitement le streaming pour
-        // tout gros max_tokens : il évite les timeouts de requête. On garde le MÊME modèle
-        // et le MÊME max_tokens (8000) — seul le transport change.
+        // STREAMING (PREMIUM-GUIDE-001B-timeout) : le streaming évite le timeout HTTP du SDK.
+        // GUIDE-V1 : la sortie est désormais un texte (pas un gros JSON), donc max_tokens
+        // descend de 8000 à 3000 — moins de tokens à générer = moins de risque de timeout.
         const stream = client.messages.stream({
           model: 'claude-sonnet-4-6',
-          max_tokens: 8000,
+          max_tokens: 3000,
           messages: [{ role: 'user', content: prompt }],
         });
 
-        // Hard timeout INTERNE relevé à 45s (plafond Vercel maxDuration=60). Le streaming
-        // évite le timeout HTTP ; ce garde-fou coupe seulement une génération anormalement
-        // lente, en abortant proprement le stream pour ne pas laisser fuir la connexion.
+        // Hard timeout INTERNE (45s, sous le plafond Vercel maxDuration=60). Abort propre
+        // du stream pour ne pas laisser fuir la connexion.
         const hardTimeout = new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
             stream.abort();
@@ -435,22 +362,21 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
 
         try {
           const msg = await Promise.race([stream.finalMessage(), hardTimeout]);
-          // Garde anti-troncature : si la réponse est coupée au plafond, on lève AVANT
-          // le retour. withCache ne mettra donc PAS en cache un JSON tronqué (qui serait
-          // resservi cassé pendant 2h), et le catch renverra le fallback contrôlé loggué.
+          // Garde anti-troncature : réponse coupée au plafond → on lève AVANT le return,
+          // donc withCache ne met PAS en cache un guide tronqué et le catch renvoie un
+          // fallback honnête NON caché.
           if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
             throw new Error('itinerary: réponse tronquée (stop_reason=max_tokens)');
           }
-          const text = (msg.content[0] as { text: string }).text;
-          // VALIDATION AVANT CACHE (PREMIUM-GUIDE-001B stabilisation) : on parse et on
-          // vérifie la structure ICI, dans le fetcher. Si le JSON est malformé ou sans
-          // `days`, on throw AVANT le return → withCache ne stocke RIEN (le catch renverra
-          // un fallback honnête NON caché). Sans ça, une string non-JSON (« pas du json »)
-          // était mise en cache 2h : chaque appel suivant la relisait, re-throwait au parse
-          // et reservait le fallback pendant 2h au lieu de retenter un appel Claude frais.
-          const parsedInFetcher = JSON.parse(text) as { days?: unknown };
-          if (!Array.isArray(parsedInFetcher.days) || parsedInFetcher.days.length === 0) {
-            throw new Error('itinerary: malformed response — no days array');
+          const text = (msg.content[0] as { text: string }).text.trim();
+          // VALIDATION AVANT CACHE : le guide doit être un texte substantiel. Un texte vide
+          // ou trop court (< MIN_NARRATIVE_WORDS) n'est PAS un guide premium → on throw AVANT
+          // le return pour que withCache ne stocke rien et que le catch renvoie un fallback
+          // honnête NON caché (jamais resservi pendant 2h). C'est l'équivalent guide-v1 de
+          // l'ancienne garde « no days array ».
+          const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
+          if (wordCount < MIN_NARRATIVE_WORDS) {
+            throw new Error(`itinerary: guide trop court (${wordCount} mots < ${MIN_NARRATIVE_WORDS})`);
           }
           logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', Date.now() - t0, false);
           return text;
@@ -461,39 +387,9 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
       7200 // 2h cache
     );
 
-    // `data` est garanti parsable et muni d'un `days` non vide (validé dans le fetcher
-    // ci-dessus AVANT toute mise en cache) : ce JSON.parse ne peut donc plus empoisonner
-    // le cache. On re-parse simplement pour extraire les champs typés.
-    const parsed = JSON.parse(data) as {
-      narrativeText?: string;
-      days: ItineraryResult['days'];
-      globalAdvice: string[];
-      safetyDisclaimer: string;
-      officialSourceReminder: string;
-    };
-
-    // narrativeText (PREMIUM-GUIDE-001B) : champ optionnel CÔTÉ TYPE (rétro-compat), mais
-    // ATTENDU comme substantiel pour toute génération fraîche — c'est le rendu PRINCIPAL.
-    // On ne le retient que si c'est une string non vide ; sinon `undefined`, et
-    // ItineraryBlock retombe proprement sur le rendu jour/jour. Le JSON `days` reste la
-    // source d'autorité (PDF, compatibilité), donc un narrativeText absent n'invalide rien.
-    const rawNarrative =
-      typeof parsed.narrativeText === 'string' ? parsed.narrativeText.trim() : '';
-    const narrativeText = rawNarrative.length > 0 ? rawNarrative : undefined;
-
-    // Diagnostic dev (PREMIUM-GUIDE-001B, point 5) : une génération fraîche qui revient
-    // SANS narrativeText, ou avec un texte trop court pour un vrai guide, est un échec
-    // produit silencieux (le lecteur ne verra que les cartes). On le SIGNALE côté serveur
-    // (logger.warn) pour le détecter en dev/test/logs — JAMAIS d'erreur anxiogène à
-    // l'utilisateur, JAMAIS d'exception : le rendu jour/jour reste un repli gracieux.
-    const narrativeWordCount = narrativeText ? narrativeText.split(/\s+/).length : 0;
-    if (narrativeWordCount < MIN_NARRATIVE_WORDS) {
-      logger.warn(
-        'Claude-Itinerary',
-        `narrativeText insuffisant (${narrativeWordCount} mots < ${MIN_NARRATIVE_WORDS}) pour ${req.countryCode ?? req.countryName ?? 'unknown'} — rendu jour/jour en repli. Vérifier le prompt/modèle.`,
-      );
-    }
-
+    // `data` est garanti = un texte de guide substantiel (validé dans le fetcher AVANT le
+    // cache). GUIDE-V1 : c'est le narrativeText, et l'UNIQUE livrable. days reste vide
+    // (le type le garde optionnel pour rétro-compat PDF/cache), globalAdvice vide.
     return {
       countryCode: req.countryCode ?? '',
       countryName: req.countryName ?? req.countryCode ?? '',
@@ -504,12 +400,12 @@ Génère exactement ${days} jours dans le tableau "days". Le champ "narrativeTex
         currency,
         level: classifyBudget(budgetAmount, days),
       },
-      narrativeText,
-      days: parsed.days,
-      globalAdvice: Array.isArray(parsed.globalAdvice) ? parsed.globalAdvice : [],
-      safetyDisclaimer: parsed.safetyDisclaimer ??
+      narrativeText: data,
+      days: [],
+      globalAdvice: [],
+      safetyDisclaimer:
         "Cet itinéraire est généré à titre indicatif. Vérifiez les conditions locales et les recommandations officielles avant tout départ.",
-      officialSourceReminder: parsed.officialSourceReminder ??
+      officialSourceReminder:
         "Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.",
       generatedAt: new Date().toISOString(),
     };

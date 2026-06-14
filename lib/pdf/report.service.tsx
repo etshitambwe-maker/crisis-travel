@@ -449,36 +449,53 @@ export function TravelReport({ score, narrative, generatedAt, countryName, profi
               <Text style={styles.itineraryMetaText}>DONNEES OFFICIELLES STATIQUES</Text>
             </View>
 
-            {/* Jours */}
-            {itinerary.days.map((day) => (
-              <View key={day.day} style={styles.dayCard}>
-                <View style={styles.dayHeader}>
-                  <Text style={styles.dayNum}>JOUR {day.day}</Text>
-                  <Text style={styles.dayTitle}>{day.title}</Text>
-                </View>
-                {day.summary ? (
-                  <Text style={styles.daySummary}>{day.summary}</Text>
-                ) : null}
-                <View style={styles.daySlotRow}>
-                  {[
-                    { label: 'MATIN',       text: day.morning },
-                    { label: 'APRES-MIDI',  text: day.afternoon },
-                    { label: 'SOIR',        text: day.evening },
-                  ].map(({ label, text }) => (
-                    <View key={label} style={styles.daySlot}>
-                      <Text style={styles.daySlotLabel}>{label}</Text>
-                      <Text style={styles.daySlotText}>{text}</Text>
+            {/* GUIDE-V1 : l'itinéraire est un TEXTE de guide narratif. On l'exporte en
+                priorité, paragraphe par paragraphe (les ** markdown sont retirés, react-pdf
+                ne les interprète pas). Les anciennes cartes jour/matin/après-midi/soir ne
+                sont rendues QUE si un ancien itinéraire en contient encore (days?.length) —
+                rétro-compat, jamais pour une génération guide-v1. */}
+            {itinerary.narrativeText
+              ? itinerary.narrativeText
+                  .split(/\n\s*\n/)
+                  .map((para) => para.replace(/\*\*/g, '').trim())
+                  .filter(Boolean)
+                  .map((para, i) => (
+                    <Text key={i} style={styles.narrativeText}>{para}</Text>
+                  ))
+              : null}
+
+            {/* Jours — rétro-compat uniquement (anciens itinéraires), garde days?.length */}
+            {itinerary.days && itinerary.days.length > 0
+              ? itinerary.days.map((day) => (
+                  <View key={day.day} style={styles.dayCard}>
+                    <View style={styles.dayHeader}>
+                      <Text style={styles.dayNum}>JOUR {day.day}</Text>
+                      <Text style={styles.dayTitle}>{day.title}</Text>
                     </View>
-                  ))}
-                </View>
-                {day.estimatedBudget ? (
-                  <Text style={styles.dayBudget}>Budget estime : {day.estimatedBudget}</Text>
-                ) : null}
-                {day.safetyNote ? (
-                  <Text style={styles.daySafetyNote}>! {day.safetyNote}</Text>
-                ) : null}
-              </View>
-            ))}
+                    {day.summary ? (
+                      <Text style={styles.daySummary}>{day.summary}</Text>
+                    ) : null}
+                    <View style={styles.daySlotRow}>
+                      {[
+                        { label: 'MATIN',       text: day.morning },
+                        { label: 'APRES-MIDI',  text: day.afternoon },
+                        { label: 'SOIR',        text: day.evening },
+                      ].map(({ label, text }) => (
+                        <View key={label} style={styles.daySlot}>
+                          <Text style={styles.daySlotLabel}>{label}</Text>
+                          <Text style={styles.daySlotText}>{text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {day.estimatedBudget ? (
+                      <Text style={styles.dayBudget}>Budget estime : {day.estimatedBudget}</Text>
+                    ) : null}
+                    {day.safetyNote ? (
+                      <Text style={styles.daySafetyNote}>! {day.safetyNote}</Text>
+                    ) : null}
+                  </View>
+                ))
+              : null}
 
             {/* Conseils généraux */}
             {itinerary.globalAdvice.length > 0 && (

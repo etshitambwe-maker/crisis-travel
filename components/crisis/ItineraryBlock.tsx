@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { ItineraryApiResponse, ItineraryDay, ItineraryRequest, ItineraryResult } from '@/types/crisis.types';
+import type { ItineraryApiResponse, ItineraryRequest, ItineraryResult } from '@/types/crisis.types';
 import { PdfExportButton } from './PdfExportButton';
 import { NarrativeRenderer } from './NarrativeRenderer';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -108,81 +108,6 @@ function ItinerarySkeleton() {
   );
 }
 
-// ── Day card ──────────────────────────────────────────────────────────────────
-
-function DayCard({ day }: { day: ItineraryDay }) {
-  const [open, setOpen] = useState(day.day === 1);
-  return (
-    <div
-      style={{
-        border: '1px solid var(--ctv3-line)',
-        borderLeft: '2px solid var(--ctv3-blue)',
-        background: 'var(--ctv3-ink-850)',
-        marginBottom: 8,
-      }}
-    >
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '13px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-        }}
-        aria-expanded={open}
-      >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span className="ctv3-mono" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--ctv3-blue)', textTransform: 'uppercase' }}>
-            Jour {day.day}
-          </span>
-          <span style={{ fontFamily: 'var(--ctv3-display)', fontWeight: 700, fontSize: 15, color: 'var(--ctv3-paper)' }}>
-            {day.title}
-          </span>
-        </div>
-        <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', flexShrink: 0, marginLeft: 8 }}>
-          {open ? '▲' : '▼'}
-        </span>
-      </button>
-
-      {open && (
-        <div style={{ padding: '0 16px 14px' }}>
-          {day.summary && (
-            <p className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-muted)', lineHeight: 1.5, marginBottom: 12 }}>
-              {day.summary}
-            </p>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10 }}>
-            {[
-              { label: 'Matin', value: day.morning },
-              { label: 'Après-midi', value: day.afternoon },
-              { label: 'Soir', value: day.evening },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ background: 'var(--ctv3-ink-900)', padding: '10px 12px', border: '1px solid var(--ctv3-line)' }}>
-                <div className="ctv3-mono" style={{ fontSize: 9, letterSpacing: '0.16em', color: 'var(--ctv3-faint)', textTransform: 'uppercase', marginBottom: 5 }}>
-                  {label}
-                </div>
-                <p className="ctv3-serif" style={{ fontSize: 12.5, color: 'var(--ctv3-muted)', lineHeight: 1.45, margin: 0 }}>
-                  {value}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {day.estimatedBudget && (
-              <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-reco)', letterSpacing: '0.08em' }}>
-                Budget estimé : {day.estimatedBudget}
-              </span>
-            )}
-            {day.safetyNote && (
-              <span className="ctv3-mono" style={{ fontSize: 10, color: 'var(--ctv3-faint)', letterSpacing: '0.06em' }}>
-                ⚠ {day.safetyNote}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ItineraryBlock(props: ItineraryBlockProps) {
@@ -248,7 +173,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
       // bug de rendu à corriger. S'il est ABSENT ou différent, c'est un build/déploiement
       // périmé — on teste le mauvais déploiement, pas le code. À inspecter dans DevTools
       // (élément racine du bloc) ou via Playwright. Bumper à chaque passe de stabilisation.
-      data-itinerary-build="001B-stab2"
+      data-itinerary-build="guide-v1"
       style={{
         border: '1px solid var(--ctv3-line)',
         borderTop: '2px solid var(--ctv3-blue)',
@@ -455,63 +380,18 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             <span style={{ color: 'var(--ctv3-faint)' }}>Données officielles statiques intégrées</span>
           </div>
 
-          {/* ── Rendu principal ──────────────────────────────────────────────
-              PREMIUM-GUIDE-001B : si `narrativeText` est présent, c'est LUI le
-              rendu principal (parcours de guide fluide en paragraphes aérés), et
-              le détail jour/jour passe dans un bloc <details> replié « secondaire ».
-              S'il est absent (ancien itinéraire, fallback, JSON sans narrative), on
-              retombe sur l'ancien rendu jour/jour déplié — aucun crash, aucun bloc
-              vide. Les disclaimers et conseils ci-dessous restent hors de cette
-              branche : ils sont donc TOUJOURS visibles dans les deux cas. */}
-          {result.itinerary.narrativeText ? (
-            <>
-              <div data-testid="itinerary-narrative">
-                <NarrativeRenderer narrative={result.itinerary.narrativeText} />
-              </div>
-
-              <details data-testid="itinerary-days-details" style={{ marginTop: 18 }}>
-                <summary
-                  data-testid="itinerary-days-toggle"
-                  className="ctv3-mono"
-                  style={{
-                    cursor: 'pointer', listStyle: 'none',
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase',
-                    color: 'var(--ctv3-muted)', padding: '9px 0',
-                    borderTop: '1px solid var(--ctv3-line)', width: '100%',
-                  }}
-                >
-                  <span aria-hidden style={{ color: 'var(--ctv3-blue)' }}>▸</span>
-                  Voir le détail jour par jour
-                </summary>
-                <div style={{ marginTop: 10 }}>
-                  {result.itinerary.days.map((day) => (
-                    <DayCard key={day.day} day={day} />
-                  ))}
-                </div>
-              </details>
-            </>
-          ) : (
-            <div data-testid="itinerary-days">
-              {result.itinerary.days.map((day) => (
-                <DayCard key={day.day} day={day} />
-              ))}
-            </div>
-          )}
-
-          {/* Global advice */}
-          {result.itinerary.globalAdvice.length > 0 && (
-            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)' }}>
-              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-muted)', marginBottom: 8 }}>
-                Conseils généraux
-              </div>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                {result.itinerary.globalAdvice.map((advice, i) => (
-                  <li key={i} className="ctv3-serif" style={{ fontSize: 12.5, color: 'var(--ctv3-muted)', lineHeight: 1.5, marginBottom: 4 }}>
-                    · {advice}
-                  </li>
-                ))}
-              </ul>
+          {/* ── Rendu principal : TEXTE DE GUIDE (GUIDE-V1) ───────────────────
+              L'itinéraire premium est UNIQUEMENT un texte de guide narratif rendu
+              en paragraphes aérés (NarrativeRenderer). Plus AUCUNE carte jour/jour,
+              plus de matin/après-midi/soir : ce format poussait le modèle à remplir
+              des cases avec du vide. Un résultat sans texte exploitable est traité en
+              amont comme un fallback honnête (isFallbackResult) — cette branche n'est
+              donc atteinte qu'avec un narrativeText substantiel. Garde défensive : si
+              narrativeText venait à manquer ici, on n'affiche RIEN plutôt que des
+              cartes (les disclaimers ci-dessous restent visibles). */}
+          {result.itinerary.narrativeText && (
+            <div data-testid="itinerary-narrative">
+              <NarrativeRenderer narrative={result.itinerary.narrativeText} />
             </div>
           )}
 

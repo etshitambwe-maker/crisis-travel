@@ -185,12 +185,11 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
     budget: 2000, currency: 'EUR', travelers: 1, travelType: 'solo', preferences: [],
   } as never;
 
-  const validItineraryJson = JSON.stringify({
-    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
-    globalAdvice: ['conseil'],
-    safetyDisclaimer: 'disclaimer',
-    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
-  });
+  // GUIDE-V1 : l'itinéraire est un TEXTE de guide (>= MIN_NARRATIVE_WORDS=200 mots), pas un JSON.
+  const validGuideText =
+    '**Le fil conducteur du séjour**\n\n' +
+    Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile pour le voyageur`).join(' ') +
+    '\n\n**Mon conseil final**\n\nNe surcharge pas et vérifie diplomatie.gouv.fr avant le départ.';
 
   const narrativeScore = {
     country: 'Maroc', countryCode: 'MA', total: 70,
@@ -204,13 +203,14 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
 
   // ── max_tokens relevés (plafonds suffisants pour les rapports longs) ──────────
 
-  it('le plafond max_tokens de l\'itinéraire couvre les longs séjours (>= 8000)', async () => {
+  it('le plafond max_tokens de l\'itinéraire est réduit pour un texte de guide (<= 4000, GUIDE-V1)', async () => {
     const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
-    // Bloc generateItinerary uniquement
+    // Bloc generateItinerary uniquement. La sortie texte étant plus courte que l'ancien
+    // JSON jour/jour, max_tokens baisse → moins de risque de timeout/troncature.
     const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
     const m = itinBlock.match(/max_tokens:\s*(\d+)/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeGreaterThanOrEqual(8000);
+    expect(Number(m![1])).toBeLessThanOrEqual(4000);
   });
 
   it('le plafond max_tokens de la narrative est relevé (>= 1000)', async () => {
@@ -224,22 +224,22 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
 
   // ── Itinéraire tronqué ────────────────────────────────────────────────────────
 
-  it('itinéraire : stop_reason="max_tokens" → fallback (pas le JSON tronqué)', async () => {
-    // JSON volontairement coupé en plein milieu + signal de troncature
+  it('itinéraire : stop_reason="max_tokens" → fallback honnête (sans days, sans narrativeText)', async () => {
     createImpl = () => Promise.resolve({
-      content: [{ text: '{"days":[{"day":1,"title":"J1","summary":"sss' }],
+      content: [{ text: 'Texte de guide coupé en plein milieu' }],
       stop_reason: 'max_tokens',
     });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
-    // Fallback déterministe : 14 jours génériques "À planifier…"
-    expect(result.days).toHaveLength(14);
-    expect(result.days[0].morning).toContain('À planifier');
+    // GUIDE-V1 : le fallback ne fabrique plus de fausses cartes.
+    expect(result.isFallback).toBe(true);
+    expect(result.days).toHaveLength(0);
+    expect(result.narrativeText).toBeUndefined();
   });
 
   it('itinéraire tronqué : la réponse n\'est JAMAIS mise en cache', async () => {
     createImpl = () => Promise.resolve({
-      content: [{ text: '{"days":[{"day":1' }],
+      content: [{ text: validGuideText }],
       stop_reason: 'max_tokens',
     });
     const { generateItinerary } = await load();
@@ -248,14 +248,15 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
     expect(itinKey).toBeUndefined();
   });
 
-  it('itinéraire complet (stop_reason="end_turn") : mis en cache normalement', async () => {
+  it('itinéraire complet (stop_reason="end_turn") : texte de guide en narrativeText, mis en cache', async () => {
     createImpl = () => Promise.resolve({
-      content: [{ text: validItineraryJson }],
+      content: [{ text: validGuideText }],
       stop_reason: 'end_turn',
     });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
-    expect(result.days[0].title).toBe('J1');
+    expect(result.narrativeText).toContain('fil conducteur');
+    expect(result.days).toHaveLength(0);
     const itinKey = storedCacheKeys.find((k) => k.includes('itinerary'));
     expect(itinKey).toBeDefined();
   });
@@ -345,7 +346,7 @@ describe('PREMIUM-CONTENT-001 — prompt narrative : 10 sections premium présen
   });
 });
 
-describe('PREMIUM-CONTENT-001 — prompt itinéraire : travelType injecté + logique circuit', () => {
+describe('GUIDE-V1 — prompt itinéraire : texte de guide (pas de JSON, pas de cases)', () => {
   const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
   // Bloc generateItinerary uniquement
   const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
@@ -358,174 +359,131 @@ describe('PREMIUM-CONTENT-001 — prompt itinéraire : travelType injecté + log
     expect(itinBlock).toMatch(/req\.travelType/);
   });
 
-  it('le prompt itinéraire demande une logique géographique cohérente', () => {
-    expect(itinBlock).toMatch(/géographiquement cohérent|circuit/i);
+  it('le prompt demande une LOGIQUE DE PARCOURS (zones/étapes cohérentes)', () => {
+    expect(itinBlock).toMatch(/LOGIQUE DE PARCOURS|parcours|étapes/i);
   });
 
-  it('le prompt itinéraire demande des conseils de déplacement (transport)', () => {
-    expect(itinBlock).toMatch(/moyen de transport|transport inter/i);
+  it('le prompt demande un conseil de RYTHME', () => {
+    expect(itinBlock).toMatch(/RYTHME/i);
   });
 
-  it('le prompt itinéraire demande des alternatives', () => {
-    expect(itinBlock).toMatch(/alternative/i);
+  it('le prompt demande des ALTERNATIVES (fatigue/météo/budget)', () => {
+    expect(itinBlock).toMatch(/ALTERNATIVES/i);
+    expect(itinBlock).toMatch(/fatigue/i);
+    expect(itinBlock).toMatch(/météo/i);
   });
 
-  it('le prompt itinéraire adapte le budget par jour', () => {
-    expect(itinBlock).toMatch(/perDay|par jour/i);
+  it('le prompt demande les ERREURS À ÉVITER', () => {
+    expect(itinBlock).toMatch(/ERREURS À ÉVITER|erreurs à éviter/i);
   });
 
-  it('le prompt itinéraire mentionne la vigilance selon MEAE', () => {
+  it('le prompt mentionne la vigilance selon MEAE', () => {
     expect(itinBlock).toMatch(/meaeLevel|MEAE/);
   });
 
-  it('le prompt itinéraire mentionne diplomatie.gouv et Ariane', () => {
+  it('le prompt mentionne diplomatie.gouv et Ariane', () => {
     expect(itinBlock).toMatch(/diplomatie\.gouv/);
     expect(itinBlock).toMatch(/[Aa]riane/);
   });
-});
 
-// ── PREMIUM-GUIDE-001B — itinéraire narratif (texte de guide) ─────────────────
-
-describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText de guide demandé', () => {
-  const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
-  const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
-
-  it('le prompt demande explicitement un champ narrativeText', () => {
-    expect(itinBlock).toContain('narrativeText');
+  it('le prompt INTERDIT explicitement le découpage jour/matin/après-midi/soir et le JSON', () => {
+    expect(itinBlock).toMatch(/NE PRODUIS PAS de découpage jour/i);
+    expect(itinBlock).toMatch(/NI de JSON|pas de JSON/i);
   });
 
-  it('le narrativeText est décrit comme un texte de guide / parcours fluide', () => {
-    expect(itinBlock).toMatch(/guide/i);
-    expect(itinBlock).toMatch(/fil conducteur/i);
-  });
-
-  it('le prompt narrativeText couvre rythme, vigilance et conseil final', () => {
-    expect(itinBlock).toMatch(/rythme/i);
-    expect(itinBlock).toMatch(/vigilance|précautions/i);
-    expect(itinBlock).toMatch(/conseil final/i);
-  });
-
-  it('le narrativeText doit s\'appuyer sur les jours structurés (ne pas les remplacer)', () => {
-    // Le prompt précise que la narrative DÉCOULE des jours et ne les répète pas en liste.
-    expect(itinBlock).toMatch(/DÉCOULE des jours|découle des jours/i);
-  });
-
-  it('le narrativeText reste dans le contrat de sécurité (pas de sécurité absolue, diplomatie.gouv.fr)', () => {
-    // Ces garde-fous globaux du prompt s'appliquent aussi au texte narratif.
+  it('le prompt reste dans le contrat de sécurité (pas de sécurité absolue)', () => {
     expect(itinBlock).toContain('Ne promets pas de sécurité absolue');
     expect(itinBlock).toContain('diplomatie.gouv.fr');
   });
 
-  it('le plafond max_tokens couvre le narratif additionnel sans augmentation (reste à 8000)', () => {
-    // Aucun nouvel appel ni hausse de tokens : le narratif est produit dans le MÊME appel.
+  it('le max_tokens itinéraire est réduit à 3000 (sortie texte, moins de timeout)', () => {
     const m = itinBlock.match(/max_tokens:\s*(\d+)/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBe(8000);
+    expect(Number(m![1])).toBe(3000);
   });
 });
 
-describe('PREMIUM-GUIDE-001B — parsing narrativeText (optionnel, rétro-compatible)', () => {
+describe('GUIDE-V1 — sortie texte : narrativeText unique livrable, days vide', () => {
   const itinReq = {
     countryCode: 'MA', countryName: 'Maroc',
     from: '2026-07-10', to: '2026-07-15',
     budget: 900, currency: 'EUR', travelers: 1, travelType: 'solo', preferences: [],
   } as never;
 
-  const dayPayload = {
-    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
-    globalAdvice: ['conseil'],
-    safetyDisclaimer: 'disclaimer',
-    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
-  };
+  const validGuideText =
+    '**Le fil conducteur du séjour**\n\n' +
+    Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile`).join(' ') +
+    '\n\n**Mon conseil final**\n\nVérifie diplomatie.gouv.fr avant le départ.';
 
-  it('extrait narrativeText quand Claude le renvoie', async () => {
-    createImpl = () => Promise.resolve({
-      content: [{ text: JSON.stringify({ narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée…', ...dayPayload }) }],
-      stop_reason: 'end_turn',
-    });
+  it('un guide substantiel devient narrativeText ; days reste vide', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
-    expect(result.narrativeText).toBeDefined();
     expect(result.narrativeText).toContain('fil conducteur');
-    // Les jours structurés restent présents en parallèle (source d'autorité).
-    expect(result.days).toHaveLength(1);
-    expect(result.days[0].title).toBe('J1');
+    expect(result.days).toHaveLength(0);
+    expect(result.isFallback).toBeFalsy();
   });
 
-  it('narrativeText absent → result.narrativeText undefined, days intacts (rétro-compatible)', async () => {
-    createImpl = () => Promise.resolve({
-      content: [{ text: JSON.stringify(dayPayload) }], // pas de narrativeText
-      stop_reason: 'end_turn',
-    });
+  it('un texte trop court → fallback honnête (sans days, sans narrativeText), NON caché', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'Trop court.' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
     expect(result.narrativeText).toBeUndefined();
-    expect(result.days).toHaveLength(1);
-    expect(result.globalAdvice).toContain('conseil');
+    expect(result.days).toHaveLength(0);
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeUndefined();
   });
 
-  it('narrativeText vide ou whitespace → traité comme absent (undefined)', async () => {
-    createImpl = () => Promise.resolve({
-      content: [{ text: JSON.stringify({ narrativeText: '   ', ...dayPayload }) }],
-      stop_reason: 'end_turn',
-    });
+  it('le fallback déterministe ne fabrique JAMAIS de fausses cartes', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: '' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
-    expect(result.narrativeText).toBeUndefined();
-  });
-
-  it('le fallback déterministe n\'a pas de narrativeText (rendu jour/jour assuré)', async () => {
-    // Réponse JSON malformée → buildItineraryFallback, qui ne fournit pas de narrative.
-    createImpl = () => Promise.resolve({ content: [{ text: 'pas du json' }], stop_reason: 'end_turn' });
-    const { generateItinerary } = await load();
-    const result = await generateItinerary(itinReq);
-    expect(result.narrativeText).toBeUndefined();
-    expect(result.days.length).toBeGreaterThan(0);
+    expect(result.isFallback).toBe(true);
+    expect(result.days).toHaveLength(0);
   });
 });
 
-// ── PREMIUM-GUIDE-001B (réouverture) — cache itinéraire versionné (H1) ──────────
+// ── GUIDE-V1 — cache itinéraire versionné guide-v1 ──────────
 
-describe('PREMIUM-GUIDE-001B — clé cache itinéraire versionnée (anti anciens JSON sans narrativeText)', () => {
+describe('GUIDE-V1 — clé cache itinéraire versionnée guide-v1', () => {
   const itinReq = {
     countryCode: 'JP', countryName: 'Japon',
     from: '2026-09-01', to: '2026-09-08',
     budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
   } as never;
 
-  const validJson = JSON.stringify({
-    narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée au Japon, je te conseille de commencer doucement.',
-    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
-    globalAdvice: ['conseil'],
-    safetyDisclaimer: 'disclaimer',
-    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
-  });
+  const validGuideText =
+    '**Le fil conducteur**\n\n' +
+    Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile`).join(' ') +
+    '\n\n**Mon conseil final**\n\nVérifie diplomatie.gouv.fr.';
 
-  it('la clé itinéraire inclut un segment de version narrative-v2 (bump anti-legacy)', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+  it('la clé itinéraire inclut un segment de version guide-v1', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
     const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
     expect(itinKey).toBeDefined();
-    expect(itinKey).toContain('narrative-v2');
+    expect(itinKey).toContain('guide-v1');
   });
 
   it('le segment de version est présent dans la clé EFFECTIVEMENT stockée', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+    createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
     const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
     expect(storedKey).toBeDefined();
-    expect(storedKey).toContain('narrative-v2');
+    expect(storedKey).toContain('guide-v1');
   });
 
-  it('la clé ne contient PLUS l\'ancien segment narrative-v1 (l\'ancien cache ne peut plus matcher)', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+  it('la clé ne contient PLUS les anciens segments (narrative-v1/v2)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
     const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
     expect(itinKey).toBeDefined();
     expect(itinKey).not.toContain('narrative-v1');
+    expect(itinKey).not.toContain('narrative-v2');
   });
 
   // Le fallback (catch) ne doit JAMAIS être mis en cache : il est construit HORS withCache.
@@ -551,18 +509,13 @@ describe('PREMIUM-GUIDE-001B — clé cache itinéraire versionnée (anti ancien
   });
 });
 
-// ── PREMIUM-GUIDE-001B (réouverture) — prompt : narrativeText = livrable principal ──
+// ── GUIDE-V1 — prompt : texte guide substantiel, formulations humaines ──
 
-describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText substantiel et prioritaire', () => {
+describe('GUIDE-V1 — prompt itinéraire : texte guide substantiel, voix humaine', () => {
   const src = readFileSync(resolve(process.cwd(), 'lib/claude/claude.service.ts'), 'utf-8');
   const itinBlock = src.slice(src.indexOf('export async function generateItinerary'));
 
-  it('le prompt désigne narrativeText comme le LIVRABLE PRINCIPAL', () => {
-    expect(itinBlock).toMatch(/LIVRABLE PRINCIPAL/);
-  });
-
   it('le prompt impose un nombre de paragraphes mis à l\'échelle de la durée', () => {
-    // La cible de paragraphes est interpolée depuis narrativeParagraphTarget.
     expect(itinBlock).toMatch(/narrativeParagraphTarget/);
     expect(itinBlock).toMatch(/paragraphes/i);
   });
@@ -572,7 +525,6 @@ describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText substantiel 
   });
 
   it('la cible de paragraphes croît avec la durée (court < long séjour)', () => {
-    // Le service exporte la logique via une expression : court séjour 6, long séjour 10.
     expect(itinBlock).toMatch(/days <= 4 \? 6/);
     expect(itinBlock).toMatch(/: 10/);
   });
@@ -584,88 +536,64 @@ describe('PREMIUM-GUIDE-001B — prompt itinéraire : narrativeText substantiel 
     expect(itinBlock).toMatch(/rythme le plus intelligent/i);
   });
 
-  it('le prompt demande des transitions entre étapes et des alternatives (fatigue/météo/budget)', () => {
-    expect(itinBlock).toMatch(/TRANSITIONS/i);
-    expect(itinBlock).toMatch(/ALTERNATIVES/i);
-    expect(itinBlock).toMatch(/fatigue/i);
-    expect(itinBlock).toMatch(/météo/i);
-  });
-
   it('le prompt demande d\'expliquer POURQUOI chaque étape est recommandée', () => {
     expect(itinBlock).toMatch(/POURQUOI/);
   });
 
-  it('le prompt marque les days comme SECONDAIRES par rapport au narratif', () => {
-    expect(itinBlock).toMatch(/SECONDAIRES/i);
-  });
-
-  it('le narratif reste dans le MÊME appel (max_tokens inchangé à 8000)', () => {
-    const m = itinBlock.match(/max_tokens:\s*(\d+)/);
-    expect(m).not.toBeNull();
-    expect(Number(m![1])).toBe(8000);
+  it('le prompt demande un format markdown (titres en gras + paragraphes), pas de cases', () => {
+    expect(itinBlock).toMatch(/markdown/i);
+    expect(itinBlock).toMatch(/Titres? courts? en gras/i);
   });
 });
 
-// ── PREMIUM-GUIDE-001B (réouverture) — diagnostic narrativeText insuffisant (point 5) ──
+// ── GUIDE-V1 — fallback honnête quand le guide est insuffisant ──
 
-describe('PREMIUM-GUIDE-001B — diagnostic dev quand narrativeText absent/trop court', () => {
+describe('GUIDE-V1 — fallback honnête quand le guide est insuffisant', () => {
   const itinReq = {
     countryCode: 'JP', countryName: 'Japon',
     from: '2026-09-01', to: '2026-09-08',
     budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
   } as never;
 
-  const dayPayload = {
-    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
-    globalAdvice: ['conseil'],
-    safetyDisclaimer: 'disclaimer',
-    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
-  };
-
-  // Narratif réaliste > 200 mots (le plancher MIN_NARRATIVE_WORDS).
-  const longNarrative =
+  const longGuide =
     '**Le fil conducteur du séjour**\n\n' +
     Array.from({ length: 60 }, (_, i) => `phrase${i} de guide détaillée pour le voyageur`).join(' ') +
-    '\n\n**Mon conseil final de guide**\n\nProfite bien et vérifie diplomatie.gouv.fr.';
+    '\n\n**Mon conseil final**\n\nProfite bien et vérifie diplomatie.gouv.fr.';
 
-  it('émet un warn quand une génération fraîche revient SANS narrativeText', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: JSON.stringify(dayPayload) }], stop_reason: 'end_turn' });
+  it('texte vide → fallback honnête NON caché (pas de faux contenu)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: '' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
-    await generateItinerary(itinReq);
-    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
-    expect(warn).toBeDefined();
+    const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
+    expect(result.narrativeText).toBeUndefined();
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeUndefined();
   });
 
-  it('émet un warn quand le narrativeText est trop court', async () => {
-    createImpl = () => Promise.resolve({
-      content: [{ text: JSON.stringify({ narrativeText: 'Trop court.', ...dayPayload }) }],
-      stop_reason: 'end_turn',
-    });
+  it('texte trop court → fallback honnête NON caché', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'Quelques mots seulement.' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
-    await generateItinerary(itinReq);
-    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
-    expect(warn).toBeDefined();
+    const result = await generateItinerary(itinReq);
+    expect(result.isFallback).toBe(true);
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeUndefined();
   });
 
-  it('n\'émet PAS de warn quand le narrativeText est substantiel', async () => {
-    createImpl = () => Promise.resolve({
-      content: [{ text: JSON.stringify({ narrativeText: longNarrative, ...dayPayload }) }],
-      stop_reason: 'end_turn',
-    });
+  it('guide substantiel → narrativeText présent, PAS fallback, mis en cache', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: longGuide }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
     expect(result.narrativeText).toBeDefined();
-    const warn = capturedWarns.find((w) => /narrativeText insuffisant/i.test(w));
-    expect(warn).toBeUndefined();
+    expect(result.isFallback).toBeFalsy();
+    const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
+    expect(storedKey).toBeDefined();
   });
 
-  it('le diagnostic ne lève JAMAIS d\'exception (rendu jour/jour reste un repli gracieux)', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: JSON.stringify(dayPayload) }], stop_reason: 'end_turn' });
+  it('le fallback ne lève JAMAIS d\'exception et ne fabrique pas de days', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: '' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
-    // Pas de narrativeText, mais les days du payload sont là et l'appel n'a pas throw.
-    expect(result.narrativeText).toBeUndefined();
-    expect(result.days).toHaveLength(dayPayload.days.length);
+    expect(result.days).toHaveLength(0);
   });
 });
 
@@ -678,13 +606,11 @@ describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', (
     budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
   } as never;
 
-  const validJson = JSON.stringify({
-    narrativeText: '**Le fil conducteur**\n\nÀ ton arrivée, je te conseille de commencer doucement.',
-    days: [{ day: 1, title: 'J1', summary: 's', morning: 'm', afternoon: 'a', evening: 'e', estimatedBudget: '~80', safetyNote: 'ok' }],
-    globalAdvice: ['conseil'],
-    safetyDisclaimer: 'disclaimer',
-    officialSourceReminder: 'Vérifiez toujours les informations officielles sur diplomatie.gouv.fr avant votre départ.',
-  });
+  // GUIDE-V1 : la sortie est un TEXTE de guide (>= 200 mots), pas un JSON.
+  const validGuideText =
+    '**Le fil conducteur**\n\n' +
+    Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile`).join(' ') +
+    '\n\n**Mon conseil final**\n\nVérifie diplomatie.gouv.fr.';
 
   // ── Le service appelle bien stream() (pas create non-streamé) ──────────────────
 
@@ -719,13 +645,13 @@ describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', (
 
   // ── Cas nominal : streaming réussit ──────────────────────────────────────────────
 
-  it('streaming nominal : itinéraire réel, narrativeText présent, PAS isFallback', async () => {
-    createImpl = () => Promise.resolve({ content: [{ text: validJson }], stop_reason: 'end_turn' });
+  it('streaming nominal : texte de guide en narrativeText, PAS isFallback, days vide', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
     expect(result.narrativeText).toContain('fil conducteur');
     expect(result.isFallback).toBeFalsy();
-    expect(result.days).toHaveLength(1);
+    expect(result.days).toHaveLength(0);
   });
 
   // ── Cas timeout : abort + repli marqué isFallback ────────────────────────────────
@@ -743,12 +669,11 @@ describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', (
     expect(abortCount).toBeGreaterThanOrEqual(1); // le stream a été aborté proprement
     expect(result.isFallback).toBe(true);          // repli marqué → UI honnête
     expect(result.narrativeText).toBeUndefined();  // pas de faux narratif
-    expect(result.days.length).toBeGreaterThan(0); // structure de repli présente
+    expect(result.days).toHaveLength(0);           // GUIDE-V1 : pas de fausses cartes
   });
 
-  it('le repli déterministe porte le marqueur isFallback (source + runtime)', async () => {
-    // Réponse JSON malformée → buildItineraryFallback.
-    createImpl = () => Promise.resolve({ content: [{ text: 'pas du json' }], stop_reason: 'end_turn' });
+  it('le repli déterministe porte le marqueur isFallback (texte vide → fallback)', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: '' }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     const result = await generateItinerary(itinReq);
     expect(result.isFallback).toBe(true);
@@ -756,9 +681,9 @@ describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', (
 
   // ── Garde anti-troncature toujours active via le stream ──────────────────────────
 
-  it('stop_reason="max_tokens" via stream → repli marqué isFallback (jamais le JSON tronqué)', async () => {
+  it('stop_reason="max_tokens" via stream → repli marqué isFallback (jamais le texte tronqué)', async () => {
     createImpl = () => Promise.resolve({
-      content: [{ text: '{"days":[{"day":1,"title":"J1' }],
+      content: [{ text: 'texte de guide coupé au milieu' }],
       stop_reason: 'max_tokens',
     });
     const { generateItinerary } = await load();
