@@ -19,6 +19,7 @@ import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destina
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 import { PremiumActions } from '@/components/crisis/PremiumActions';
+import { NarrativeRenderer } from '@/components/crisis/NarrativeRenderer';
 import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
 import type { VisaType } from '@/lib/data/visa-requirements';
 
@@ -103,13 +104,19 @@ type DestinationResult =
   | { kind: 'not_found' }      // le code pays n'existe pas dans notre référentiel
   | { kind: 'error' };          // le pays existe mais l'analyse a échoué techniquement
 
-async function getData(code: string): Promise<DestinationResult> {
+// PREMIUM-EXPERIENCE-001 (C) — `withNarrative` gate : la narrative IA premium n'est
+// générée (appel Claude coûteux + lent) QUE pour un utilisateur premium, le seul qui
+// la verra (elle vit dans le children du PremiumGate). Pour un non-premium on renvoie
+// narrative:'' : le scoring tourne toujours (gauges + synthèse gratuite restent
+// pleinement visibles), mais AUCUN appel Claude narrative n'est fait — moins de tokens,
+// page plus rapide, risque de timeout SSR réduit à la source.
+async function getData(code: string, withNarrative: boolean): Promise<DestinationResult> {
   const country = findCountry(code);
   if (!country) return { kind: 'not_found' };
   try {
     const profile = { departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType: 'solo' as const, mode: 'standard' as const };
     const score = await calculateCrisisScore(country, profile);
-    const narrative = await generateDestinationNarrative(score, profile);
+    const narrative = withNarrative ? await generateDestinationNarrative(score, profile) : '';
     return { kind: 'ok', data: { score, narrative, flagUrl: getFlagUrlLarge(code), colors: getCountryColors(code) } };
   } catch {
     // Le pays existe mais une exception est survenue (scoring/narrative) —
@@ -120,10 +127,10 @@ async function getData(code: string): Promise<DestinationResult> {
 
 export default async function DestinationPage({ params }: Props) {
   const { country } = await params;
-  const [result, { user, isPremium }] = await Promise.all([
-    getData(country.toUpperCase()),
-    getUserWithSubscription(),
-  ]);
+  // L'abonnement est résolu D'ABORD : il conditionne la génération de la narrative
+  // (premium-only). getData ne lance l'appel Claude que si isPremium est vrai.
+  const { user, isPremium } = await getUserWithSubscription();
+  const result = await getData(country.toUpperCase(), isPremium);
 
   if (result.kind !== 'ok') {
     // Deux messages distincts : pays inconnu de notre référentiel vs panne technique.
@@ -616,17 +623,20 @@ export default async function DestinationPage({ params }: Props) {
                   Générée à partir des signaux disponibles
                 </span>
               </div>
-              <div className="ctv3-serif" style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--ctv3-paper)', whiteSpace: 'pre-wrap' }}>
-                {narrative}
-              </div>
+              {/* PREMIUM-EXPERIENCE-001 (A) — narrative rendue en sections lisibles
+                  (titres, paragraphes aérés, listes) au lieu d'un bloc markdown brut. */}
+              <NarrativeRenderer narrative={narrative} />
 
-              {/* Actions premium réelles — itinéraire (→ /results) + export PDF.
-                  Pas de génération in-place : le CTA itinéraire oriente seulement. */}
+              {/* PREMIUM-EXPERIENCE-001 (D) — actions premium : itinéraire IN-PLACE
+                  ciblé sur le pays de la fiche (countryCode/countryName + meaeLevel),
+                  on-demand (jamais en SSR) via /api/itinerary, + export PDF.
+                  Plus de router.push('/results') nu qui perdait le pays. */}
               <PremiumActions
                 countryCode={score.countryCode}
                 countryName={score.country}
                 scoreSnapshot={score}
                 narrative={narrative}
+                meaeLevel={meaeLevel as 1 | 2 | 3 | 4}
               />
             </div>
           </PremiumGate>

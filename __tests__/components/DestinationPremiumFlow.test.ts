@@ -143,25 +143,101 @@ describe('PREMIUM-FLOW-001F — composant PremiumActions (actions premium réell
     expect(src).toMatch(/Préparer mon itinéraire/);
   });
 
-  it('le bouton itinéraire redirige vers /results (vrai flow, pas de génération in-place)', () => {
-    const src = read(ACTIONS);
-    expect(src).toContain('/results');
-  });
-
-  it('PremiumActions n\'appelle PAS de route itinéraire (aucune valeur figée)', () => {
-    const src = read(ACTIONS);
-    expect(src).not.toMatch(/\/api\/itinerary/);
-  });
-
   it('PremiumActions monte PdfExportButton pour l\'export', () => {
     const src = read(ACTIONS);
     expect(src).toMatch(/PdfExportButton/);
   });
 });
 
-describe('PREMIUM-FLOW-001D — aucun itinéraire généré avec valeurs figées', () => {
-  it('la page ne monte PAS ItineraryBlock (pas de génération in-place avec profil figé)', () => {
+// ── PREMIUM-EXPERIENCE-001 (D) — itinéraire IN-PLACE ciblé pays ──────────────────
+// Décision produit B1 : depuis une fiche pays, « Préparer mon itinéraire » affiche
+// ItineraryBlock IN-PLACE pour CE pays (countryCode/countryName transmis), au lieu de
+// router.push('/results') nu qui relançait une analyse globale ciblant ranked[0].
+// (Remplace les tests hérités de PREMIUM-FLOW-001F qui interdisaient ItineraryBlock /
+//  /api/itinerary sur la fiche pays.)
+describe('PREMIUM-EXPERIENCE-001 (D) — itinéraire in-place ciblé pays', () => {
+  it('PremiumActions ne fait PLUS de router.push(\'/results\') nu', () => {
+    const src = read(ACTIONS);
+    // On retire les commentaires avant d'asserter, pour ne pas matcher la prose qui
+    // documente l'ancien comportement.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/router\.push\(\s*['"]\/results['"]\s*\)/);
+    // useRouter n'est même plus importé/utilisé (navigation remplacée par un toggle local).
+    expect(code).not.toMatch(/useRouter/);
+  });
+
+  it('PremiumActions monte ItineraryBlock (itinéraire affiché in-place)', () => {
+    const src = read(ACTIONS);
+    expect(src).toMatch(/<ItineraryBlock/);
+    expect(src).toMatch(/from\s+['"]\.\/ItineraryBlock['"]/);
+  });
+
+  it('ItineraryBlock reçoit le countryCode et le countryName de la fiche', () => {
+    const src = read(ACTIONS);
+    const block = src.slice(src.indexOf('<ItineraryBlock'));
+    expect(block).toMatch(/countryCode=\{countryCode\}/);
+    expect(block).toMatch(/countryName=\{countryName\}/);
+  });
+
+  it('l\'itinéraire reste on-demand : ItineraryBlock n\'est monté qu\'après interaction (état)', () => {
+    const src = read(ACTIONS);
+    // Le bloc n'est rendu que conditionnellement (toggle via state), pas inconditionnellement.
+    expect(src).toMatch(/showItinerary/);
+    expect(src).toMatch(/\{showItinerary\s*&&/);
+  });
+
+  it('la page destination transmet score.countryCode à PremiumActions', () => {
     const src = read(DEST_PAGE);
-    expect(src).not.toMatch(/<ItineraryBlock/);
+    const block = src.slice(src.indexOf('<PremiumActions'));
+    expect(block).toMatch(/countryCode=\{score\.countryCode\}/);
+  });
+});
+
+// ── PREMIUM-EXPERIENCE-001 (C) — narrative premium générée SEULEMENT si premium ───
+describe('PREMIUM-EXPERIENCE-001 (C) — SSR narrative premium-only', () => {
+  it('getData reçoit un drapeau de génération narrative (premium-gated)', () => {
+    const src = read(DEST_PAGE);
+    // getData prend un second argument booléen qui conditionne l'appel Claude.
+    expect(src).toMatch(/async function getData\([^)]*,\s*\w+:\s*boolean\)/);
+  });
+
+  it('generateDestinationNarrative n\'est appelée que sous condition (pas systématiquement)', () => {
+    const src = read(DEST_PAGE);
+    // L'appel est gardé par une condition (ternaire/if), pas un await nu inconditionnel.
+    expect(src).toMatch(/\?\s*await generateDestinationNarrative|if\s*\([^)]*\)\s*[^;]*generateDestinationNarrative/);
+  });
+
+  it('isPremium est résolu et passé à getData', () => {
+    const src = read(DEST_PAGE);
+    expect(src).toMatch(/getUserWithSubscription/);
+    // getData reçoit isPremium comme dernier argument (l'argument peut contenir des
+    // appels imbriqués, ex. country.toUpperCase(), d'où le matcher tolérant).
+    expect(src).toMatch(/getData\([\s\S]*?,\s*isPremium\s*\)/);
+  });
+
+  it('la synthèse gratuite (basicSynthesis) reste rendue indépendamment de la narrative', () => {
+    const src = read(DEST_PAGE);
+    // basicSynthesis vient de buildFreeSummary (données structurées), pas de la narrative.
+    expect(src).toMatch(/freeSummary\.basicSynthesis/);
+    const freeIdx = src.indexOf('data-testid="free-summary"');
+    const gateIdx = src.indexOf('<PremiumGate');
+    expect(freeIdx).toBeGreaterThan(-1);
+    expect(freeIdx).toBeLessThan(gateIdx);
+  });
+});
+
+// ── PREMIUM-EXPERIENCE-001 (A) — narrative rendue en sections (plus de bloc brut) ──
+describe('PREMIUM-EXPERIENCE-001 (A) — rendu narrative structuré', () => {
+  it('la page rend la narrative via NarrativeRenderer (plus de bloc whiteSpace:pre-wrap brut)', () => {
+    const src = read(DEST_PAGE);
+    expect(src).toMatch(/<NarrativeRenderer\s+narrative=\{narrative\}/);
+  });
+
+  it('la narrative premium reste dans le PremiumGate', () => {
+    const src = read(DEST_PAGE);
+    const gateOpen = src.indexOf('<PremiumGate');
+    const gateClose = src.indexOf('</PremiumGate>');
+    const block = src.slice(gateOpen, gateClose);
+    expect(block).toMatch(/<NarrativeRenderer/);
   });
 });

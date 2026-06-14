@@ -48,11 +48,17 @@ export async function generateDestinationNarrative(
   // La clé inclut le travelType : le prompt distingue déjà solo/couple/family/nomad,
   // donc deux profils ne doivent PAS partager la même narrative en cache
   // (ANALYZE-PROFILE-001 — sinon une narrative "solo" est resservie à une famille).
+  //
+  // Segment de version 'v2' (PREMIUM-EXPERIENCE-001 B) : le prompt narrative a été
+  // réécrit en 10 sections (PREMIUM-CONTENT-001). Sans versionner la clé, les anciennes
+  // narratives courtes (3 paragraphes) restaient servies jusqu'à expiration du TTL.
+  // Bumper ce segment à chaque refonte du prompt force une régénération propre.
   const key = buildCacheKey(
     'claude-narrative',
     score.countryCode,
     String(Math.floor(score.total / 5)),
     profile.travelType,
+    'v2',
   );
   try {
     const { data, fromCache } = await withCache(

@@ -122,6 +122,17 @@ describe('generateDestinationNarrative — clé cache profile-aware (ANALYZE-PRO
     expect(narrativeKey).toContain('family');
   });
 
+  // PREMIUM-EXPERIENCE-001 (B) — la clé narrative est versionnée pour ne plus servir
+  // les anciennes narratives courtes générées avant la refonte du prompt (10 sections).
+  it('la clé narrative inclut un segment de version v2', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: 'Analyse versionnée.' }] });
+    const { generateDestinationNarrative } = await load();
+    await generateDestinationNarrative(score, mk('solo'));
+    const narrativeKey = capturedCacheKeys.find((k) => k.includes('claude-narrative'));
+    expect(narrativeKey).toBeDefined();
+    expect(narrativeKey).toContain('v2');
+  });
+
   it('solo et family produisent des clés narrative DIFFÉRENTES (pas de partage cache)', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: 'x' }] });
     const { generateDestinationNarrative } = await load();
