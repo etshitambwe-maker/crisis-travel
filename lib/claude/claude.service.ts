@@ -197,7 +197,9 @@ const ITINERARY_HARD_TIMEOUT_MS = 45000;
 // « guide » premium → on rejette (throw dans le fetcher) AVANT toute mise en cache, et le
 // catch renvoie un fallback honnête. Réglé sous le minimum demandé au prompt pour ne
 // rejeter que les vrais déficits, pas les textes corrects légèrement en deçà de la cible.
-const MIN_NARRATIVE_WORDS = 200;
+// GUIDE-V2 (anti-timeout) : cible revue à 250-400 mots → plancher abaissé 200 → 180 en
+// cohérence, pour ne rejeter que les vrais déficits face à la nouvelle cible plus courte.
+const MIN_NARRATIVE_WORDS = 180;
 
 function classifyBudget(amount: number, days: number): BudgetLevel {
   const perDay = amount / days;
@@ -247,29 +249,32 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
   const meaeLevel = req.riskContext?.meaeLevel ?? 1;
   const perDay = Math.round(budgetAmount / days);
 
-  // Cible du narratif mise à l'échelle de la durée (PREMIUM-GUIDE-001B) : un séjour long
-  // ne doit PAS se contenter de ~250 mots. On exige plus de paragraphes et de mots quand
-  // le voyage s'allonge — le narrativeText est le cœur de l'expérience premium, pas une
-  // intro. Bornes : court séjour ≈ 6 paragraphes / 280 mots ; long séjour ≈ 10 / 550.
-  const narrativeParagraphTarget = days <= 4 ? 6 : days <= 8 ? 7 : days <= 12 ? 8 : 10;
-  const narrativeWordTarget = Math.min(600, 250 + days * 30);
+  // Cible du narratif (GUIDE-V2, anti-timeout) : volontairement COURTE et bornée pour que
+  // la génération passe sous le hard timeout de 45 s (cf. logs Preview : l'ancienne cible
+  // 6-10 paragraphes / ~600 mots faisait déborder Claude → fallback systématique). On vise
+  // désormais un texte guide ramassé mais réel : 4 à 6 paragraphes, ~250 à 400 mots. La
+  // durée du séjour fait varier la cible DANS cette fourchette serrée, jamais au-delà —
+  // mieux vaut un guide court qui s'affiche qu'un long qui timeoute.
+  const narrativeParagraphTarget = days <= 6 ? 4 : days <= 12 ? 5 : 6;
+  const narrativeWordTarget = Math.min(400, 250 + days * 12);
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return buildItineraryFallback(req, days);
   }
 
-  // Segment de version 'guide-v1' (PREMIUM-GUIDE-001B, refonte produit) : l'itinéraire
-  // premium n'est PLUS un JSON jour/matin/après-midi/soir mais un TEXTE de guide narratif
-  // (narrativeText). Bump 'narrative-v2' → 'guide-v1' : invalide d'un coup tous les anciens
-  // itinéraires cachés (JSON lourd, cartes vides) — ils ne peuvent plus ressortir. Aucune
-  // purge manuelle de Redis.
+  // Segment de version 'guide-v2' (PREMIUM-GUIDE-001B, anti-timeout) : le CONTRAT de longueur
+  // du guide change (cible ramassée 250-400 mots / 4-6 paragraphes pour passer sous le hard
+  // timeout). Bump 'guide-v1' → 'guide-v2' : invalide les guides cachés au format précédent
+  // (potentiellement plus longs), pour ne resservir que des textes générés sous le nouveau
+  // contrat. Aucune purge manuelle de Redis. (Rappel historique : 'narrative-v2' → 'guide-v1'
+  // avait déjà tué les anciens itinéraires JSON lourds à cartes vides.)
   const cacheKey = buildCacheKey(
     'itinerary',
     req.countryCode ?? req.countryName ?? 'unknown',
     String(days),
     String(Math.floor(budgetAmount / 100) * 100),
     req.travelType ?? 'solo',
-    'guide-v1',
+    'guide-v2',
   );
 
   const safetyHeader = meaeLevel >= 3
@@ -319,11 +324,11 @@ CE QUE TU ÉCRIS — un texte de guide, comme si tu parlais directement au voyag
 - Intègre les PRÉCAUTIONS de sécurité cohérentes avec MEAE ${meaeLevel}/4, sans dramatiser ni promettre une sécurité absolue, et rappelle de vérifier diplomatie.gouv.fr avant le départ et de s'inscrire sur Ariane.
 - Intègre explicitement le pays, la durée (${days} jours), le budget (~${perDay} ${currency}/jour) et le profil.
 
-FORMAT (markdown léger) :
-- Titres courts en gras "**Titre**", paragraphes séparés par une LIGNE VIDE. Quelques titres seulement (4 à 7), pas une liste de cases.
-- AU MOINS ${narrativeParagraphTarget} paragraphes nourris (~${narrativeWordTarget} mots minimum). Un séjour long EXIGE plus de matière.
-- Ossature conseillée (adapte-la, ne la recopie pas mécaniquement) :
-  **Le fil conducteur du séjour** · **Comment démarrer** · **Le bon rythme à adopter** · **Les grandes étapes, et pourquoi** · **Si ça se complique** · **Les précautions à garder en tête** · **Mon conseil final**
+FORMAT (markdown léger) — RESTE CONCIS :
+- Titres courts en gras "**Titre**", paragraphes séparés par une LIGNE VIDE. Quelques titres seulement (3 à 5), pas une liste de cases.
+- Vise ${narrativeParagraphTarget} à ${narrativeParagraphTarget + 1} paragraphes, ~${narrativeWordTarget} mots au total (NE DÉPASSE PAS ~420 mots). Mieux vaut un guide dense et utile que long et dilué : va droit au but, pas de remplissage.
+- Ossature conseillée (adapte-la, ne la recopie pas mécaniquement, et fusionne des points si besoin pour rester court) :
+  **Le fil conducteur du séjour** · **Le bon rythme à adopter** · **Les grandes étapes, et pourquoi** · **Si ça se complique & précautions** · **Mon conseil final**
 
 RÈGLES ABSOLUES :
 1. Ne prétends PAS accéder à des données en temps réel (prix de vols, météo live, disponibilités).
@@ -343,11 +348,12 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
         let timer: ReturnType<typeof setTimeout> | undefined;
 
         // STREAMING (PREMIUM-GUIDE-001B-timeout) : le streaming évite le timeout HTTP du SDK.
-        // GUIDE-V1 : la sortie est désormais un texte (pas un gros JSON), donc max_tokens
-        // descend de 8000 à 3000 — moins de tokens à générer = moins de risque de timeout.
+        // GUIDE-V2 (anti-timeout) : la cible texte est ramassée (250-400 mots), donc max_tokens
+        // descend de 3000 à 1800 — moins de tokens à générer = génération plus rapide, sous le
+        // hard timeout de 45 s (cf. logs Preview où 3000 tokens débordaient systématiquement).
         const stream = client.messages.stream({
           model: 'claude-sonnet-4-6',
-          max_tokens: 3000,
+          max_tokens: 1800,
           messages: [{ role: 'user', content: prompt }],
         });
 

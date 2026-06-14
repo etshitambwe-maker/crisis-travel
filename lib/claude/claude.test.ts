@@ -185,7 +185,7 @@ describe('garde anti-troncature (REPORT-LENGTH-001)', () => {
     budget: 2000, currency: 'EUR', travelers: 1, travelType: 'solo', preferences: [],
   } as never;
 
-  // GUIDE-V1 : l'itinéraire est un TEXTE de guide (>= MIN_NARRATIVE_WORDS=200 mots), pas un JSON.
+  // GUIDE-V2 : l'itinéraire est un TEXTE de guide (>= MIN_NARRATIVE_WORDS=180 mots), pas un JSON.
   const validGuideText =
     '**Le fil conducteur du séjour**\n\n' +
     Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile pour le voyageur`).join(' ') +
@@ -396,10 +396,10 @@ describe('GUIDE-V1 — prompt itinéraire : texte de guide (pas de JSON, pas de 
     expect(itinBlock).toContain('diplomatie.gouv.fr');
   });
 
-  it('le max_tokens itinéraire est réduit à 3000 (sortie texte, moins de timeout)', () => {
+  it('le max_tokens itinéraire est réduit à 1800 (GUIDE-V2, sortie courte, moins de timeout)', () => {
     const m = itinBlock.match(/max_tokens:\s*(\d+)/);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBe(3000);
+    expect(Number(m![1])).toBe(1800);
   });
 });
 
@@ -444,9 +444,9 @@ describe('GUIDE-V1 — sortie texte : narrativeText unique livrable, days vide',
   });
 });
 
-// ── GUIDE-V1 — cache itinéraire versionné guide-v1 ──────────
+// ── GUIDE-V2 — cache itinéraire versionné guide-v2 ──────────
 
-describe('GUIDE-V1 — clé cache itinéraire versionnée guide-v1', () => {
+describe('GUIDE-V2 — clé cache itinéraire versionnée guide-v2', () => {
   const itinReq = {
     countryCode: 'JP', countryName: 'Japon',
     from: '2026-09-01', to: '2026-09-08',
@@ -458,13 +458,13 @@ describe('GUIDE-V1 — clé cache itinéraire versionnée guide-v1', () => {
     Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile`).join(' ') +
     '\n\n**Mon conseil final**\n\nVérifie diplomatie.gouv.fr.';
 
-  it('la clé itinéraire inclut un segment de version guide-v1', async () => {
+  it('la clé itinéraire inclut un segment de version guide-v2', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
     const itinKey = capturedCacheKeys.find((k) => k.includes('itinerary'));
     expect(itinKey).toBeDefined();
-    expect(itinKey).toContain('guide-v1');
+    expect(itinKey).toContain('guide-v2');
   });
 
   it('le segment de version est présent dans la clé EFFECTIVEMENT stockée', async () => {
@@ -473,10 +473,10 @@ describe('GUIDE-V1 — clé cache itinéraire versionnée guide-v1', () => {
     await generateItinerary(itinReq);
     const storedKey = storedCacheKeys.find((k) => k.includes('itinerary'));
     expect(storedKey).toBeDefined();
-    expect(storedKey).toContain('guide-v1');
+    expect(storedKey).toContain('guide-v2');
   });
 
-  it('la clé ne contient PLUS les anciens segments (narrative-v1/v2)', async () => {
+  it('la clé ne contient PLUS les anciens segments (narrative-v1/v2, guide-v1)', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: validGuideText }], stop_reason: 'end_turn' });
     const { generateItinerary } = await load();
     await generateItinerary(itinReq);
@@ -484,6 +484,7 @@ describe('GUIDE-V1 — clé cache itinéraire versionnée guide-v1', () => {
     expect(itinKey).toBeDefined();
     expect(itinKey).not.toContain('narrative-v1');
     expect(itinKey).not.toContain('narrative-v2');
+    expect(itinKey).not.toContain('guide-v1');
   });
 
   // Le fallback (catch) ne doit JAMAIS être mis en cache : il est construit HORS withCache.
@@ -524,9 +525,11 @@ describe('GUIDE-V1 — prompt itinéraire : texte guide substantiel, voix humain
     expect(itinBlock).toMatch(/narrativeWordTarget/);
   });
 
-  it('la cible de paragraphes croît avec la durée (court < long séjour)', () => {
-    expect(itinBlock).toMatch(/days <= 4 \? 6/);
-    expect(itinBlock).toMatch(/: 10/);
+  it('la cible de paragraphes reste courte et croît avec la durée (GUIDE-V2 : bornée 4→6)', () => {
+    // GUIDE-V2 (anti-timeout) : fourchette resserrée 4-6 paragraphes (court → long séjour),
+    // jamais au-delà — mieux vaut un guide court qui s'affiche qu'un long qui timeoute.
+    expect(itinBlock).toMatch(/days <= 6 \? 4/);
+    expect(itinBlock).toMatch(/: 6;/);
   });
 
   it('le prompt emploie des formulations de guide humain (je te conseille / j\'éviterais)', () => {
@@ -606,7 +609,7 @@ describe('PREMIUM-GUIDE-001B-timeout — streaming, timeouts, repli honnête', (
     budget: 2000, currency: 'EUR', travelers: 2, travelType: 'couple', preferences: [],
   } as never;
 
-  // GUIDE-V1 : la sortie est un TEXTE de guide (>= 200 mots), pas un JSON.
+  // GUIDE-V2 : la sortie est un TEXTE de guide (>= 180 mots), pas un JSON.
   const validGuideText =
     '**Le fil conducteur**\n\n' +
     Array.from({ length: 70 }, (_, i) => `phrase${i} de guide concrète et utile`).join(' ') +
