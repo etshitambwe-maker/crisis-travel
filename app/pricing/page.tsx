@@ -10,14 +10,15 @@ const PLANS = [
     period: 'toujours',
     color: '#6b6b85',
     features: [
-      { label: '3 analyses complètes / mois', included: true },
-      { label: 'Accès lecture fiches destinations', included: true },
-      { label: 'CrisisScore en temps réel', included: true },
+      { label: '3 analyses CrisisScore / mois', included: true },
+      { label: 'Fiches destination : scores, MEAE, budget, visa', included: true },
+      { label: 'Synthèse voyage gratuite (verdict + conseils)', included: true },
+      { label: 'Guide terrain pays (IA)', included: false },
+      { label: 'Itinéraire parcours-guide personnalisé', included: false },
+      { label: 'Analyse détaillée + risques/événements live', included: false },
+      { label: 'Exports PDF (rapport + guide)', included: false },
       { label: 'Analyses illimitées', included: false },
-      { label: 'Alertes push par email', included: false },
-      { label: 'Export PDF rapport voyage', included: false },
       { label: 'Historique des scores (6 mois)', included: false },
-      { label: 'Accès API B2B', included: false },
     ],
   },
   {
@@ -29,14 +30,12 @@ const PLANS = [
     highlight: true,
     badge: 'POPULAIRE',
     features: [
+      { label: 'Guide terrain pays (IA) — où se baser, quoi éviter', included: true },
+      { label: 'Itinéraire parcours-guide personnalisé', included: true },
+      { label: 'Analyse détaillée + risques/événements live', included: true },
+      { label: 'Exports PDF illimités (rapport + guide pays)', included: true },
       { label: 'Analyses illimitées', included: true },
-      { label: 'Alertes push par email', included: true },
-      { label: 'Export PDF rapport voyage', included: true },
       { label: 'Historique des scores (6 mois)', included: true },
-      { label: 'Fiches destinations complètes', included: true },
-      { label: 'Tri et filtres avancés', included: true },
-      { label: 'Support prioritaire', included: true },
-      { label: 'Accès API B2B', included: false },
     ],
   },
   {
@@ -47,14 +46,10 @@ const PLANS = [
     saving: '−29%',
     color: '#3ddc97',
     features: [
-      { label: 'Tout Premium mensuel', included: true },
-      { label: '29% d\'économie vs mensuel', included: true },
+      { label: 'Tout Premium mensuel inclus', included: true },
+      { label: "29% d'économie vs mensuel", included: true },
       { label: 'Priorité nouvelles fonctionnalités', included: true },
       { label: 'Accès bêta', included: true },
-      { label: 'Support prioritaire', included: true },
-      { label: 'Fiches destinations complètes', included: true },
-      { label: 'Alertes push par email', included: true },
-      { label: 'Accès API B2B', included: false },
     ],
   },
 ];
@@ -125,7 +120,7 @@ export default function PricingPage() {
             VOYAGEZ<br/><span style={{ color: '#ff3b2f' }}>INTELLIGENT</span>
           </h1>
           <p style={{ color: '#9898b0', fontSize: 15, lineHeight: 1.5, maxWidth: 480, margin: '0 auto' }}>
-            Commencez gratuitement. Passez à Premium pour des analyses illimitées et des alertes en temps réel.
+            Commencez gratuitement. Passez à Premium pour débloquer le guide terrain pays, l'itinéraire personnalisé et l'analyse détaillée.
           </p>
         </section>
 
