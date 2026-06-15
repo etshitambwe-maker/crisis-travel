@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { CrisisScore, ItineraryResult, PremiumCountryGuide } from '@/types/crisis.types';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { loadTripContext } from '@/lib/utils/tripContext';
 
 interface PdfExportButtonProps {
   countryCode: string;
@@ -36,12 +37,30 @@ export function PdfExportButton({ countryCode, countryName, profile, itinerary, 
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [showAuth, setShowAuth] = useState(false);
 
+  // TRIP-CONTEXT-001 : si le profil n'est pas transmis par le parent (accès direct
+  // à la page destination), on lit le TripContext depuis sessionStorage pour éviter
+  // un PDF sans profil (budget/travelType vides).
+  const [effectiveProfile, setEffectiveProfile] = useState(profile);
+  useEffect(() => {
+    if (profile) return; // profil déjà fourni par le parent — on ne l'écrase pas
+    const ctx = loadTripContext();
+    if (ctx) {
+      setEffectiveProfile({
+        budget:     ctx.budget,
+        duration:   ctx.duration,
+        travelType: ctx.travelType,
+        from:       ctx.from,
+        to:         ctx.to,
+      });
+    }
+  }, [profile]);
+
   async function handleExport() {
     if (status === 'loading') return;
     setStatus('loading');
 
     try {
-      const body: Record<string, unknown> = { profile: profile ?? {} };
+      const body: Record<string, unknown> = { profile: effectiveProfile ?? {} };
       if (itinerary)      body.itinerary      = itinerary;
       if (scoreSnapshot)  body.scoreSnapshot  = scoreSnapshot;
       if (narrative)      body.narrative      = narrative;

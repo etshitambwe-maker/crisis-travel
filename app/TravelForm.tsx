@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { saveTripContext } from '@/lib/utils/tripContext';
 
 const TRAVEL_TYPES = [
   { value: 'solo', label: 'Solo' },
@@ -27,6 +28,18 @@ export function TravelForm() {
     e.preventDefault();
     setLoading(true);
     const params = new URLSearchParams({ budget: String(budget), duration: String(duration), travelType, mode });
+    // TRIP-CONTEXT-001 : persiste le profil en sessionStorage avant la navigation.
+    // Tous les composants clients en aval (PremiumActions, CountryGuideBlock, PdfExportButton)
+    // le liront pour éviter les hardcodes (budget:1500 / duration:7 / travelType:'solo').
+    saveTripContext({
+      budget,
+      duration,
+      travelType: travelType as 'solo' | 'couple' | 'family' | 'nomad',
+      mode: mode as 'standard' | 'bunker' | 'budget_crisis',
+      departureCountry: 'FR',
+      createdAt: new Date().toISOString(),
+      source: 'form',
+    });
     router.push(`/results?${params.toString()}`);
     // router.push is fire-and-forget; reset loading so the button is not
     // permanently disabled if the user navigates back to this form.

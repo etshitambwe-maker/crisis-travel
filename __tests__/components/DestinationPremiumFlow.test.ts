@@ -198,7 +198,9 @@ describe('PREMIUM-EXPERIENCE-001 (C) — SSR narrative premium-only', () => {
   it('getData reçoit un drapeau de génération narrative (premium-gated)', () => {
     const src = read(DEST_PAGE);
     // getData prend un second argument booléen qui conditionne l'appel Claude.
-    expect(src).toMatch(/async function getData\([^)]*,\s*\w+:\s*boolean\)/);
+    // TRIP-CONTEXT-001 : la signature accepte désormais un 3ème param optionnel
+    // (userProfile) — on vérifie la présence de withNarrative: boolean dans la sig.
+    expect(src).toMatch(/async function getData\([^,)]+,\s*\w+:\s*boolean/);
   });
 
   it('generateDestinationNarrative n\'est appelée que sous condition (pas systématiquement)', () => {
@@ -210,9 +212,9 @@ describe('PREMIUM-EXPERIENCE-001 (C) — SSR narrative premium-only', () => {
   it('isPremium est résolu et passé à getData', () => {
     const src = read(DEST_PAGE);
     expect(src).toMatch(/getUserWithSubscription/);
-    // getData reçoit isPremium comme dernier argument (l'argument peut contenir des
-    // appels imbriqués, ex. country.toUpperCase(), d'où le matcher tolérant).
-    expect(src).toMatch(/getData\([\s\S]*?,\s*isPremium\s*\)/);
+    // getData reçoit isPremium comme second argument (withNarrative gate).
+    // TRIP-CONTEXT-001 : un 3ème arg optionnel (userProfile) peut suivre.
+    expect(src).toMatch(/getData\([\s\S]*?,\s*isPremium/);
   });
 
   it('la synthèse gratuite (basicSynthesis) reste rendue indépendamment de la narrative', () => {

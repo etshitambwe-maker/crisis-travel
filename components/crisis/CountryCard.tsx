@@ -28,6 +28,8 @@ import { ScoreTooltip } from './ScoreTooltip';
 
 interface Props {
   score: CrisisScore;
+  /** TRIP-CONTEXT-001 — Query params à transmettre vers /destination pour la SSR profile-aware. */
+  destinationParams?: string;
 }
 
 const PILLARS = [
@@ -37,7 +39,7 @@ const PILLARS = [
   { label: 'Praticité', key: 'practicality' as const },
 ];
 
-export function CountryCard({ score }: Props) {
+export function CountryCard({ score, destinationParams }: Props) {
   const ident = getDestinationImagery(score.countryCode);
   const tier = tierFromScore(score.total);
   const tierInfo = TIER[tier];
@@ -67,9 +69,13 @@ export function CountryCard({ score }: Props) {
     : `Euro ${fxDelta.toFixed(0)}%`;
   const fxColor = fxDelta > 10 ? 'var(--ctv3-ideal)' : fxDelta < -5 ? 'var(--ctv3-red)' : 'var(--ctv3-muted)';
 
+  const destHref = destinationParams
+    ? `/destination/${score.countryCode}?${destinationParams}`
+    : `/destination/${score.countryCode}`;
+
   return (
     <Link
-      href={`/destination/${score.countryCode}`}
+      href={destHref}
       className="ctv3-result-card"
       style={{ textDecoration: 'none', display: 'block', color: 'inherit' }}
     >

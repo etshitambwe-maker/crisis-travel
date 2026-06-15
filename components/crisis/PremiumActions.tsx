@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { CrisisScore } from '@/types/crisis.types';
 import { PdfExportButton } from './PdfExportButton';
 import { ItineraryBlock } from './ItineraryBlock';
+import { loadTripContext } from '@/lib/utils/tripContext';
 
 /**
  * PREMIUM-EXPERIENCE-001 (D) — Actions premium réelles du bloc « Aller plus loin ».
@@ -28,10 +29,39 @@ interface Props {
   narrative: string;
   /** Niveau MEAE de la fiche (1–4) — transmis à l'itinéraire pour les notes de sécurité. */
   meaeLevel?: 1 | 2 | 3 | 4;
+  /**
+   * TRIP-CONTEXT-001 — Profil SSR (depuis searchParams de la page destination).
+   * Utilisé comme source initiale ; le TripContext sessionStorage prend le dessus si présent.
+   */
+  ssrProfile?: {
+    budget?: number;
+    duration?: number;
+    travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+    from?: string;
+    to?: string;
+  };
 }
 
-export function PremiumActions({ countryCode, countryName, scoreSnapshot, narrative, meaeLevel }: Props) {
+export function PremiumActions({ countryCode, countryName, scoreSnapshot, narrative, meaeLevel, ssrProfile }: Props) {
   const [showItinerary, setShowItinerary] = useState(false);
+
+  // TRIP-CONTEXT-001 : lit le TripContext depuis sessionStorage (client-only).
+  // ssrProfile sert de fallback quand le contexte n'est pas en sessionStorage
+  // (ex. accès direct à la fiche destination sans analyse préalable).
+  const [tripProfile, setTripProfile] = useState(ssrProfile);
+
+  useEffect(() => {
+    const ctx = loadTripContext();
+    if (ctx) {
+      setTripProfile({
+        budget:     ctx.budget,
+        duration:   ctx.duration,
+        travelType: ctx.travelType,
+        from:       ctx.from,
+        to:         ctx.to,
+      });
+    }
+  }, []);
 
   return (
     <div data-testid="premium-actions" style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--ctv3-line-soft)' }}>
@@ -57,6 +87,7 @@ export function PremiumActions({ countryCode, countryName, scoreSnapshot, narrat
           countryName={countryName}
           scoreSnapshot={scoreSnapshot}
           narrative={narrative}
+          profile={tripProfile}
         />
       </div>
 
@@ -67,7 +98,16 @@ export function PremiumActions({ countryCode, countryName, scoreSnapshot, narrat
         <ItineraryBlock
           countryCode={countryCode}
           countryName={countryName}
-          travelType="solo"
+          travelType={tripProfile?.travelType ?? 'solo'}
+          budget={tripProfile?.budget}
+          dateFrom={tripProfile?.from}
+          dateTo={tripProfile?.to}
+          travelers={
+            (() => {
+              const tt = tripProfile?.travelType;
+              return tt === 'couple' || tt === 'family' ? 2 : 1;
+            })()
+          }
           meaeLevel={meaeLevel}
         />
       )}

@@ -98,6 +98,8 @@ const VISA_COLOR: Record<VisaType, string> = {
 
 interface Props {
   params: Promise<{ country: string }>;
+  /** TRIP-CONTEXT-001 — Query params optionnels transmis par CountryCard depuis /results. */
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 type DestinationData = { score: CrisisScore; narrative: string; flagUrl: string; colors: [string, string] };
@@ -106,17 +108,36 @@ type DestinationResult =
   | { kind: 'not_found' }      // le code pays n'existe pas dans notre référentiel
   | { kind: 'error' };          // le pays existe mais l'analyse a échoué techniquement
 
+// TRIP-CONTEXT-001 — profil utilisateur optionnel transmis depuis les searchParams.
+type UserProfileOverride = {
+  budget?: number;
+  duration?: number;
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+  mode?: 'standard' | 'bunker' | 'budget_crisis';
+};
+
 // PREMIUM-EXPERIENCE-001 (C) — `withNarrative` gate : la narrative IA premium n'est
 // générée (appel Claude coûteux + lent) QUE pour un utilisateur premium, le seul qui
 // la verra (elle vit dans le children du PremiumGate). Pour un non-premium on renvoie
 // narrative:'' : le scoring tourne toujours (gauges + synthèse gratuite restent
 // pleinement visibles), mais AUCUN appel Claude narrative n'est fait — moins de tokens,
 // page plus rapide, risque de timeout SSR réduit à la source.
-async function getData(code: string, withNarrative: boolean): Promise<DestinationResult> {
+//
+// TRIP-CONTEXT-001 — `userProfile` optionnel : si transmis via searchParams depuis
+// /results, le scoring et la narrative utilisent le vrai profil utilisateur au lieu
+// des hardcodes (budget:1500/duration:7/travelType:'solo').
+async function getData(code: string, withNarrative: boolean, userProfile?: UserProfileOverride): Promise<DestinationResult> {
   const country = findCountry(code);
   if (!country) return { kind: 'not_found' };
   try {
-    const profile = { departureCountry: 'FR', budget: 1500, duration: 7, period: 'flexible', travelType: 'solo' as const, mode: 'standard' as const };
+    const profile = {
+      departureCountry: 'FR',
+      budget:      userProfile?.budget     ?? 1500,
+      duration:    userProfile?.duration   ?? 7,
+      period:      'flexible',
+      travelType:  userProfile?.travelType ?? ('solo' as const),
+      mode:        userProfile?.mode       ?? ('standard' as const),
+    };
     const score = await calculateCrisisScore(country, profile);
     const narrative = withNarrative ? await generateDestinationNarrative(score, profile) : '';
     return { kind: 'ok', data: { score, narrative, flagUrl: getFlagUrlLarge(code), colors: getCountryColors(code) } };
@@ -127,12 +148,22 @@ async function getData(code: string, withNarrative: boolean): Promise<Destinatio
   }
 }
 
-export default async function DestinationPage({ params }: Props) {
+export default async function DestinationPage({ params, searchParams }: Props) {
   const { country } = await params;
+  // TRIP-CONTEXT-001 : on résout les searchParams optionnels pour reconstituer le
+  // profil utilisateur. Accès direct sans params → comportement actuel (defaults).
+  const sp = searchParams ? await searchParams : undefined;
+  const userProfile = sp ? {
+    budget:     sp.budget     ? parseInt(String(sp.budget), 10) || undefined     : undefined,
+    duration:   sp.duration   ? parseInt(String(sp.duration), 10) || undefined   : undefined,
+    travelType: (['solo', 'couple', 'family', 'nomad'] as const).find((t) => t === sp.travelType),
+    mode:       (['standard', 'bunker', 'budget_crisis'] as const).find((m) => m === sp.mode),
+  } : undefined;
+
   // L'abonnement est résolu D'ABORD : il conditionne la génération de la narrative
   // (premium-only). getData ne lance l'appel Claude que si isPremium est vrai.
   const { user, isPremium } = await getUserWithSubscription();
-  const result = await getData(country.toUpperCase(), isPremium);
+  const result = await getData(country.toUpperCase(), isPremium, userProfile);
 
   if (result.kind !== 'ok') {
     // Deux messages distincts : pays inconnu de notre référentiel vs panne technique.
@@ -212,7 +243,7 @@ export default async function DestinationPage({ params }: Props) {
   // synthèse basique (basicSynthesis). Le profil voyageur est passé pour
   // personnaliser le texte (figé 'solo' aujourd'hui, prêt pour un profil dynamique).
   // La narrative intégrale reste réservée à la section premium "Synthèse IA complète".
-  const freeSummary = buildFreeSummary(score, narrative, { travelType: 'solo' });
+  const freeSummary = buildFreeSummary(score, narrative, { travelType: userProfile?.travelType ?? 'solo' });
 
   return (
     <div className="ctv3" style={{ minHeight: '100vh', background: 'var(--ctv3-ink-900)' }}>
@@ -645,6 +676,13 @@ export default async function DestinationPage({ params }: Props) {
                 scoreSnapshot={score}
                 narrative={narrative}
                 meaeLevel={meaeLevel as 1 | 2 | 3 | 4}
+                ssrProfile={userProfile ? {
+                  budget:     userProfile.budget,
+                  duration:   userProfile.duration,
+                  travelType: userProfile.travelType,
+                  from:       sp?.from ? String(sp.from) : undefined,
+                  to:         sp?.to   ? String(sp.to)   : undefined,
+                } : undefined}
               />
 
               {/* PREMIUM-GUIDE-001C — Guide pays premium ADDITIF, sous la narrative +
@@ -653,7 +691,9 @@ export default async function DestinationPage({ params }: Props) {
               <CountryGuideBlock
                 countryCode={score.countryCode}
                 countryName={score.country}
-                travelType="solo"
+                travelType={userProfile?.travelType ?? 'solo'}
+                budget={userProfile?.budget}
+                duration={userProfile?.duration}
               />
             </div>
           </PremiumGate>

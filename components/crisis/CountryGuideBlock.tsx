@@ -9,10 +9,11 @@
 // NE réintroduit aucune carte jour/jour ni slot matin/après-midi/soir : le guide est
 // un texte continu, comme GuideItinerarySection — mais pour le PAYS, pas l'itinéraire.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { CountryGuideApiResponse, CountryGuideRequest } from '@/types/crisis.types';
 import { NarrativeRenderer } from './NarrativeRenderer';
 import { PdfExportButton } from './PdfExportButton';
+import { loadTripContext } from '@/lib/utils/tripContext';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
@@ -28,6 +29,23 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [guide, setGuide] = useState<CountryGuideApiResponse['guide'] | null>(null);
 
+  // TRIP-CONTEXT-001 : le TripContext côté client prime sur les props SSR.
+  // Les props (travelType, budget, duration) sont déjà enrichies par la page SSR
+  // depuis les searchParams ; ici on les surcharge avec le sessionStorage si dispo,
+  // ce qui couvre aussi la génération déclenchée après un retour depuis /results.
+  const [effectiveTravelType, setEffectiveTravelType] = useState(props.travelType);
+  const [effectiveBudget, setEffectiveBudget]         = useState(props.budget);
+  const [effectiveDuration, setEffectiveDuration]     = useState(props.duration);
+
+  useEffect(() => {
+    const ctx = loadTripContext();
+    if (ctx) {
+      setEffectiveTravelType(ctx.travelType);
+      if (ctx.budget)   setEffectiveBudget(ctx.budget);
+      if (ctx.duration) setEffectiveDuration(ctx.duration);
+    }
+  }, []);
+
   async function generate() {
     if (status === 'loading') return;
     setStatus('loading');
@@ -36,9 +54,9 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
       const body: CountryGuideRequest = {
         countryCode: props.countryCode,
         countryName: props.countryName,
-        travelType: props.travelType,
-        budget: props.budget,
-        duration: props.duration,
+        travelType: effectiveTravelType,
+        budget:     effectiveBudget,
+        duration:   effectiveDuration,
       };
       const res = await fetch('/api/country-guide', {
         method: 'POST',
@@ -148,7 +166,7 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
             <PdfExportButton
               countryCode={props.countryCode}
               countryName={props.countryName}
-              profile={{ travelType: props.travelType, budget: props.budget, duration: props.duration }}
+              profile={{ travelType: effectiveTravelType, budget: effectiveBudget, duration: effectiveDuration }}
               countryGuide={guide}
             />
             <button

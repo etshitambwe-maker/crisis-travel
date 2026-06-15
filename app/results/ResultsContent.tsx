@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { mergeTripContext, saveTripContext, loadTripContext, tripContextFromParams } from '@/lib/utils/tripContext';
 import { CountryCard } from '@/components/crisis/CountryCard';
 import { TravelPackMiniBlock } from '@/components/crisis/TravelPackMiniBlock';
 import { ItineraryBlock } from '@/components/crisis/ItineraryBlock';
@@ -59,6 +60,25 @@ export function ResultsContent() {
   const dateFrom  = params.get('from') ?? '';
   const dateTo    = params.get('to')   ?? '';
 
+  // TRIP-CONTEXT-001 : query string transmis à chaque CountryCard pour que la page
+  // /destination/[country] puisse reconstituer un profil SSR profile-aware.
+  // On ne transmet que les champs utiles au scoring/narrative (pas continent/priority/airport).
+  const destinationParams = (() => {
+    const p = new URLSearchParams();
+    const budget   = params.get('budget');
+    const duration = params.get('duration');
+    const tt       = params.get('travelType');
+    const mode     = params.get('mode');
+    if (budget)   p.set('budget',   budget);
+    if (duration) p.set('duration', duration);
+    if (tt)       p.set('travelType', tt);
+    if (mode)     p.set('mode',     mode);
+    if (dateFrom) p.set('from',     dateFrom);
+    if (dateTo)   p.set('to',       dateTo);
+    const str = p.toString();
+    return str || undefined;
+  })();
+
   // Timer affiché pendant le chargement
   useEffect(() => {
     if (!loading) return;
@@ -101,8 +121,23 @@ export function ResultsContent() {
         }
 
         if (r.ok && json) {
-          setData(json as unknown as AnalyzeResponse);
+          const analyzed = json as unknown as AnalyzeResponse;
+          setData(analyzed);
           setLoading(false);
+
+          // TRIP-CONTEXT-001 : enrichit le TripContext avec le scoreSnapshot de la
+          // meilleure destination. Si sessionStorage est vide (accès direct à /results
+          // via URL), on reconstruit un contexte minimal depuis les params.
+          const topScore = analyzed.topDestinations?.[0] ?? analyzed.results?.[0];
+          if (topScore) {
+            if (!loadTripContext()) {
+              // Fallback : on reconstruit depuis les URL params si TravelForm n'a pas
+              // été utilisé (ex. partage de lien /results?...)
+              const fromUrl = tripContextFromParams(params);
+              if (fromUrl) saveTripContext(fromUrl);
+            }
+            mergeTripContext({ scoreSnapshot: topScore, countryCode: topScore.countryCode, countryName: topScore.country });
+          }
           return;
         }
 
@@ -464,7 +499,7 @@ export function ResultsContent() {
                   }}
                 >
                   {ranked.map((score) => (
-                    <CountryCard key={score.countryCode} score={score} />
+                    <CountryCard key={score.countryCode} score={score} destinationParams={destinationParams} />
                   ))}
                 </div>
 
