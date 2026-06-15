@@ -472,8 +472,13 @@ function OptionGrid<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div style={{ marginBottom: 22 }}>
-      <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', color: 'var(--ctv3-muted)', letterSpacing: '0.1em', marginBottom: 10 }}>
+    <div style={{ marginBottom: 22, borderTop: '1px solid var(--ctv3-line-soft)', paddingTop: 16 }}>
+      <div style={{
+        fontFamily: 'var(--ctv3-mono)', fontSize: '0.7rem', fontWeight: 700,
+        color: 'var(--ctv3-red)', letterSpacing: '0.14em', textTransform: 'uppercase',
+        marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span aria-hidden style={{ width: 14, height: 1, background: 'var(--ctv3-red)', opacity: 0.6, display: 'inline-block' }} />
         {label}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(options.length, 2)}, 1fr)`, gap: 10 }}>

@@ -92,6 +92,16 @@ export function HowItWorks() {
         ))}
       </div>
 
+      {/* Phrase sources — confiance + référence officielle */}
+      <p className="ctv3-serif" style={{
+        fontSize: 13, lineHeight: 1.6,
+        color: 'var(--ctv3-muted)', margin: '0 0 10px',
+      }}>
+        Chaque analyse croise contexte géopolitique, sécurité, budget et praticité, en s&apos;appuyant
+        sur des sources et recommandations officielles comme{' '}
+        <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>diplomatie.gouv.fr</strong>.
+      </p>
+
       {/* Ligne honnêteté — outil d'aide à la décision (FRONT-020 : plus visible, sobre) */}
       <p className="ctv3-mono" style={{
         fontSize: 12, lineHeight: 1.65, letterSpacing: '0.02em',

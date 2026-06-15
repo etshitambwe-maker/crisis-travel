@@ -29,13 +29,33 @@ const PREMIUM_FEATURES = [
 
 const HOME_PLANS = [
   {
+    id: 'free',
+    name: 'FREEMIUM',
+    price: '0€',
+    period: 'toujours',
+    color: '#6b6b85',
+    highlight: false,
+    badge: null as string | null,
+    saving: null as string | null,
+    features: [
+      '3 analyses gratuites pour tester Crisis Travel',
+      'Classement des destinations recommandé',
+      'Première lecture sécurité, budget et praticité',
+      'Synthèse gratuite non détaillée',
+      'Idéal pour comparer avant de passer Premium',
+    ],
+    cta: 'LANCER UNE ANALYSE GRATUITE',
+    ctaHref: '#analyse' as string,
+  },
+  {
     id: 'premium_monthly',
     name: 'PREMIUM',
     price: '9€',
     period: '/mois',
     color: '#ffb224',
     highlight: true,
-    badge: 'POPULAIRE',
+    badge: 'POPULAIRE' as string | null,
+    saving: null as string | null,
     features: [
       'Guide terrain pays (IA) — où se baser, quoi éviter',
       'Itinéraire parcours-guide personnalisé',
@@ -45,6 +65,7 @@ const HOME_PLANS = [
       'Historique des scores (6 mois)',
     ],
     cta: 'PASSER PREMIUM',
+    ctaHref: '/pricing' as string,
   },
   {
     id: 'premium_annual',
@@ -53,6 +74,7 @@ const HOME_PLANS = [
     period: '/an',
     color: '#3ddc97',
     highlight: false,
+    badge: null as string | null,
     saving: '−29%',
     features: [
       'Tout Premium mensuel inclus',
@@ -61,6 +83,7 @@ const HOME_PLANS = [
       'Accès bêta',
     ],
     cta: 'CHOISIR ANNUEL',
+    ctaHref: '/pricing' as string,
   },
 ];
 
@@ -210,11 +233,11 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* Cartes d'offre — statiques, CTA vers /pricing */}
+            {/* Cartes d'offre — statiques : Freemium → Premium mensuel → Premium annuel */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
                 gap: 12,
               }}
             >
@@ -342,9 +365,9 @@ export default function HomePage() {
                     ))}
                   </div>
 
-                  {/* CTA → /pricing */}
+                  {/* CTA */}
                   <Link
-                    href="/pricing"
+                    href={plan.ctaHref}
                     style={{
                       display: 'block',
                       textAlign: 'center',
