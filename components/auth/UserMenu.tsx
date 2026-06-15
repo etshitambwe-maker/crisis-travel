@@ -125,6 +125,24 @@ export function UserMenu() {
             {portalLoading ? 'Redirection…' : 'Gérer l\'abonnement'}
           </button>
 
+          <a
+            href="/dashboard"
+            onClick={() => setShowMenu(false)}
+            style={{
+              width: '100%', padding: '7px 10px', borderRadius: 6,
+              background: 'transparent', border: 'none', textAlign: 'left',
+              color: 'var(--ctv3-muted)', fontSize: 13,
+              display: 'flex', alignItems: 'center', gap: 8,
+              textDecoration: 'none',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ctv3-ink-800)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <span style={{ fontSize: 11 }}>◈</span>
+            Mon tableau de bord
+          </a>
+
           <button
             onClick={handleSignOut}
             style={{
