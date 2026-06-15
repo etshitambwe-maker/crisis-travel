@@ -198,6 +198,25 @@ export interface CountryGuideApiResponse {
   };
 }
 
+// ── User Dashboard types (USER-DASHBOARD-001) ────────────────────────────────
+
+export interface UserAnalysis {
+  id: string;
+  countryCode: string;
+  countryName: string;
+  crisisScore: number;
+  securityScore?: number;
+  geopoliticalScore?: number;
+  budgetScore?: number;
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+  duration?: number;
+  budget?: number;
+  mode?: 'standard' | 'bunker' | 'budget_crisis';
+  status?: 'ideal' | 'recommended' | 'possible' | 'discouraged';
+  confidence?: 'high' | 'medium' | 'low';
+  analyzedAt: string;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 export function clamp(value: number, min = 0, max = 100): number {
