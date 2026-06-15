@@ -87,7 +87,7 @@ export interface GuideItinerarySectionProps {
   pdf: {
     countryCode: string;
     countryName: string;
-    profile: { budget?: number; travelType?: 'solo' | 'couple' | 'family' | 'nomad'; from?: string; to?: string };
+    profile: { budget?: number; duration?: number; travelType?: 'solo' | 'couple' | 'family' | 'nomad'; from?: string; to?: string };
   };
 }
 

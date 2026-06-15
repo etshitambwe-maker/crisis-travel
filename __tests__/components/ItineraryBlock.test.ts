@@ -689,3 +689,40 @@ describe('isFallbackItinerary — détection échec (GUIDE-V1 NO CARDS)', () => 
     expect(isFallbackItinerary(undefined)).toBe(true);
   });
 });
+
+// ── 12. TRIP-CONTEXT-001 — duration transmise dans le payload itinéraire ─────────
+
+describe('TRIP-CONTEXT-001 — duration=14 propagation (ItineraryBlock → /api/itinerary)', () => {
+  it('ItineraryBlockProps déclare duration?', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toMatch(/duration\?:\s*number/);
+  });
+
+  it('buildRequest inclut req.duration quand duration > 0', () => {
+    const src = readSource(BLOCK_PATH);
+    expect(src).toMatch(/req\.duration\s*=\s*props\.duration/);
+  });
+
+  it('PremiumActions passe duration={tripProfile?.duration} à ItineraryBlock', () => {
+    const src = readSource('components/crisis/PremiumActions.tsx');
+    const block = src.slice(src.indexOf('<ItineraryBlock'));
+    expect(block).toMatch(/duration=\{tripProfile\?\.duration\}/);
+  });
+
+  it('generateItinerary utilise req.duration comme fallback quand pas de dates', () => {
+    const src = readSource(SERVICE_PATH);
+    expect(src).toMatch(/req\.duration\s*\?\?\s*7/);
+  });
+
+  it('ItineraryRequest accepte duration dans le schéma Zod de la route', () => {
+    const src = readSource(ROUTE_PATH);
+    expect(src).toMatch(/duration.*z\.number/);
+  });
+
+  it('guide pays — clé cache inclut duration pour éviter les hit erronés', () => {
+    const src = readSource(SERVICE_PATH);
+    const guideSection = src.slice(src.indexOf('generatePremiumCountryGuide'));
+    expect(guideSection).toMatch(/profile\.duration/);
+    expect(guideSection).toMatch(/buildCacheKey[\s\S]{0,400}guide-v2/);
+  });
+});

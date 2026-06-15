@@ -26,6 +26,8 @@ export interface ItineraryBlockProps {
   /** Search params context */
   dateFrom?: string;
   dateTo?: string;
+  /** Durée en jours — transmise au service quand dateFrom/dateTo sont absents. */
+  duration?: number;
   budget?: number;
   travelers?: number;
   travelType?: 'solo' | 'couple' | 'family' | 'nomad';
@@ -45,6 +47,7 @@ function buildRequest(props: ItineraryBlockProps): ItineraryRequest {
   if (props.budget && props.budget > 0) req.budget = props.budget;
   if (props.dateFrom) req.from = props.dateFrom;
   if (props.dateTo) req.to = props.dateTo;
+  if (props.duration && props.duration > 0) req.duration = props.duration;
   if (props.meaeLevel) {
     req.riskContext = { meaeLevel: props.meaeLevel, source: 'static' };
   }
@@ -272,6 +275,7 @@ export function ItineraryBlock(props: ItineraryBlockProps) {
             countryName: props.countryName ?? props.countryCode ?? '',
             profile: {
               budget:     props.budget,
+              duration:   props.duration,
               travelType: props.travelType,
               from:       props.dateFrom,
               to:         props.dateTo,

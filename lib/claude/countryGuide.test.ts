@@ -88,7 +88,7 @@ describe('generatePremiumCountryGuide', () => {
     expect(storedCacheKeys.length).toBe(1);
   });
 
-  it('clé de cache versionnée guide-v1, segmentée par pays + profil', async () => {
+  it('clé de cache versionnée guide-v2, segmentée par pays + profil + duration', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
     const { generatePremiumCountryGuide } = await load();
     await generatePremiumCountryGuide(makeScore(), facts, profile);
@@ -96,7 +96,20 @@ describe('generatePremiumCountryGuide', () => {
     expect(key).toContain('country-guide');
     expect(key).toContain('PT');
     expect(key).toContain('solo');
-    expect(key).toContain('guide-v1');
+    // TRIP-CONTEXT-001 : bumped guide-v1 → guide-v2 pour invalider les clés sans duration.
+    expect(key).toContain('guide-v2');
+    // duration=7 est dans la clé (profile de test : { duration: 7 })
+    expect(key).toContain('7');
+  });
+
+  it('TRIP-CONTEXT-001 — clés distinctes pour duration=7 vs duration=14', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
+    const { generatePremiumCountryGuide } = await load();
+    await generatePremiumCountryGuide(makeScore(), facts, { travelType: 'solo', budget: 1500, duration: 7 });
+    await generatePremiumCountryGuide(makeScore(), facts, { travelType: 'solo', budget: 1500, duration: 14 });
+    expect(storedCacheKeys[0]).not.toBe(storedCacheKeys[1]);
+    expect(storedCacheKeys[0]).toContain(':7:');
+    expect(storedCacheKeys[1]).toContain(':14:');
   });
 
   it('stop_reason=max_tokens → fallback NON caché', async () => {

@@ -20,6 +20,7 @@ const itinerarySchema = z.object({
   cityOrRegion: z.string().min(1).max(100).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format attendu : YYYY-MM-DD').optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format attendu : YYYY-MM-DD').optional(),
+  duration: z.number().int().min(1).max(365).optional(),
   budget: z.number().positive('Le budget doit être positif').max(1_000_000).optional(),
   currency: z.string().min(3).max(3).toUpperCase().default('EUR'),
   travelers: z.number().int().min(1, 'travelers doit être >= 1').max(20).optional(),

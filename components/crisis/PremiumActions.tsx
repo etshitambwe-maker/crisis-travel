@@ -100,6 +100,7 @@ export function PremiumActions({ countryCode, countryName, scoreSnapshot, narrat
           countryName={countryName}
           travelType={tripProfile?.travelType ?? 'solo'}
           budget={tripProfile?.budget}
+          duration={tripProfile?.duration}
           dateFrom={tripProfile?.from}
           dateTo={tripProfile?.to}
           travelers={

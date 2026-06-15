@@ -243,7 +243,7 @@ export async function generateItinerary(req: ItineraryRequest): Promise<Itinerar
   const country = req.countryName ?? req.countryCode ?? 'destination inconnue';
   const days = req.from && req.to
     ? Math.max(1, Math.ceil((new Date(req.to).getTime() - new Date(req.from).getTime()) / 86400000))
-    : 7;
+    : (req.duration ?? 7);
   const budgetAmount = req.budget ?? 1000;
   const currency = req.currency ?? 'EUR';
   const travelers = req.travelers ?? 1;
@@ -500,7 +500,8 @@ export async function generatePremiumCountryGuide(
     score.countryCode,
     travelType,
     String(Math.floor(score.total / 5)),
-    'guide-v1',
+    profile.duration ? String(profile.duration) : 'any',
+    'guide-v2',
   );
 
   const prompt = `Tu es un guide de voyage humain et expérimenté qui connaît ${score.country}. Rédige, EN TEXTE (pas de JSON), un GUIDE PAYS premium pour un voyageur ${travelType}${profile.budget ? `, budget ~${profile.budget}€` : ''}${profile.duration ? `, ${profile.duration} jours` : ''}.

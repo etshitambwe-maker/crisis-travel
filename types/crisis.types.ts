@@ -142,6 +142,8 @@ export interface ItineraryRequest {
   cityOrRegion?: string;
   from?: string;
   to?: string;
+  /** Durée en jours — fallback quand from/to sont absents (TravelForm sans dates). */
+  duration?: number;
   budget?: number;
   currency?: string;
   travelers?: number;

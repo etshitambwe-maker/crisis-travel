@@ -49,3 +49,25 @@ describe('CountryGuideBlock — invariants no-cards (non-régression)', () => {
     expect(s).not.toContain('DayCard');
   });
 });
+
+// ── TRIP-CONTEXT-001 — duration transmise dans le POST /api/country-guide ─────
+
+describe('TRIP-CONTEXT-001 — duration=14 dans le POST body du guide pays', () => {
+  it('la prop duration est déclarée dans CountryGuideBlockProps', () => {
+    expect(src()).toMatch(/duration\?:\s*number/);
+  });
+
+  it('effectiveDuration est initialisé depuis les props', () => {
+    expect(src()).toMatch(/effectiveDuration.*useState.*props\.duration/);
+  });
+
+  it('effectiveDuration est lu depuis le TripContext si disponible', () => {
+    expect(src()).toMatch(/setEffectiveDuration.*ctx\.duration/);
+  });
+
+  it('duration est incluse dans le POST body envoyé à /api/country-guide', () => {
+    const s = src();
+    const fetchBlock = s.slice(s.indexOf('/api/country-guide'));
+    expect(fetchBlock).toMatch(/duration\s*:\s*effectiveDuration/);
+  });
+});
