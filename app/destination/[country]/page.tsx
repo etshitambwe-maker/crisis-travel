@@ -19,6 +19,7 @@ import { getDestinationImagery, hasDestinationPhoto } from '@/lib/design/destina
 import { MEAE_LAST_UPDATED } from '@/lib/services/security/meae.service';
 import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 import { PremiumActions } from '@/components/crisis/PremiumActions';
+import { CountryGuideBlock } from '@/components/crisis/CountryGuideBlock';
 import { NarrativeRenderer } from '@/components/crisis/NarrativeRenderer';
 import { LiveRisksBlock } from '@/components/crisis/LiveRisksBlock';
 import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
@@ -644,6 +645,15 @@ export default async function DestinationPage({ params }: Props) {
                 scoreSnapshot={score}
                 narrative={narrative}
                 meaeLevel={meaeLevel as 1 | 2 | 3 | 4}
+              />
+
+              {/* PREMIUM-GUIDE-001C — Guide pays premium ADDITIF, sous la narrative +
+                  actions. Génération on-demand (client) via /api/country-guide ; ne
+                  remplace rien (narrative, LiveRisksBlock, itinéraire no-cards intacts). */}
+              <CountryGuideBlock
+                countryCode={score.countryCode}
+                countryName={score.country}
+                travelType="solo"
               />
             </div>
           </PremiumGate>

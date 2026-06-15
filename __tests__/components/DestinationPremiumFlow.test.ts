@@ -241,3 +241,31 @@ describe('PREMIUM-EXPERIENCE-001 (A) — rendu narrative structuré', () => {
     expect(block).toMatch(/<NarrativeRenderer/);
   });
 });
+
+// ── PREMIUM-GUIDE-001C — guide pays premium ADDITIF (sous la narrative) ──
+describe('PREMIUM-GUIDE-001C — guide pays additif', () => {
+  it('importe et monte CountryGuideBlock', () => {
+    expect(read(DEST_PAGE)).toContain('CountryGuideBlock');
+  });
+
+  it('conserve la narrative premium existante (NarrativeRenderer)', () => {
+    expect(read(DEST_PAGE)).toContain('NarrativeRenderer');
+  });
+
+  it('conserve PremiumActions (itinéraire + PDF) — rien retiré', () => {
+    expect(read(DEST_PAGE)).toContain('PremiumActions');
+  });
+
+  it('CountryGuideBlock est rendu après PremiumActions (additif, sous la narrative)', () => {
+    const src = read(DEST_PAGE);
+    expect(src.indexOf('<PremiumActions')).toBeLessThan(src.indexOf('<CountryGuideBlock'));
+  });
+
+  it('CountryGuideBlock vit dans le PremiumGate (premium-only)', () => {
+    const src = read(DEST_PAGE);
+    const gateOpen = src.indexOf('<PremiumGate');
+    const gateClose = src.indexOf('</PremiumGate>');
+    const block = src.slice(gateOpen, gateClose);
+    expect(block).toContain('<CountryGuideBlock');
+  });
+});
