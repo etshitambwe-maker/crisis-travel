@@ -20,7 +20,13 @@ interface Props {
 
 // Bénéfices premium affichés dans le gate — wording court, la grille complète
 // (plans détaillés, FAQ) reste sur /pricing. PREMIUM-FLOW-001C.
-const PREMIUM_BENEFITS = ['PDF illimité', 'Préparer mon itinéraire', 'Analyses illimitées'] as const;
+const PREMIUM_BENEFITS = [
+  'Guide terrain pays (IA)',
+  'Itinéraire personnalisé',
+  'Analyse détaillée + risques live',
+  'Exports PDF illimités',
+  'Analyses illimitées',
+] as const;
 
 /**
  * CTA du gate, conscient de l'état (PREMIUM-FLOW-001C).
@@ -197,11 +203,14 @@ export function PremiumGate({ children, feature, description, isPremium = false,
           </div>
 
           {/* Bénéfices premium — wording court (la grille complète reste sur /pricing) */}
-          <div className="ctv3-mono" style={{
-            fontSize: 11, color: 'var(--ctv3-muted)', lineHeight: 1.5, maxWidth: 240,
-          }}>
-            + PDF illimité · Préparer mon itinéraire · Analyses illimitées
-          </div>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, width: '100%', maxWidth: 240, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {PREMIUM_BENEFITS.map((b) => (
+              <li key={b} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--ctv3-muted)' }}>
+                <span style={{ color: 'var(--ctv3-reco)', fontWeight: 700, flexShrink: 0 }}>+</span>
+                {b}
+              </li>
+            ))}
+          </ul>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 240 }}>
             {/* Pricing info */}
