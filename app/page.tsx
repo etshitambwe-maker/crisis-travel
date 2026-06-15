@@ -1,37 +1,32 @@
 import { Header } from '@/components/layout/Header';
 import { SmartSearchHub } from '@/components/crisis/SmartSearchHub';
-import { WorldMap } from '@/components/crisis/WorldMap';
 import { OpportunityCards } from '@/components/crisis/HomeClientSections';
 import { HowItWorks } from '@/components/crisis/HowItWorks';
-import { CrisisScoreExplainer } from '@/components/crisis/CrisisScoreExplainer';
-import { CountryFlag } from '@/components/design/CountryFlag';
-import { DestinationImage } from '@/components/design/DestinationImage';
 import { Eyebrow } from '@/components/design/atoms';
 import { TARGET_COUNTRIES } from '@/lib/utils/countries';
 import { CANDIDATE_CAP } from '@/lib/utils/selectCandidates';
 import { TickerBanner } from '@/components/crisis/TickerBanner';
 import { getMeaeTickerItems, MEAE_LAST_UPDATED } from '@/lib/utils/meae-ticker-items';
+import Link from 'next/link';
 
 /**
- * FRONT-002 — Homepage redesign (premium travel-editorial).
- * Built on the FRONT-001 foundation (--ctv3-* tokens, fonts, imagery system,
- * CountryFlag / DestinationImage / atoms). Scoped under .ctv3.
- *
- * Honesty: no fabricated metrics. Coverage is stated truthfully —
- *   - COVERED   = TARGET_COUNTRIES.length (catalog of covered destinations)
- *   - SCORED/RQ = CANDIDATE_CAP (destinations scored per analysis request)
- * The terminal/dashboard chrome and the invented stat block / ticker were
- * removed. TickerBanner is no longer rendered here (component kept in repo).
+ * HOME-UX-001 — Simplification page d'accueil.
+ * Sections supprimées : WorldMap (décorative), CrisisScoreExplainer (trop technique),
+ * rail photo hero (décoratif, pas cliquable).
+ * Nouvelle structure : hero → formulaire → bloc premium → comment ça marche → destinations.
  */
 
-const COVERED = TARGET_COUNTRIES.length; // 65 — covered destination catalog
-const SCORED_PER_REQUEST = CANDIDATE_CAP; // 18 — scored per /api/analyze request
-
-// A small, fixed set of covered destinations used as the editorial hero rail.
-// Real countries from TARGET_COUNTRIES -> real flags + FRONT-001 imagery only.
-const HERO_RAIL = ['PT', 'GE', 'MA', 'JP', 'VN', 'AL'] as const;
+const COVERED = TARGET_COUNTRIES.length;
+const SCORED_PER_REQUEST = CANDIDATE_CAP;
 
 const MEAE_TICKER_ITEMS = getMeaeTickerItems();
+
+const PREMIUM_FEATURES = [
+  { label: 'Guide terrain pays', desc: 'Analyse de terrain en 8 sections : ambiance locale, sécurité au quotidien, budget réel.' },
+  { label: 'Itinéraire parcours-guide', desc: 'Un récit de voyage structuré adapté à votre profil, pas des cartes horaires.' },
+  { label: 'Risques live & événements', desc: 'Événements récents et risques actifs remontés en temps réel depuis les sources officielles.' },
+  { label: 'Export PDF', desc: 'Téléchargez votre rapport complet pour le consulter hors-ligne ou le partager.' },
+];
 
 export default function HomePage() {
   return (
@@ -40,45 +35,41 @@ export default function HomePage() {
       <TickerBanner items={MEAE_TICKER_ITEMS} lastUpdated={MEAE_LAST_UPDATED} />
 
       <main style={{ maxWidth: 1080, margin: '0 auto', padding: '0 20px 88px' }}>
-        {/* ── HERO — editorial ───────────────────────────────── */}
-        <section style={{ padding: '40px 0 28px' }}>
+
+        {/* ── HERO ────────────────────────────────────────────── */}
+        <section style={{ padding: '40px 0 32px' }}>
           <Eyebrow red>Intelligence voyage · temps réel</Eyebrow>
 
           <h1
             style={{
               fontFamily: 'var(--ctv3-display)',
-              fontSize: 'clamp(34px, 7vw, 60px)',
+              fontSize: 'clamp(30px, 6vw, 54px)',
               fontWeight: 900,
-              lineHeight: 1.02,
-              letterSpacing: '-0.035em',
-              margin: '16px 0 18px',
+              lineHeight: 1.05,
+              letterSpacing: '-0.03em',
+              margin: '14px 0 16px',
               color: 'var(--ctv3-paper)',
-              maxWidth: 760,
+              maxWidth: 680,
             }}
           >
-            Le monde change.{' '}
-            <span style={{ color: 'var(--ctv3-red)' }}>Vos destinations aussi.</span>
+            Trouvez la destination adaptée à votre profil,{' '}
+            <span style={{ color: 'var(--ctv3-red)' }}>votre budget et votre niveau de risque.</span>
           </h1>
 
           <p
             className="ctv3-serif"
-            style={{ maxWidth: 560, color: 'var(--ctv3-muted)', fontSize: 18, lineHeight: 1.6, margin: 0 }}
+            style={{ maxWidth: 520, color: 'var(--ctv3-muted)', fontSize: 17, lineHeight: 1.65, margin: '0 0 20px' }}
           >
-            Nous analysons la <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>sécurité</strong>, la{' '}
-            <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>géopolitique</strong>, le{' '}
-            <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>budget</strong> et la{' '}
-            <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>praticité</strong> pour révéler les
-            destinations les plus avantageuses du moment.
+            Crisis Travel analyse la sécurité, la géopolitique, le budget et la praticité pour
+            révéler les destinations les plus avantageuses du moment.
           </p>
 
-          {/* Honest coverage line — replaces the fabricated stat block */}
           <div
             className="ctv3-mono"
             style={{
-              marginTop: 22,
               display: 'flex',
               flexWrap: 'wrap',
-              gap: 18,
+              gap: 14,
               fontSize: 11,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
@@ -90,57 +81,130 @@ export default function HomePage() {
             </span>
             <span style={{ color: 'var(--ctv3-line-bright)' }}>·</span>
             <span>
-              jusqu’à <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 700 }}>{SCORED_PER_REQUEST}</strong> analysées
+              jusqu'à <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 700 }}>{SCORED_PER_REQUEST}</strong> analysées
               par requête
             </span>
             <span style={{ color: 'var(--ctv3-line-bright)' }}>·</span>
             <span>sources officielles &amp; marché</span>
           </div>
-
-          {/* Editorial destination rail — photo-led (duotone fallback if no photo) */}
-          <div
-            style={{
-              marginTop: 28,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: 12,
-            }}
-          >
-            {HERO_RAIL.map((code) => (
-              <DestinationImage key={code} code={code} slot="card" aspect="3/4" showLabel={false} scrim="strong">
-                <div style={{ position: 'absolute', left: 12, bottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CountryFlag code={code} width={20} />
-                </div>
-              </DestinationImage>
-            ))}
-          </div>
         </section>
 
-        {/* ── HOW IT WORKS — parcours pédagogique (FRONT-019) ── */}
-        <section style={{ marginBottom: 36 }}>
-          <HowItWorks />
-        </section>
-
-        {/* ── SCORE METHOD ───────────────────────────────────── */}
-        <section style={{ marginBottom: 36 }}>
-          <CrisisScoreExplainer />
-        </section>
-
-        {/* ── SEARCH / ANALYSE (functional core — preserved) ─── */}
-        <section id="analyse" style={{ marginBottom: 40 }}>
+        {/* ── FORMULAIRE D'ANALYSE ────────────────────────────── */}
+        <section id="analyse" style={{ marginBottom: 44 }}>
           <SectionHead label="Lancer une analyse" meta="Sécurité · géo · budget · praticité" />
           <SmartSearchHub />
         </section>
 
-        {/* ── WORLD MAP — ambient editorial visual ───────────── */}
-        <section style={{ marginBottom: 40 }}>
-          <SectionHead label="Carte des destinations" meta={`${COVERED} couvertes`} />
-          <WorldMap showScores={false} />
+        {/* ── BLOC PREMIUM ─────────────────────────────────────── */}
+        <section style={{ marginBottom: 44 }}>
+          <SectionHead label="Aller plus loin avec Premium" meta="Guide complet" />
+          <div
+            style={{
+              background: 'var(--ctv3-ink-850)',
+              border: '1px solid var(--ctv3-line)',
+              borderTop: '2px solid var(--ctv3-red)',
+              padding: '20px 22px',
+            }}
+          >
+            <p
+              className="ctv3-serif"
+              style={{ maxWidth: 600, color: 'var(--ctv3-muted)', fontSize: 14.5, lineHeight: 1.6, margin: '0 0 18px' }}
+            >
+              L'analyse gratuite donne le classement et le contexte. Le Premium débloque le guide
+              terrain complet, l'itinéraire adapté et les exports.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 10,
+                marginBottom: 20,
+              }}
+            >
+              {PREMIUM_FEATURES.map((f) => (
+                <div
+                  key={f.label}
+                  style={{
+                    background: 'var(--ctv3-ink-900)',
+                    border: '1px solid var(--ctv3-line)',
+                    padding: '13px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 6,
+                        height: 6,
+                        background: 'var(--ctv3-red)',
+                        transform: 'rotate(45deg)',
+                        flexShrink: 0,
+                        display: 'inline-block',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: 'var(--ctv3-display)',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        letterSpacing: '-0.01em',
+                        color: 'var(--ctv3-paper)',
+                      }}
+                    >
+                      {f.label}
+                    </span>
+                  </div>
+                  <p
+                    className="ctv3-serif"
+                    style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--ctv3-muted)', margin: 0 }}
+                  >
+                    {f.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <Link
+              href="/pricing"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '11px 20px',
+                background: 'rgba(228,51,43,0.14)',
+                border: '1px solid rgba(228,51,43,0.45)',
+                color: 'var(--ctv3-red-2)',
+                fontFamily: 'var(--ctv3-mono)',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textDecoration: 'none',
+                textTransform: 'uppercase',
+              }}
+            >
+              Voir les offres Premium →
+            </Link>
+          </div>
         </section>
 
-        {/* ── EDITORIAL DESTINATION ENTRIES ──────────────────── */}
+        {/* ── COMMENT ÇA MARCHE ───────────────────────────────── */}
+        <section style={{ marginBottom: 44 }}>
+          <HowItWorks />
+        </section>
+
+        {/* ── DESTINATIONS EXEMPLES ───────────────────────────── */}
         <section style={{ marginBottom: 40 }}>
-          <SectionHead label="Commencer par une destination" meta="Points d’entrée" />
+          <SectionHead label="Tester avec un exemple" meta="Analyses pré-remplies" />
           <OpportunityCards />
         </section>
 
@@ -173,7 +237,7 @@ export default function HomePage() {
   );
 }
 
-/* ── Section head (editorial, no terminal numbering) ───────── */
+/* ── Section head ──────────────────────────────────────────── */
 function SectionHead({ label, meta }: { label: string; meta?: string }) {
   return (
     <div
