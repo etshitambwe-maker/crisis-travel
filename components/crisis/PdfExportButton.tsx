@@ -137,7 +137,7 @@ export function PdfExportButton({ countryCode, countryName, profile, itinerary, 
         ? 'Génération…'
         : status === 'error'
           ? 'Erreur — Réessayer'
-          : '↓ Exporter en PDF'}
+          : countryGuide ? '↓ Exporter le guide PDF' : '↓ Exporter le rapport PDF'}
     </button>
   );
 }
