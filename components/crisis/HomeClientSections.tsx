@@ -26,7 +26,7 @@ const ENTRIES: {
 }[] = [
   {
     code: 'GR',
-    positioning: 'Un point d’entrée pour tester une analyse Europe, budget maîtrisé.',
+    positioning: "Un point d'entrée pour tester une analyse Europe, budget maîtrisé.",
     href: '/results?mode=standard&budget=1800&duration=15&travelType=solo&continent=Europe',
   },
   {
@@ -36,8 +36,13 @@ const ENTRIES: {
   },
   {
     code: 'TN',
-    positioning: 'Un scénario proche pour observer l’équilibre budget, saison et stabilité.',
+    positioning: "Un scénario proche pour observer l'équilibre budget, saison et stabilité.",
     href: '/results?mode=budget_crisis&budget=1200&duration=14&travelType=solo&continent=Africa',
+  },
+  {
+    code: 'CO',
+    positioning: 'Un exemple Amériques pour explorer un profil découverte hors des sentiers battus.',
+    href: '/results?mode=standard&budget=2000&duration=14&travelType=solo&continent=Americas',
   },
 ];
 

@@ -10,10 +10,9 @@ import { getMeaeTickerItems, MEAE_LAST_UPDATED } from '@/lib/utils/meae-ticker-i
 import Link from 'next/link';
 
 /**
- * HOME-UX-001 — Simplification page d'accueil.
- * Sections supprimées : WorldMap (décorative), CrisisScoreExplainer (trop technique),
- * rail photo hero (décoratif, pas cliquable).
- * Nouvelle structure : hero → formulaire → bloc premium → comment ça marche → destinations.
+ * HOME-UX-001 — Simplification + ajustements structure (Preview feedback).
+ * Ordre : hero → comment ça marche → formulaire → premium cartes → exemples.
+ * Supprimés : WorldMap, CrisisScoreExplainer, rail photo.
  */
 
 const COVERED = TARGET_COUNTRIES.length;
@@ -24,8 +23,45 @@ const MEAE_TICKER_ITEMS = getMeaeTickerItems();
 const PREMIUM_FEATURES = [
   { label: 'Guide terrain pays', desc: 'Analyse de terrain en 8 sections : ambiance locale, sécurité au quotidien, budget réel.' },
   { label: 'Itinéraire parcours-guide', desc: 'Un récit de voyage structuré adapté à votre profil, pas des cartes horaires.' },
-  { label: 'Risques live & événements', desc: 'Événements récents et risques actifs remontés en temps réel depuis les sources officielles.' },
-  { label: 'Export PDF', desc: 'Téléchargez votre rapport complet pour le consulter hors-ligne ou le partager.' },
+  { label: 'Analyse détaillée + risques live', desc: 'Événements récents et risques actifs remontés en temps réel depuis les sources officielles.' },
+  { label: 'Exports PDF', desc: 'Téléchargez votre rapport complet pour le consulter hors-ligne ou le partager.' },
+];
+
+const HOME_PLANS = [
+  {
+    id: 'premium_monthly',
+    name: 'PREMIUM',
+    price: '9€',
+    period: '/mois',
+    color: '#ffb224',
+    highlight: true,
+    badge: 'POPULAIRE',
+    features: [
+      'Guide terrain pays (IA) — où se baser, quoi éviter',
+      'Itinéraire parcours-guide personnalisé',
+      'Analyse détaillée + risques/événements live',
+      'Exports PDF illimités (rapport + guide pays)',
+      'Analyses illimitées',
+      'Historique des scores (6 mois)',
+    ],
+    cta: 'PASSER PREMIUM',
+  },
+  {
+    id: 'premium_annual',
+    name: 'PREMIUM ANNUEL',
+    price: '79€',
+    period: '/an',
+    color: '#3ddc97',
+    highlight: false,
+    saving: '−29%',
+    features: [
+      'Tout Premium mensuel inclus',
+      "29% d'économie vs mensuel",
+      'Priorité nouvelles fonctionnalités',
+      'Accès bêta',
+    ],
+    cta: 'CHOISIR ANNUEL',
+  },
 ];
 
 export default function HomePage() {
@@ -43,22 +79,22 @@ export default function HomePage() {
           <h1
             style={{
               fontFamily: 'var(--ctv3-display)',
-              fontSize: 'clamp(30px, 6vw, 54px)',
+              fontSize: 'clamp(32px, 6.5vw, 58px)',
               fontWeight: 900,
-              lineHeight: 1.05,
+              lineHeight: 1.03,
               letterSpacing: '-0.03em',
-              margin: '14px 0 16px',
+              margin: '14px 0 18px',
               color: 'var(--ctv3-paper)',
-              maxWidth: 680,
+              maxWidth: 720,
             }}
           >
-            Trouvez la destination adaptée à votre profil,{' '}
-            <span style={{ color: 'var(--ctv3-red)' }}>votre budget et votre niveau de risque.</span>
+            Le monde change.{' '}
+            <span style={{ color: 'var(--ctv3-red)' }}>Vos destinations aussi.</span>
           </h1>
 
           <p
             className="ctv3-serif"
-            style={{ maxWidth: 520, color: 'var(--ctv3-muted)', fontSize: 17, lineHeight: 1.65, margin: '0 0 20px' }}
+            style={{ maxWidth: 560, color: 'var(--ctv3-muted)', fontSize: 17, lineHeight: 1.65, margin: '0 0 20px' }}
           >
             Crisis Travel analyse la sécurité, la géopolitique, le budget et la praticité pour
             révéler les destinations les plus avantageuses du moment.
@@ -89,6 +125,11 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ── COMMENT ÇA MARCHE ───────────────────────────────── */}
+        <section style={{ marginBottom: 44 }}>
+          <HowItWorks />
+        </section>
+
         {/* ── FORMULAIRE D'ANALYSE ────────────────────────────── */}
         <section id="analyse" style={{ marginBottom: 44 }}>
           <SectionHead label="Lancer une analyse" meta="Sécurité · géo · budget · praticité" />
@@ -114,12 +155,13 @@ export default function HomePage() {
               terrain complet, l'itinéraire adapté et les exports.
             </p>
 
+            {/* Bénéfices */}
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: 10,
-                marginBottom: 20,
+                marginBottom: 24,
               }}
             >
               {PREMIUM_FEATURES.map((f) => (
@@ -134,13 +176,7 @@ export default function HomePage() {
                     gap: 6,
                   }}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span
                       aria-hidden
                       style={{
@@ -174,32 +210,162 @@ export default function HomePage() {
               ))}
             </div>
 
-            <Link
-              href="/pricing"
+            {/* Cartes d'offre — statiques, CTA vers /pricing */}
+            <div
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '11px 20px',
-                background: 'rgba(228,51,43,0.14)',
-                border: '1px solid rgba(228,51,43,0.45)',
-                color: 'var(--ctv3-red-2)',
-                fontFamily: 'var(--ctv3-mono)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                textDecoration: 'none',
-                textTransform: 'uppercase',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: 12,
               }}
             >
-              Voir les offres Premium →
-            </Link>
-          </div>
-        </section>
+              {HOME_PLANS.map((plan) => (
+                <div
+                  key={plan.id}
+                  style={{
+                    background: plan.highlight
+                      ? `linear-gradient(135deg, ${plan.color}12, var(--ctv3-ink-900))`
+                      : 'var(--ctv3-ink-900)',
+                    border: `1px solid ${plan.highlight ? `${plan.color}55` : 'var(--ctv3-line)'}`,
+                    padding: '18px 18px 16px',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0,
+                  }}
+                >
+                  {/* Badge / économie */}
+                  {plan.badge && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 12,
+                        right: 12,
+                        background: plan.color,
+                        color: '#07070c',
+                        fontFamily: 'var(--ctv3-mono)',
+                        fontSize: '0.52rem',
+                        letterSpacing: '0.12em',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      {plan.badge}
+                    </div>
+                  )}
+                  {plan.saving && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 12,
+                        right: 12,
+                        background: `${plan.color}22`,
+                        border: `1px solid ${plan.color}55`,
+                        color: plan.color,
+                        fontFamily: 'var(--ctv3-mono)',
+                        fontSize: '0.52rem',
+                        letterSpacing: '0.12em',
+                        fontWeight: 700,
+                        padding: '3px 8px',
+                      }}
+                    >
+                      {plan.saving}
+                    </div>
+                  )}
 
-        {/* ── COMMENT ÇA MARCHE ───────────────────────────────── */}
-        <section style={{ marginBottom: 44 }}>
-          <HowItWorks />
+                  {/* Nom du plan */}
+                  <div
+                    style={{
+                      fontFamily: 'var(--ctv3-mono)',
+                      fontSize: '0.6rem',
+                      letterSpacing: '0.18em',
+                      color: plan.color,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      marginBottom: 10,
+                    }}
+                  >
+                    {plan.name}
+                  </div>
+
+                  {/* Prix */}
+                  <div style={{ marginBottom: 16 }}>
+                    <span
+                      style={{
+                        fontFamily: 'var(--ctv3-mono)',
+                        fontSize: 32,
+                        fontWeight: 700,
+                        letterSpacing: '-0.03em',
+                        color: 'var(--ctv3-paper)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {plan.price}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--ctv3-mono)',
+                        fontSize: 11,
+                        color: 'var(--ctv3-faint)',
+                        marginLeft: 5,
+                      }}
+                    >
+                      {plan.period}
+                    </span>
+                  </div>
+
+                  {/* Features */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18, flex: 1 }}>
+                    {plan.features.map((feat) => (
+                      <div
+                        key={feat}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12 }}
+                      >
+                        <span
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: '50%',
+                            flexShrink: 0,
+                            display: 'grid',
+                            placeItems: 'center',
+                            background: `${plan.color}22`,
+                            color: plan.color,
+                            fontSize: 8,
+                            fontWeight: 700,
+                            marginTop: 1,
+                          }}
+                        >
+                          +
+                        </span>
+                        <span style={{ color: 'var(--ctv3-muted)', lineHeight: 1.4 }}>{feat}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA → /pricing */}
+                  <Link
+                    href="/pricing"
+                    style={{
+                      display: 'block',
+                      textAlign: 'center',
+                      padding: '11px',
+                      background: plan.highlight ? plan.color : `${plan.color}20`,
+                      border: `1px solid ${plan.color}`,
+                      color: plan.highlight ? '#07070c' : plan.color,
+                      fontFamily: 'var(--ctv3-mono)',
+                      fontSize: '0.68rem',
+                      letterSpacing: '0.1em',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {plan.cta}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* ── DESTINATIONS EXEMPLES ───────────────────────────── */}
