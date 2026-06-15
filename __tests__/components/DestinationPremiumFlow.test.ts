@@ -269,3 +269,39 @@ describe('PREMIUM-GUIDE-001C — guide pays additif', () => {
     expect(block).toContain('<CountryGuideBlock');
   });
 });
+
+describe('PREMIUM-CONVERSION-001 — libellés PDF distincts & bloc 07 non-redondant', () => {
+  const PDF_BTN = 'components/crisis/PdfExportButton.tsx';
+  const GUIDE_BLOCK = 'components/crisis/CountryGuideBlock.tsx';
+
+  it('PdfExportButton différencie rapport vs guide dans son label idle', () => {
+    const src = read(PDF_BTN);
+    expect(src).toMatch(/countryGuide.*Exporter le guide|Exporter le guide.*countryGuide/);
+    expect(src).toMatch(/Exporter le rapport/);
+  });
+
+  it('CountryGuideBlock transmet countryGuide à PdfExportButton (mode export-only)', () => {
+    const src = read(GUIDE_BLOCK);
+    expect(src).toContain('countryGuide={guide}');
+  });
+
+  it('section 06 synthèse gratuite toujours présente et hors PremiumGate', () => {
+    const src = read(DEST_PAGE);
+    const idx06 = src.indexOf('data-testid="free-summary"');
+    const idx07 = src.indexOf('data-testid="premium-actions"');
+    expect(idx06).toBeGreaterThan(0);
+    expect(idx06).toBeLessThan(idx07 === -1 ? Infinity : idx07);
+  });
+
+  it('invariant no-cards : CountryGuideBlock sans DayCard ni Jour 1', () => {
+    const src = read(GUIDE_BLOCK);
+    expect(src).not.toContain('DayCard');
+    expect(src).not.toMatch(/Jour\s+\d/);
+    expect(src).not.toContain('À planifier selon vos préférences');
+  });
+
+  it('marqueur data-country-guide-build présent (no-cards build identifier)', () => {
+    const src = read(GUIDE_BLOCK);
+    expect(src).toContain('data-country-guide-build="guide-v1"');
+  });
+});
