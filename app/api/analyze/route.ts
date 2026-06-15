@@ -8,6 +8,7 @@ import { checkRateLimit, getClientIdentifier } from '@/lib/middleware/rateLimit'
 import { checkAndIncrementQuota } from '@/lib/auth/analysisQuota';
 import { getUser } from '@/lib/auth/supabase-server';
 import { resetCacheStats, getCacheStats } from '@/lib/cache/redis';
+import { persistUserAnalysisBestEffort } from '@/lib/auth/userAnalyses';
 import type { AnalyzeResponse, OpportunityWindow } from '@/types/crisis.types';
 
 // Plafond technique : l'analyse cold-cache de tous les pays peut dépasser les
@@ -57,6 +58,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   // ne sait pas classer. Fail-closed sur le quota : on ne lance JAMAIS l'analyse
   // si le contrôle quota échoue, pour protéger les APIs payantes (Claude/Perplexity).
   let quota: Awaited<ReturnType<typeof checkAndIncrementQuota>>;
+  // Déclaré ici pour être accessible dans le bloc de persistance (USER-DASHBOARD-001).
+  let user: { id: string; email?: string | null } | null = null;
   try {
     // Rate limiting — protège les APIs payantes (Claude, Perplexity)
     const ip = getClientIdentifier(request);
@@ -87,7 +90,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // Quota analyses gratuites (3/mois pour les comptes free)
-    let user;
     try {
       user = await getUser();
     } catch (e) {
@@ -209,6 +211,31 @@ export async function POST(request: Request): Promise<NextResponse> {
           : {}),
       },
     };
+    // USER-DASHBOARD-001 — Persistance best-effort de la top destination.
+    // Appelée sans await : le helper gère lui-même timeout 3s + catch interne.
+    // Le .catch() extérieur protège contre une exception inattendue du helper.
+    // On ne persiste que topDestinations[0] pour éviter le bruit de 5 entrées
+    // simultanées et garder l'historique lisible (une analyse = une ligne).
+    if (user?.id && topDestinations[0]) {
+      const top = topDestinations[0];
+      persistUserAnalysisBestEffort(user.id, {
+        countryCode:       top.countryCode,
+        countryName:       top.country,
+        crisisScore:       top.total,
+        securityScore:     top.security.value,
+        geopoliticalScore: top.geopolitical.value,
+        budgetScore:       top.budget.value,
+        travelType:        profile.travelType,
+        duration:          profile.duration,
+        budget:            profile.budget,
+        mode:              profile.mode,
+        status:            top.status,
+        confidence:        top.confidence,
+      }).catch((err) => {
+        console.error('[API/analyze] persist unexpected', err);
+      });
+    }
+
     return NextResponse.json(response, {
       headers: {
         'X-Quota-Remaining': quota.isPremium ? '999' : String(quota.remaining),
