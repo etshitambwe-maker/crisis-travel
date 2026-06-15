@@ -159,6 +159,43 @@ export interface ItineraryApiResponse {
   };
 }
 
+// ── Premium Country Guide types (PREMIUM-GUIDE-001C) ─────────────────────────
+
+export interface CountryGuideRequest {
+  countryCode: string;
+  countryName: string;
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+  budget?: number;
+  duration?: number;
+}
+
+export interface PremiumCountryGuide {
+  countryCode: string;
+  countryName: string;
+  /**
+   * Texte de guide terrain en markdown léger (8 sections, titres **gras** +
+   * paragraphes/listes), rendu via NarrativeRenderer. UNIQUE livrable de contenu.
+   */
+  guideText: string;
+  generatedAt: string;
+  /**
+   * true UNIQUEMENT pour le repli honnête (génération échouée/timeout). Permet à
+   * CountryGuideBlock d'afficher un état « génération trop longue + Réessayer » au
+   * lieu d'un faux guide. Absent/false = vrai guide généré.
+   */
+  isFallback?: boolean;
+}
+
+export interface CountryGuideApiResponse {
+  guide: PremiumCountryGuide;
+  meta: {
+    premiumOnly: true;
+    source: 'ai';
+    /** 'live' si les faits Perplexity ont été utilisés ; 'derived' si fallback score. */
+    factsSource: 'live' | 'derived';
+  };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 export function clamp(value: number, min = 0, max = 100): number {
