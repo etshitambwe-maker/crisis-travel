@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { withCache, buildCacheKey } from '@/lib/cache/redis';
 import { logger } from '@/lib/utils/logger';
-import type { CrisisScore, UserProfile, ItineraryRequest, ItineraryResult, BudgetLevel } from '@/types/crisis.types';
+import type { CrisisScore, UserProfile, ItineraryRequest, ItineraryResult, BudgetLevel, PremiumCountryGuide } from '@/types/crisis.types';
+import type { PerplexityCountryFacts } from '@/types/api.types';
 
 // maxRetries: 0 — sans ça, le SDK Anthropic réessaie (jusqu'à 2x) sur timeout/erreur,
 // ce qui transformait le timeout de 8s en ~25s d'attente sur le chemin critique
@@ -429,6 +430,161 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
       `fallback honnête retourné (NON caché) pour ${req.countryCode ?? req.countryName ?? 'unknown'} — cause: ${error instanceof Error ? error.message : 'inconnue'}`,
     );
     return buildItineraryFallback(req, days);
+  }
+}
+
+// ── Premium Country Guide (PREMIUM-GUIDE-001C) ────────────────────────────────
+
+// 45s : même garde-fou que l'itinéraire, sous le plafond Vercel maxDuration=60. Avec
+// le streaming (évite le timeout HTTP), ne coupe que les générations anormalement lentes.
+const GUIDE_HARD_TIMEOUT_MS = 45000;
+// Plancher : un guide pays utile fait ~350-500 mots ; en deçà de 250 on rejette AVANT
+// cache (throw dans le fetcher) → fallback honnête NON caché. Même discipline que MIN_NARRATIVE_WORDS.
+const GUIDE_MIN_WORDS = 250;
+
+type GuideProfile = { travelType?: 'solo' | 'couple' | 'family' | 'nomad'; budget?: number; duration?: number };
+
+function buildGuideFallback(score: CrisisScore): PremiumCountryGuide {
+  return {
+    countryCode: score.countryCode,
+    countryName: score.country,
+    guideText: '',
+    generatedAt: new Date().toISOString(),
+    isFallback: true,
+  };
+}
+
+/** Bloc « faits frais » injecté dans le prompt ; conditionnel si Perplexity en fallback. */
+function buildFactsBlock(facts: PerplexityCountryFacts): string {
+  const sections: Array<[string, string[]]> = [
+    ['Où se baser', facts.whereToStay],
+    ['Zones/situations à éviter', facts.zonesToAvoid],
+    ['Arnaques fréquentes', facts.commonScams],
+    ['Erreurs classiques', facts.classicMistakes],
+    ['Habitudes locales', facts.localCustoms],
+    ['Conseils terrain', facts.fieldTips],
+  ];
+  const lines = sections
+    .filter(([, items]) => items.length > 0)
+    .map(([label, items]) => `- ${label} : ${items.join(' ; ')}`);
+  return lines.length > 0
+    ? `FAITS TERRAIN VÉRIFIÉS (utilise-les en priorité, reformule, ne recopie pas) :\n${lines.join('\n')}`
+    : `AUCUN FAIT TERRAIN FRAIS DISPONIBLE : reste plus général et emploie le conditionnel ; ne donne aucun nom de quartier/arnaque dont tu n'es pas sûr.`;
+}
+
+/**
+ * PREMIUM-GUIDE-001C — Guide pays premium (texte terrain en 8 sections), hybride :
+ * faits frais Perplexity (déjà récupérés par l'appelant) + scoreSnapshot + profil +
+ * risques live. Streaming + hard timeout + garde anti-troncature + plancher mots ;
+ * fallback honnête NON caché (isFallback) sur échec/timeout/troncature/déficit.
+ * Cache versionné guide-v1, segmenté par pays + profil + bande de score.
+ */
+export async function generatePremiumCountryGuide(
+  score: CrisisScore,
+  facts: PerplexityCountryFacts,
+  profile: GuideProfile,
+): Promise<PremiumCountryGuide> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return buildGuideFallback(score);
+  }
+
+  const travelType = profile.travelType ?? 'solo';
+  const liveRisksLine = (score.liveRisks ?? []).length > 0
+    ? `Risques terrain remontés par nos sources : ${(score.liveRisks ?? []).join(' ; ')}.`
+    : '';
+  const meaeRaw = score.security.details.meaeLevel;
+  const meaeLevel = typeof meaeRaw === 'number' ? meaeRaw : parseInt(String(meaeRaw ?? '2'), 10) || 2;
+
+  const cacheKey = buildCacheKey(
+    'country-guide',
+    score.countryCode,
+    travelType,
+    String(Math.floor(score.total / 5)),
+    'guide-v1',
+  );
+
+  const prompt = `Tu es un guide de voyage humain et expérimenté qui connaît ${score.country}. Rédige, EN TEXTE (pas de JSON), un GUIDE PAYS premium pour un voyageur ${travelType}${profile.budget ? `, budget ~${profile.budget}€` : ''}${profile.duration ? `, ${profile.duration} jours` : ''}.
+
+Ce n'est PAS un rapport de score : c'est un guide terrain, comme si tu briefais un ami avant son départ. Tutoiement, ton chaleureux mais sobre, prends position.
+
+Contexte objectif (à intégrer, pas à réciter) :
+- CrisisScore ${score.total}/100 (${score.status}) — sécurité ${score.security.value}, géopolitique ${score.geopolitical.value}, budget ${score.budget.value}, praticité ${score.practicality.value}.
+- Niveau de vigilance MEAE ${meaeLevel}/4.
+- Repas bon marché ~${score.budget.details.mealCheap ?? 'N/A'}€, hôtel moyen ~${score.budget.details.hotelAvg ?? 'N/A'}€/nuit.
+${liveRisksLine}
+
+${buildFactsBlock(facts)}
+
+STRUCTURE — 8 sections, chacune un titre court en gras puis 1-2 paragraphes (ou une courte liste) :
+**1. Vue d'ensemble & avant de partir**
+**2. Culture & comportements locaux**
+**3. Où se baser / zones à privilégier**
+**4. Zones ou situations à éviter**
+**5. Sécurité terrain & vigilance concrète** (cohérente avec MEAE ${meaeLevel}/4, sans dramatiser ni promettre une sécurité absolue)
+**6. Arnaques fréquentes & erreurs classiques**
+**7. Budget, confort & logistique**
+**8. Conseils selon profil ${travelType} + mon conseil final de guide**
+
+RÈGLES ABSOLUES :
+1. N'invente JAMAIS une adresse, un prix précis, une source officielle ou une règle locale.
+2. Quand tu n'as pas de fait sûr, emploie le conditionnel (« tu trouveras généralement », « il vaut mieux »).
+3. Ne promets pas de sécurité absolue ; rappelle de vérifier diplomatie.gouv.fr et de s'inscrire sur Ariane.
+4. Aucun numéro de téléphone ni prix garanti.
+5. Reste CONCIS : ~350-500 mots au total, dense et utile, pas de remplissage.
+
+Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragraphes). Commence directement par "**1. Vue d'ensemble".`;
+
+  try {
+    const { data } = await withCache(
+      cacheKey,
+      async () => {
+        const t0 = Date.now();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const stream = client.messages.stream({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2200,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const hardTimeout = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            stream.abort();
+            reject(new Error(`country-guide hard timeout ${GUIDE_HARD_TIMEOUT_MS}ms`));
+          }, GUIDE_HARD_TIMEOUT_MS);
+        });
+        try {
+          const msg = await Promise.race([stream.finalMessage(), hardTimeout]);
+          // Garde anti-troncature : réponse coupée au plafond → throw AVANT le return,
+          // withCache ne cache rien et le catch renvoie un fallback honnête NON caché.
+          if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
+            throw new Error('country-guide: réponse tronquée (stop_reason=max_tokens)');
+          }
+          const text = (msg.content[0] as { text: string }).text.trim();
+          const wordCount = text ? text.split(/\s+/).filter(Boolean).length : 0;
+          if (wordCount < GUIDE_MIN_WORDS) {
+            throw new Error(`country-guide: trop court (${wordCount} mots < ${GUIDE_MIN_WORDS})`);
+          }
+          logger.api('Claude-CountryGuide', score.countryCode, Date.now() - t0, false);
+          return text;
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      },
+      21600, // 6h
+    );
+
+    return {
+      countryCode: score.countryCode,
+      countryName: score.country,
+      guideText: data,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    logger.error('Claude-CountryGuide', error);
+    logger.warn(
+      'Claude-CountryGuide',
+      `guide fallback honnête retourné (NON caché) pour ${score.countryCode} — cause: ${error instanceof Error ? error.message : 'inconnue'}`,
+    );
+    return buildGuideFallback(score);
   }
 }
 
