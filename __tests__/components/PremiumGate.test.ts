@@ -168,9 +168,11 @@ describe('PREMIUM-FLOW-001C — wording premium clarifié', () => {
     expect(src).toMatch(/PDF illimit/i);
   });
 
-  it('mentionne "Préparer mon itinéraire"', () => {
+  it('mentionne un bénéfice itinéraire (ex. "Itinéraire personnalisé")', () => {
     const src = read(GATE);
-    expect(src).toMatch(/Préparer mon itinéraire/i);
+    // PREMIUM-CONVERSION-001 : libellé mis à jour de "Préparer mon itinéraire"
+    // vers "Itinéraire personnalisé" dans PREMIUM_BENEFITS (source unique).
+    expect(src).toMatch(/[Ii]tinéraire personnalisé|Préparer mon itinéraire/i);
   });
 
   it('garde un wording court (pas de grille tarifaire dupliquée depuis /pricing)', () => {
@@ -178,5 +180,34 @@ describe('PREMIUM-FLOW-001C — wording premium clarifié', () => {
     // La grille complète reste sur /pricing : on ne réimporte pas PLANS ni FAQ.
     expect(src).not.toContain('QUESTIONS FRÉQUENTES');
     expect(src).not.toContain('const PLANS');
+  });
+});
+
+describe('PREMIUM-CONVERSION-001 — PREMIUM_BENEFITS source unique et guide en tête', () => {
+  it('PREMIUM_BENEFITS est un seul tableau (source unique)', () => {
+    const src = read(GATE);
+    const matches = src.match(/PREMIUM_BENEFITS\s*=/g) ?? [];
+    expect(matches).toHaveLength(1);
+  });
+
+  it('Guide terrain pays figure dans PREMIUM_BENEFITS (en premier bénéfice)', () => {
+    const src = read(GATE);
+    expect(src).toMatch(/PREMIUM_BENEFITS\s*=\s*\[[\s\S]*?['"]Guide terrain pays/);
+  });
+
+  it('Itinéraire personnalisé figure dans PREMIUM_BENEFITS', () => {
+    const src = read(GATE);
+    expect(src).toMatch(/[Ii]tinéraire personnalisé/);
+  });
+
+  it('ne contient plus la string dupliquée "PDF illimité · Préparer mon itinéraire"', () => {
+    const src = read(GATE);
+    expect(src).not.toContain('PDF illimité · Préparer mon itinéraire');
+  });
+
+  it('utilise PREMIUM_BENEFITS dans les deux variants (map)', () => {
+    const src = read(GATE);
+    const usages = src.match(/PREMIUM_BENEFITS\.map/g) ?? [];
+    expect(usages.length).toBeGreaterThanOrEqual(2);
   });
 });
