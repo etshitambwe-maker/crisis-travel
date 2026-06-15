@@ -2,7 +2,24 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 
-export async function GET(): Promise<NextResponse> {
+interface AnalysisRow {
+  id: string;
+  country_code: string;
+  country_name: string;
+  crisis_score: number;
+  security_score: number | null;
+  geopolitical_score: number | null;
+  budget_score: number | null;
+  travel_type: string | null;
+  duration: number | null;
+  budget: number | null;
+  mode: string | null;
+  status: string | null;
+  confidence: string | null;
+  analyzed_at: string;
+}
+
+export async function GET(_request: Request): Promise<NextResponse> {
   const { user, isPremium } = await getUserWithSubscription();
 
   if (!user) {
@@ -46,7 +63,10 @@ export async function GET(): Promise<NextResponse> {
   }
 
   // Mapper snake_case → camelCase ; user_id explicitement exclu
-  const analyses = (data ?? []).map((row) => ({
+  // Double cast via unknown : Supabase SDK sans schéma injecté retourne un type
+  // union complexe incompatible avec notre interface. Le cast est sûr car on contrôle
+  // exactement les colonnes sélectionnées dans le .select() ci-dessus.
+  const analyses = ((data ?? []) as unknown as AnalysisRow[]).map((row) => ({
     id:                row.id,
     countryCode:       row.country_code,
     countryName:       row.country_name,
