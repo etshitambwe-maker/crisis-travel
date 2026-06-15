@@ -619,10 +619,10 @@ export default async function DestinationPage({ params }: Props) {
                 <span className="ctv3-mono" style={{
                   fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--ctv3-paper)',
                 }}>
-                  Analyse détaillée
+                  Synthèse IA & analyse terrain
                 </span>
                 <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
-                  Générée à partir des signaux disponibles
+                  Narrative complète · Risques live · Itinéraire · Guide pays
                 </span>
               </div>
               {/* PREMIUM-EXPERIENCE-001 (A) — narrative rendue en sections lisibles
