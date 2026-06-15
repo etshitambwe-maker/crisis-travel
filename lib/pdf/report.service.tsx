@@ -6,7 +6,7 @@ import {
   View,
   StyleSheet,
 } from '@react-pdf/renderer';
-import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
+import type { CrisisScore, ItineraryResult, PremiumCountryGuide } from '@/types/crisis.types';
 
 // Styles PDF
 const styles = StyleSheet.create({
@@ -305,9 +305,15 @@ interface ReportProps {
     to?:         string;
   };
   itinerary?: ItineraryResult;
+  /**
+   * COUNTRY-GUIDE-PDF-001 — Guide pays premium DÉJÀ généré côté client. Quand fourni,
+   * le rapport rend une section « Guide pays premium » (texte markdown léger découpé en
+   * paragraphes, ** retirés). Aucun appel IA : c'est un export-only du guide existant.
+   */
+  countryGuide?: PremiumCountryGuide;
 }
 
-export function TravelReport({ score, narrative, generatedAt, countryName, profile, itinerary }: ReportProps) {
+export function TravelReport({ score, narrative, generatedAt, countryName, profile, itinerary, countryGuide }: ReportProps) {
   const color = score ? getScoreColor(score.total) : '#5b8def';
   const date  = generatedAt ?? new Date().toLocaleDateString('fr-FR', {
     day: '2-digit', month: 'long', year: 'numeric',
@@ -341,9 +347,9 @@ export function TravelReport({ score, narrative, generatedAt, countryName, profi
 
   return (
     <Document
-      title={`Crisis Travel - Rapport ${score?.country ?? itinerary?.countryName ?? countryName ?? ''}`}
+      title={`Crisis Travel - Rapport ${score?.country ?? itinerary?.countryName ?? countryGuide?.countryName ?? countryName ?? ''}`}
       author="Crisis Travel"
-      subject={`Analyse CrisisScore ${score?.country ?? itinerary?.countryName ?? countryName ?? ''}`}
+      subject={`Analyse CrisisScore ${score?.country ?? itinerary?.countryName ?? countryGuide?.countryName ?? countryName ?? ''}`}
     >
       <Page size="A4" style={styles.page}>
 
@@ -387,10 +393,12 @@ export function TravelReport({ score, narrative, generatedAt, countryName, profi
           ) : (
             <View style={{ flex: 1 }}>
               <Text style={styles.countryName}>
-                {(itinerary?.countryName ?? countryName ?? '').toUpperCase()}
+                {(itinerary?.countryName ?? countryGuide?.countryName ?? countryName ?? '').toUpperCase()}
               </Text>
               <Text style={{ fontSize: 9, color: '#6b7280', marginTop: 6, letterSpacing: 0.5 }}>
-                ITINERAIRE GENERE LE {date.toUpperCase()}
+                {countryGuide && !itinerary
+                  ? `GUIDE PAYS PREMIUM - GENERE LE ${date.toUpperCase()}`
+                  : `ITINERAIRE GENERE LE ${date.toUpperCase()}`}
               </Text>
             </View>
           )}
@@ -518,6 +526,29 @@ export function TravelReport({ score, narrative, generatedAt, countryName, profi
             </View>
           </>
         )}
+
+        {/* Guide pays premium — COUNTRY-GUIDE-PDF-001. Section optionnelle, incluse
+            uniquement si countryGuide fourni (déjà généré côté client, aucun appel IA).
+            Le texte est un markdown léger : on découpe en paragraphes et on retire les **
+            (react-pdf ne les interprète pas), comme le rendu narrativeText de l'itinéraire. */}
+        {countryGuide && countryGuide.guideText ? (
+          <>
+            <Text style={styles.sectionTitle}>{nextSection()} / GUIDE PAYS PREMIUM</Text>
+            {countryGuide.guideText
+              .split(/\n\s*\n/)
+              .map((para) => para.replace(/\*\*/g, '').trim())
+              .filter(Boolean)
+              .map((para, i) => (
+                <Text key={i} style={styles.narrativeText}>{para}</Text>
+              ))}
+            <View style={[styles.safetyBlock, { marginTop: 8 }]}>
+              <Text style={styles.safetyText}>
+                ! Informations d&apos;aide a la preparation de votre voyage, generees par IA.
+                A verifier avec les sources officielles (diplomatie.gouv.fr) avant tout depart.
+              </Text>
+            </View>
+          </>
+        ) : null}
 
         {/* Disclaimer général */}
         <View style={styles.disclaimer}>

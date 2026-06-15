@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import type { CountryGuideApiResponse, CountryGuideRequest } from '@/types/crisis.types';
 import { NarrativeRenderer } from './NarrativeRenderer';
+import { PdfExportButton } from './PdfExportButton';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 
@@ -140,17 +141,28 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
       {status === 'success' && guide && !guide.isFallback && (
         <div data-testid="country-guide-result">
           <NarrativeRenderer narrative={guide.guideText} />
-          <button
-            onClick={generate}
-            className="ctv3-mono"
-            style={{
-              marginTop: 12, padding: '9px 16px', cursor: 'pointer', background: 'none',
-              border: '1px solid var(--ctv3-line)', color: 'var(--ctv3-muted)',
-              fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
-            }}
-          >
-            Regénérer le guide
-          </button>
+
+          {/* COUNTRY-GUIDE-PDF-001 — export du guide DÉJÀ généré (aucun re-appel IA).
+              Le guide en mémoire est passé tel quel à PdfExportButton (mode export-only). */}
+          <div data-testid="country-guide-pdf-export" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 14 }}>
+            <PdfExportButton
+              countryCode={props.countryCode}
+              countryName={props.countryName}
+              profile={{ travelType: props.travelType, budget: props.budget, duration: props.duration }}
+              countryGuide={guide}
+            />
+            <button
+              onClick={generate}
+              className="ctv3-mono"
+              style={{
+                padding: '9px 16px', cursor: 'pointer', background: 'none',
+                border: '1px solid var(--ctv3-line)', color: 'var(--ctv3-muted)',
+                fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, textTransform: 'uppercase',
+              }}
+            >
+              Regénérer le guide
+            </button>
+          </div>
         </div>
       )}
     </div>

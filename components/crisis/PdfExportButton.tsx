@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
+import type { CrisisScore, ItineraryResult, PremiumCountryGuide } from '@/types/crisis.types';
 import { AuthModal } from '@/components/auth/AuthModal';
 
 interface PdfExportButtonProps {
@@ -23,11 +23,16 @@ interface PdfExportButtonProps {
   scoreSnapshot?: CrisisScore;
   /** Already-generated Claude narrative from the destination page (SSR). */
   narrative?: string;
+  /**
+   * COUNTRY-GUIDE-PDF-001 — Guide pays premium DÉJÀ généré côté client. Quand fourni,
+   * déclenche le mode export-only « guide pays » server-side — AUCUN appel Perplexity/Claude.
+   */
+  countryGuide?: PremiumCountryGuide;
 }
 
 type ExportStatus = 'idle' | 'loading' | 'error' | 'error_401' | 'error_402';
 
-export function PdfExportButton({ countryCode, countryName, profile, itinerary, scoreSnapshot, narrative }: PdfExportButtonProps) {
+export function PdfExportButton({ countryCode, countryName, profile, itinerary, scoreSnapshot, narrative, countryGuide }: PdfExportButtonProps) {
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [showAuth, setShowAuth] = useState(false);
 
@@ -40,6 +45,7 @@ export function PdfExportButton({ countryCode, countryName, profile, itinerary, 
       if (itinerary)      body.itinerary      = itinerary;
       if (scoreSnapshot)  body.scoreSnapshot  = scoreSnapshot;
       if (narrative)      body.narrative      = narrative;
+      if (countryGuide)   body.countryGuide   = countryGuide;
 
       const res = await fetch(`/api/export-pdf/${countryCode}`, {
         method: 'POST',

@@ -5,7 +5,7 @@ import { renderToBuffer } from '@react-pdf/renderer';
 import { findCountry } from '@/lib/utils/countries';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 import { TravelReport } from '@/lib/pdf/report.service';
-import type { CrisisScore, ItineraryResult } from '@/types/crisis.types';
+import type { CrisisScore, ItineraryResult, PremiumCountryGuide } from '@/types/crisis.types';
 
 // PDF-UX-002: maxDuration augmenté à 60s — PDF + Claude narrative peut dépasser 10s (défaut Vercel Hobby).
 export const maxDuration = 60;
@@ -72,11 +72,22 @@ const scoreSnapshotSchema = z.object({
   opportunities: z.array(z.string()).optional(),
 }).optional();
 
+// COUNTRY-GUIDE-PDF-001 — guide pays premium DÉJÀ généré côté client (export-only,
+// aucun appel IA). Validation minimale de shape (le texte est rendu tel quel).
+const countryGuideSchema = z.object({
+  countryCode: z.string(),
+  countryName: z.string(),
+  guideText:   z.string(),
+  generatedAt: z.string(),
+  isFallback:  z.boolean().optional(),
+}).optional();
+
 const pdfPayloadSchema = z.object({
   profile:       profileSchema,
   itinerary:     itinerarySchema,
   scoreSnapshot: scoreSnapshotSchema,
   narrative:     z.string().optional(),
+  countryGuide:  countryGuideSchema,
 });
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -109,6 +120,7 @@ export async function POST(
   let clientItinerary:     ItineraryResult | undefined          = undefined;
   let clientScoreSnapshot: CrisisScore | undefined              = undefined;
   let clientNarrative:     string | undefined                   = undefined;
+  let clientCountryGuide:  PremiumCountryGuide | undefined       = undefined;
 
   const contentType = request.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
@@ -120,6 +132,7 @@ export async function POST(
       clientItinerary     = parsed.data.itinerary     as ItineraryResult | undefined;
       clientScoreSnapshot = parsed.data.scoreSnapshot as CrisisScore | undefined;
       clientNarrative     = parsed.data.narrative;
+      clientCountryGuide  = parsed.data.countryGuide  as PremiumCountryGuide | undefined;
     }
   }
 
@@ -140,7 +153,17 @@ export async function POST(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       renderToBuffer(React.createElement(TravelReport, props) as any);
 
-    if (clientItinerary) {
+    if (clientCountryGuide && clientCountryGuide.guideText && !clientCountryGuide.isFallback) {
+      // ── Mode Guide — export-only guide pays (COUNTRY-GUIDE-PDF-001) ─────────
+      // Guide DÉJÀ généré côté client → AUCUN appel Perplexity/Claude/scoring.
+      // Placé en TÊTE de cascade : un guide explicite ne doit jamais tomber dans
+      // le legacy (Mode C) qui, lui, recalcule.
+      pdfBuffer = await renderReport({
+        countryGuide: clientCountryGuide,
+        profile,
+        countryName:  country.name,
+      });
+    } else if (clientItinerary) {
       // ── Mode A — export-only itinerary (PDF-UX-004) ────────────────────────
       // itinerary déjà généré → pas d'appel Claude/scoring.
       pdfBuffer = await renderReport({
