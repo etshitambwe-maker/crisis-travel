@@ -369,6 +369,18 @@ export function TravelReport({ score, narrative, generatedAt, countryName, profi
                 {profile.duration ? ` - ${profile.duration}J` : ''}
               </Text>
             )}
+            {/* TRAVEL-DATES-001 — affichage dates de voyage si présentes */}
+            {(profile?.from || profile?.to) && (
+              <Text style={styles.brandMeta}>
+                DATES :{' '}
+                {profile?.from
+                  ? new Date(profile.from).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()
+                  : '?'}
+                {profile?.to
+                  ? ` → ${new Date(profile.to).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()}`
+                  : ''}
+              </Text>
+            )}
           </View>
         </View>
 
