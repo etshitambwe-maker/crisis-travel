@@ -231,6 +231,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         mode:              profile.mode,
         status:            top.status,
         confidence:        top.confidence,
+        // TRAVEL-DATES-001 — dates optionnelles, déjà dans le schéma Zod (lignes 31-32)
+        departureDate:     profile.departureDate ?? undefined,
+        returnDate:        profile.returnDate    ?? undefined,
       });
     }
 

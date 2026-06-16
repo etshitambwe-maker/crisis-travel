@@ -158,6 +158,38 @@ describe('persistUserAnalysisBestEffort', () => {
     expect(lastInsertPayload).toMatchObject({ confidence: null });
   });
 
+  // ── TRAVEL-DATES-001 — persistance des dates de voyage ─────────────────────
+
+  it('insère departure_date et return_date si fournis', async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'PT', countryName: 'Portugal', crisisScore: 82,
+      departureDate: '2026-08-15',
+      returnDate: '2026-08-29',
+    });
+
+    expect(lastInsertPayload).toMatchObject({
+      departure_date: '2026-08-15',
+      return_date: '2026-08-29',
+    });
+  });
+
+  it('insère NULL pour departure_date/return_date si absents', async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'PT', countryName: 'Portugal', crisisScore: 82,
+    });
+
+    expect(lastInsertPayload).toMatchObject({
+      departure_date: null,
+      return_date: null,
+    });
+  });
+
   it('retourne toujours 200 même si timeout (8s simulé)', async () => {
     // Simuler un insert qui ne résout jamais (timeout déclenché)
     insertImpl = () => new Promise(() => { /* jamais résolu */ });

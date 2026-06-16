@@ -17,6 +17,8 @@ interface AnalysisRow {
   status: string | null;
   confidence: string | null;
   analyzed_at: string;
+  departure_date: string | null;  // TRAVEL-DATES-001
+  return_date: string | null;     // TRAVEL-DATES-001
 }
 
 export async function GET(_request: Request): Promise<NextResponse> {
@@ -50,7 +52,7 @@ export async function GET(_request: Request): Promise<NextResponse> {
     .select(
       'id, country_code, country_name, crisis_score, security_score, ' +
       'geopolitical_score, budget_score, travel_type, duration, budget, ' +
-      'mode, status, confidence, analyzed_at'
+      'mode, status, confidence, analyzed_at, departure_date, return_date'
     )
     .eq('user_id', user.id)
     .gt('analyzed_at', sixMonthsAgo.toISOString())
@@ -81,6 +83,8 @@ export async function GET(_request: Request): Promise<NextResponse> {
     status:            row.status,
     confidence:        row.confidence,
     analyzedAt:        row.analyzed_at,
+    departureDate:     row.departure_date ?? null,  // TRAVEL-DATES-001
+    returnDate:        row.return_date    ?? null,  // TRAVEL-DATES-001
   }));
 
   return NextResponse.json({ analyses });

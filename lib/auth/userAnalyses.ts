@@ -13,6 +13,9 @@ export interface UserAnalysisPayload {
   mode?: string;
   status?: string;
   confidence?: string;
+  /** TRAVEL-DATES-001 — Dates de voyage optionnelles (YYYY-MM-DD). */
+  departureDate?: string;
+  returnDate?: string;
 }
 
 const VALID_STATUS = new Set(['ideal', 'recommended', 'possible', 'discouraged']);
@@ -71,6 +74,8 @@ export async function persistUserAnalysisBestEffort(
     mode:               payload.mode ?? null,
     status,
     confidence,
+    departure_date:     payload.departureDate ?? null,  // TRAVEL-DATES-001
+    return_date:        payload.returnDate    ?? null,  // TRAVEL-DATES-001
   });
 
   const timeout = new Promise<{ error: unknown }>(

@@ -29,6 +29,38 @@ describe('buildDestinationUrl', () => {
   });
 });
 
+describe('TRAVEL-DATES-001 — buildDestinationUrl avec dates', () => {
+  it('inclut from et to dans l\'URL si fournis', () => {
+    const url = buildDestinationUrl({
+      countryCode: 'PT',
+      travelType: 'solo',
+      duration: 14,
+      budget: 2000,
+      mode: 'standard',
+      departureDate: '2026-08-15',
+      returnDate: '2026-08-29',
+    });
+    expect(url).toContain('from=2026-08-15');
+    expect(url).toContain('to=2026-08-29');
+  });
+
+  it('omet from/to si absents ou null', () => {
+    const url = buildDestinationUrl({ countryCode: 'PT', travelType: 'solo' });
+    expect(url).not.toContain('from=');
+    expect(url).not.toContain('to=');
+  });
+
+  it('inclut uniquement from si returnDate est null', () => {
+    const url = buildDestinationUrl({
+      countryCode: 'PT',
+      departureDate: '2026-08-15',
+      returnDate: null,
+    });
+    expect(url).toContain('from=2026-08-15');
+    expect(url).not.toContain('to=');
+  });
+});
+
 describe('formatAnalysisDate', () => {
   it('formate une date ISO en date lisible dd/mm/yyyy', () => {
     const result = formatAnalysisDate('2026-06-15T10:00:00Z');

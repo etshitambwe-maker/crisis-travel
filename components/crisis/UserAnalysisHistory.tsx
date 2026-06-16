@@ -11,12 +11,17 @@ export function buildDestinationUrl(opts: {
   duration?: number;
   budget?: number;
   mode?: string;
+  /** TRAVEL-DATES-001 — Dates de voyage (YYYY-MM-DD), restaurées dans le lien Revoir. */
+  departureDate?: string | null;
+  returnDate?: string | null;
 }): string {
   const params = new URLSearchParams();
-  if (opts.travelType) params.set('travelType', opts.travelType);
-  if (opts.duration)   params.set('duration',   String(opts.duration));
-  if (opts.budget)     params.set('budget',      String(opts.budget));
-  if (opts.mode)       params.set('mode',        opts.mode);
+  if (opts.travelType)     params.set('travelType', opts.travelType);
+  if (opts.duration)       params.set('duration',   String(opts.duration));
+  if (opts.budget)         params.set('budget',      String(opts.budget));
+  if (opts.mode)           params.set('mode',        opts.mode);
+  if (opts.departureDate)  params.set('from',        opts.departureDate);  // TRAVEL-DATES-001
+  if (opts.returnDate)     params.set('to',          opts.returnDate);     // TRAVEL-DATES-001
   const qs = params.toString();
   return `/destination/${opts.countryCode.toLowerCase()}${qs ? `?${qs}` : ''}`;
 }
@@ -136,11 +141,13 @@ export function UserAnalysisHistory() {
         const tier = tierFromScore(a.crisisScore);
         const tierInfo = TIER[tier];
         const destUrl = buildDestinationUrl({
-          countryCode: a.countryCode,
-          travelType:  a.travelType,
-          duration:    a.duration,
-          budget:      a.budget,
-          mode:        a.mode,
+          countryCode:   a.countryCode,
+          travelType:    a.travelType,
+          duration:      a.duration,
+          budget:        a.budget,
+          mode:          a.mode,
+          departureDate: a.departureDate,  // TRAVEL-DATES-001
+          returnDate:    a.returnDate,     // TRAVEL-DATES-001
         });
 
         return (
@@ -195,6 +202,18 @@ export function UserAnalysisHistory() {
                   <Tag warn>{MODE_LABEL[a.mode] ?? a.mode}</Tag>
                 )}
               </div>
+
+              {/* TRAVEL-DATES-001 — dates de voyage si disponibles */}
+              {a.departureDate && (
+                <div style={{ marginTop: 5 }}>
+                  <Tag>
+                    {new Date(a.departureDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                    {a.returnDate
+                      ? ` → ${new Date(a.returnDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
+                      : ''}
+                  </Tag>
+                </div>
+              )}
 
               {/* Sous-scores */}
               {(a.securityScore != null || a.geopoliticalScore != null || a.budgetScore != null) && (
