@@ -534,7 +534,11 @@ function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
     if (dateError) return;
     if (!acquireAnalyzeLock()) return;
     const b = BUDGET_MAP[state.budget ?? 'moyen'];
-    const d = DURATION_MAP[state.duration ?? 'semaine'];
+    // TRAVEL-DATES-001 : durée calculée depuis les dates si les deux sont présentes,
+    // sinon DURATION_MAP (comportement antérieur préservé pour l'usage sans dates).
+    const d = (dateDepart && dateRetour)
+      ? Math.max(1, Math.ceil((new Date(dateRetour).getTime() - new Date(dateDepart).getTime()) / 86400000))
+      : DURATION_MAP[state.duration ?? 'semaine'];
     const tt = state.travelType ?? 'solo';
     const mode = state.priority === 'securite' ? 'bunker' : state.priority === 'budget' ? 'budget_crisis' : 'standard';
     const priority = state.priority ?? 'tout';
@@ -657,7 +661,12 @@ export function SmartSearchHub() {
 
   const handleRegionAnalyze = useCallback((continent: Continent, sort: SortKey) => {
     const sortMode = sort === 'security' ? 'bunker' : sort === 'budget' ? 'budget_crisis' : 'standard';
-    const rp = new URLSearchParams({ continent, mode: sortMode, budget: '1500', duration: '7', travelType: 'solo', airport });
+    // TRAVEL-DATES-001 : durée calculée depuis les dates si les deux sont présentes,
+    // sinon 7 jours par défaut (comportement antérieur préservé pour l'usage sans dates).
+    const computedDuration = (dateDepart && dateRetour)
+      ? Math.max(1, Math.ceil((new Date(dateRetour).getTime() - new Date(dateDepart).getTime()) / 86400000))
+      : 7;
+    const rp = new URLSearchParams({ continent, mode: sortMode, budget: '1500', duration: String(computedDuration), travelType: 'solo', airport });
     if (dateDepart) rp.set('from', dateDepart);
     if (dateRetour) rp.set('to', dateRetour);
     router.push(`/results?${rp.toString()}`);
