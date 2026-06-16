@@ -1,18 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock @supabase/supabase-js
-let insertImpl: () => Promise<{ error: unknown }>;
+// insertImpl reçoit le payload pour les tests de normalisation
+let insertImpl: (data: unknown) => Promise<{ error: unknown }>;
+let lastInsertPayload: unknown;
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: () => ({
-      insert: () => insertImpl(),
+      insert: (data: unknown) => {
+        lastInsertPayload = data;
+        return insertImpl(data);
+      },
     }),
   }),
 }));
 
 beforeEach(() => {
   vi.resetModules();
+  lastInsertPayload = undefined;
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://fake.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'fake-service-key';
 });
@@ -90,5 +96,87 @@ describe('persistUserAnalysisBestEffort', () => {
     ).resolves.toBeUndefined();
 
     expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  // ── Normalisation status (GATE-3D — valeurs stale cache Redis) ───────────────
+
+  it("normalise status 'recommend' (stale cache) → 'recommended' avant insert", async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'JP',
+      countryName: 'Japon',
+      crisisScore: 75,
+      status: 'recommend',
+      confidence: 'low',
+    });
+
+    expect(lastInsertPayload).toMatchObject({ status: 'recommended' });
+  });
+
+  it("conserve status 'ideal' / 'possible' / 'discouraged' intacts", async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    for (const s of ['ideal', 'possible', 'discouraged'] as const) {
+      lastInsertPayload = undefined;
+      await persistUserAnalysisBestEffort('user-123', {
+        countryCode: 'PT', countryName: 'Portugal', crisisScore: 82, status: s,
+      });
+      expect(lastInsertPayload).toMatchObject({ status: s });
+    }
+  });
+
+  it("met status à null si valeur inconnue (valeur stale non récupérable)", async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'PT', countryName: 'Portugal', crisisScore: 82,
+      status: 'unknown_value',
+    });
+
+    expect(lastInsertPayload).toMatchObject({ status: null });
+  });
+
+  it("normalise confidence : valeurs valides conservées, inconnues → null", async () => {
+    insertImpl = () => Promise.resolve({ error: null });
+    const { persistUserAnalysisBestEffort } = await load();
+
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'PT', countryName: 'Portugal', crisisScore: 82,
+      confidence: 'medium',
+    });
+    expect(lastInsertPayload).toMatchObject({ confidence: 'medium' });
+
+    lastInsertPayload = undefined;
+    await persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'PT', countryName: 'Portugal', crisisScore: 82,
+      confidence: 'stale_value',
+    });
+    expect(lastInsertPayload).toMatchObject({ confidence: null });
+  });
+
+  it('retourne toujours 200 même si timeout (8s simulé)', async () => {
+    // Simuler un insert qui ne résout jamais (timeout déclenché)
+    insertImpl = () => new Promise(() => { /* jamais résolu */ });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { persistUserAnalysisBestEffort } = await load();
+
+    // Le vi.useFakeTimers accélère le setTimeout interne du helper
+    vi.useFakeTimers();
+    const promise = persistUserAnalysisBestEffort('user-123', {
+      countryCode: 'JP', countryName: 'Japon', crisisScore: 75,
+    });
+    vi.advanceTimersByTime(8001);
+    await promise;
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[userAnalyses] persist error',
+      expect.objectContaining({ message: 'timeout' })
+    );
+    warnSpy.mockRestore();
+    vi.useRealTimers();
   });
 });

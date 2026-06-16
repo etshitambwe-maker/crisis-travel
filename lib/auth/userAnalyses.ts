@@ -15,6 +15,24 @@ export interface UserAnalysisPayload {
   confidence?: string;
 }
 
+const VALID_STATUS = new Set(['ideal', 'recommended', 'possible', 'discouraged']);
+const VALID_CONFIDENCE = new Set(['high', 'medium', 'low']);
+
+/**
+ * Normalise status : corrige les valeurs stale du cache Redis ('recommend' → 'recommended').
+ * Toute valeur inconnue est mise à null plutôt que de violer le CHECK SQL.
+ */
+function normalizeStatus(v: string | undefined): string | null {
+  if (!v) return null;
+  if (v === 'recommend') return 'recommended';
+  return VALID_STATUS.has(v) ? v : null;
+}
+
+function normalizeConfidence(v: string | undefined): string | null {
+  if (!v) return null;
+  return VALID_CONFIDENCE.has(v) ? v : null;
+}
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,7 +43,7 @@ function getAdminClient() {
 /**
  * Persiste une analyse utilisateur dans user_analyses.
  * Best-effort : ne throw jamais, ne bloque jamais /api/analyze.
- * Timeout 3s via Promise.race pour éviter de bloquer le runtime serverless.
+ * Timeout 8s via Promise.race — couvre Supabase Hobby cold-start.
  */
 export async function persistUserAnalysisBestEffort(
   userId: string | null | undefined,
@@ -42,16 +60,19 @@ export async function persistUserAnalysisBestEffort(
   console.log('[userAnalyses][diag] admin client created:', !!supabase);
   if (!supabase) return;
 
+  const status     = normalizeStatus(payload.status);
+  const confidence = normalizeConfidence(payload.confidence);
+
   console.log('[userAnalyses][diag] payload:', {
-    countryCode:   payload.countryCode,
-    countryName:   payload.countryName,
-    crisisScore:   payload.crisisScore,
-    travelType:    payload.travelType,
-    duration:      payload.duration,
-    budget:        payload.budget,
-    mode:          payload.mode,
-    status:        payload.status,
-    confidence:    payload.confidence,
+    countryCode: payload.countryCode,
+    countryName: payload.countryName,
+    crisisScore: payload.crisisScore,
+    travelType:  payload.travelType,
+    duration:    payload.duration,
+    budget:      payload.budget,
+    mode:        payload.mode,
+    status,
+    confidence,
   });
 
   const t0 = Date.now();
@@ -67,12 +88,12 @@ export async function persistUserAnalysisBestEffort(
     duration:           payload.duration ?? null,
     budget:             payload.budget ?? null,
     mode:               payload.mode ?? null,
-    status:             payload.status ?? null,
-    confidence:         payload.confidence ?? null,
+    status,
+    confidence,
   });
 
   const timeout = new Promise<{ error: unknown }>(
-    (resolve) => setTimeout(() => resolve({ error: new Error('timeout') }), 3000)
+    (resolve) => setTimeout(() => resolve({ error: new Error('timeout') }), 8000)
   );
 
   try {
