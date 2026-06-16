@@ -169,6 +169,10 @@ export interface CountryGuideRequest {
   travelType?: 'solo' | 'couple' | 'family' | 'nomad';
   budget?: number;
   duration?: number;
+  /** TRAVEL-DATES-001 — Date de départ (YYYY-MM-DD). */
+  from?: string;
+  /** TRAVEL-DATES-001 — Date de retour (YYYY-MM-DD). */
+  to?: string;
 }
 
 export interface PremiumCountryGuide {
@@ -215,6 +219,9 @@ export interface UserAnalysis {
   status?: 'ideal' | 'recommended' | 'possible' | 'discouraged';
   confidence?: 'high' | 'medium' | 'low';
   analyzedAt: string;
+  /** TRAVEL-DATES-001 — Dates de voyage (nullable : absent pour les analyses antérieures). */
+  departureDate?: string | null;
+  returnDate?: string | null;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

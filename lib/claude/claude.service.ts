@@ -442,7 +442,14 @@ const GUIDE_HARD_TIMEOUT_MS = 45000;
 // cache (throw dans le fetcher) → fallback honnête NON caché. Même discipline que MIN_NARRATIVE_WORDS.
 const GUIDE_MIN_WORDS = 250;
 
-type GuideProfile = { travelType?: 'solo' | 'couple' | 'family' | 'nomad'; budget?: number; duration?: number };
+type GuideProfile = {
+  travelType?: 'solo' | 'couple' | 'family' | 'nomad';
+  budget?: number;
+  duration?: number;
+  /** TRAVEL-DATES-001 — Dates de voyage optionnelles (YYYY-MM-DD). */
+  from?: string;
+  to?: string;
+};
 
 function buildGuideFallback(score: CrisisScore): PremiumCountryGuide {
   return {
@@ -495,14 +502,24 @@ export async function generatePremiumCountryGuide(
   const meaeRaw = score.security.details.meaeLevel;
   const meaeLevel = typeof meaeRaw === 'number' ? meaeRaw : parseInt(String(meaeRaw ?? '2'), 10) || 2;
 
+  // TRAVEL-DATES-001 : bucketisation par mois (YYYY-MM) pour guide saisonnier.
+  // 12 buckets/an par pays+profil+bande au lieu de 365 — équilibre fraîcheur/cache.
+  const monthBucket = profile.from ? profile.from.slice(0, 7) : 'any';
+
   const cacheKey = buildCacheKey(
     'country-guide',
     score.countryCode,
     travelType,
     String(Math.floor(score.total / 5)),
     profile.duration ? String(profile.duration) : 'any',
-    'guide-v2',
+    monthBucket,  // TRAVEL-DATES-001
+    'guide-v3',   // bump guide-v2→v3 : invalide les guides cachés sans contexte saisonnier
   );
+
+  // TRAVEL-DATES-001 : contexte saisonnier injecté si from est connu
+  const dateContext = profile.from
+    ? `\nContexte temporel : voyage prévu du ${profile.from}${profile.to ? ` au ${profile.to}` : ''} — tiens compte de la saison (météo, événements, affluence touristique) sans inventer de données météo précises.`
+    : '';
 
   const prompt = `Tu es un guide de voyage humain et expérimenté qui connaît ${score.country}. Rédige, EN TEXTE (pas de JSON), un GUIDE PAYS premium pour un voyageur ${travelType}${profile.budget ? `, budget ~${profile.budget}€` : ''}${profile.duration ? `, ${profile.duration} jours` : ''}.
 
@@ -512,7 +529,7 @@ Contexte objectif (à intégrer, pas à réciter) :
 - CrisisScore ${score.total}/100 (${score.status}) — sécurité ${score.security.value}, géopolitique ${score.geopolitical.value}, budget ${score.budget.value}, praticité ${score.practicality.value}.
 - Niveau de vigilance MEAE ${meaeLevel}/4.
 - Repas bon marché ~${score.budget.details.mealCheap ?? 'N/A'}€, hôtel moyen ~${score.budget.details.hotelAvg ?? 'N/A'}€/nuit.
-${liveRisksLine}
+${liveRisksLine}${dateContext}
 
 ${buildFactsBlock(facts)}
 

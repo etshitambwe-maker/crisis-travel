@@ -23,6 +23,10 @@ export interface CountryGuideBlockProps {
   travelType?: 'solo' | 'couple' | 'family' | 'nomad';
   budget?: number;
   duration?: number;
+  /** TRAVEL-DATES-001 — Date de départ (YYYY-MM-DD). */
+  from?: string;
+  /** TRAVEL-DATES-001 — Date de retour (YYYY-MM-DD). */
+  to?: string;
 }
 
 export function CountryGuideBlock(props: CountryGuideBlockProps) {
@@ -30,19 +34,23 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
   const [guide, setGuide] = useState<CountryGuideApiResponse['guide'] | null>(null);
 
   // TRIP-CONTEXT-001 : le TripContext côté client prime sur les props SSR.
-  // Les props (travelType, budget, duration) sont déjà enrichies par la page SSR
+  // Les props (travelType, budget, duration, from, to) sont déjà enrichies par la page SSR
   // depuis les searchParams ; ici on les surcharge avec le sessionStorage si dispo,
   // ce qui couvre aussi la génération déclenchée après un retour depuis /results.
   const [effectiveTravelType, setEffectiveTravelType] = useState(props.travelType);
   const [effectiveBudget, setEffectiveBudget]         = useState(props.budget);
   const [effectiveDuration, setEffectiveDuration]     = useState(props.duration);
+  const [effectiveFrom, setEffectiveFrom]             = useState(props.from);  // TRAVEL-DATES-001
+  const [effectiveTo, setEffectiveTo]                 = useState(props.to);    // TRAVEL-DATES-001
 
   useEffect(() => {
     const ctx = loadTripContext();
     if (ctx) {
       setEffectiveTravelType(ctx.travelType);
-      if (ctx.budget)   setEffectiveBudget(ctx.budget);
-      if (ctx.duration) setEffectiveDuration(ctx.duration);
+      if (ctx.budget)    setEffectiveBudget(ctx.budget);
+      if (ctx.duration)  setEffectiveDuration(ctx.duration);
+      if (ctx.from)      setEffectiveFrom(ctx.from);   // TRAVEL-DATES-001
+      if (ctx.to)        setEffectiveTo(ctx.to);       // TRAVEL-DATES-001
     }
   }, []);
 
@@ -57,6 +65,8 @@ export function CountryGuideBlock(props: CountryGuideBlockProps) {
         travelType: effectiveTravelType,
         budget:     effectiveBudget,
         duration:   effectiveDuration,
+        from:       effectiveFrom,  // TRAVEL-DATES-001
+        to:         effectiveTo,    // TRAVEL-DATES-001
       };
       const res = await fetch('/api/country-guide', {
         method: 'POST',

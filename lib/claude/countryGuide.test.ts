@@ -88,7 +88,7 @@ describe('generatePremiumCountryGuide', () => {
     expect(storedCacheKeys.length).toBe(1);
   });
 
-  it('clé de cache versionnée guide-v2, segmentée par pays + profil + duration', async () => {
+  it('clé de cache versionnée guide-v3, segmentée par pays + profil + duration', async () => {
     createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
     const { generatePremiumCountryGuide } = await load();
     await generatePremiumCountryGuide(makeScore(), facts, profile);
@@ -96,8 +96,9 @@ describe('generatePremiumCountryGuide', () => {
     expect(key).toContain('country-guide');
     expect(key).toContain('PT');
     expect(key).toContain('solo');
-    // TRIP-CONTEXT-001 : bumped guide-v1 → guide-v2 pour invalider les clés sans duration.
-    expect(key).toContain('guide-v2');
+    // TRAVEL-DATES-001 : bumped guide-v2 → guide-v3 pour invalider les guides sans contexte saisonnier.
+    expect(key).toContain('guide-v3');
+    expect(key).not.toContain('guide-v2');
     // duration=7 est dans la clé (profile de test : { duration: 7 })
     expect(key).toContain('7');
   });
@@ -142,5 +143,41 @@ describe('generatePremiumCountryGuide', () => {
     const { generatePremiumCountryGuide } = await load();
     const guide = await generatePremiumCountryGuide(makeScore(), facts, profile);
     expect(guide.isFallback).toBe(true);
+  });
+
+  // ── TRAVEL-DATES-001 — contexte saisonnier ─────────────────────────────────
+
+  it('injecte la date de départ dans le prompt quand from est fourni', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
+    const { generatePremiumCountryGuide } = await load();
+    await generatePremiumCountryGuide(makeScore(), facts, { ...profile, from: '2026-08-15', to: '2026-08-29' });
+    expect(capturedPrompt).toMatch(/2026-08-15/);
+  });
+
+  it('clé de cache contient le bucket YYYY-MM quand from est fourni', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
+    const { generatePremiumCountryGuide } = await load();
+    await generatePremiumCountryGuide(makeScore(), facts, { ...profile, from: '2026-08-15' });
+    const key = storedCacheKeys[storedCacheKeys.length - 1];
+    expect(key).toContain('2026-08');
+  });
+
+  it('clé de cache contient "any" pour le bucket quand from est absent', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
+    const { generatePremiumCountryGuide } = await load();
+    await generatePremiumCountryGuide(makeScore(), facts, profile);
+    const key = storedCacheKeys[storedCacheKeys.length - 1];
+    expect(key).not.toMatch(/:\d{4}-\d{2}:/);
+  });
+
+  it('deux mois différents produisent deux clés de cache distinctes', async () => {
+    createImpl = () => Promise.resolve({ content: [{ text: LONG_GUIDE }], stop_reason: 'end_turn' });
+    const { generatePremiumCountryGuide } = await load();
+    storedCacheKeys.length = 0;
+    await generatePremiumCountryGuide(makeScore(), facts, { ...profile, from: '2026-08-15' });
+    await generatePremiumCountryGuide(makeScore(), facts, { ...profile, from: '2026-12-20' });
+    expect(storedCacheKeys[0]).not.toBe(storedCacheKeys[1]);
+    expect(storedCacheKeys[0]).toContain('2026-08');
+    expect(storedCacheKeys[1]).toContain('2026-12');
   });
 });

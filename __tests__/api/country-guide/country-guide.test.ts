@@ -27,6 +27,36 @@ describe('country-guide route — validation Zod', () => {
   });
 });
 
+describe('country-guide route — from/to dates (TRAVEL-DATES-001)', () => {
+  const schemaWithDates = z.object({
+    countryCode: z.string().min(2).max(3).toUpperCase(),
+    countryName: z.string().min(1).max(100),
+    travelType: z.enum(['solo', 'couple', 'family', 'nomad']).optional(),
+    budget: z.number().positive().max(1_000_000).optional(),
+    duration: z.number().int().min(1).max(365).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  it('accepte from/to valides', () => {
+    expect(schemaWithDates.safeParse({
+      countryCode: 'PT', countryName: 'Portugal',
+      from: '2026-08-15', to: '2026-08-29',
+    }).success).toBe(true);
+  });
+
+  it('rejette un format de date invalide', () => {
+    expect(schemaWithDates.safeParse({
+      countryCode: 'PT', countryName: 'Portugal', from: '15-08-2026',
+    }).success).toBe(false);
+  });
+
+  it('la route contient une validation d\'ordre des dates (to > from)', () => {
+    const src = readRoute();
+    expect(src).toMatch(/refine|to.*from|from.*to/);
+  });
+});
+
 describe('country-guide route — structure & gating', () => {
   it('le fichier route existe', () => {
     expect(existsSync(resolve(process.cwd(), ROUTE_PATH))).toBe(true);

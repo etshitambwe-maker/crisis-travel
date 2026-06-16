@@ -71,3 +71,29 @@ describe('TRIP-CONTEXT-001 — duration=14 dans le POST body du guide pays', () 
     expect(fetchBlock).toMatch(/duration\s*:\s*effectiveDuration/);
   });
 });
+
+// ── TRAVEL-DATES-001 — from/to transmis dans le POST /api/country-guide ────────
+
+describe('TRAVEL-DATES-001 — from/to dans CountryGuideBlock', () => {
+  it('la prop from? est déclarée dans CountryGuideBlockProps', () => {
+    expect(src()).toMatch(/from\?:\s*string/);
+  });
+
+  it('la prop to? est déclarée dans CountryGuideBlockProps', () => {
+    expect(src()).toMatch(/to\?:\s*string/);
+  });
+
+  it('effectiveFrom est initialisé depuis les props', () => {
+    expect(src()).toMatch(/effectiveFrom.*useState.*props\.from/);
+  });
+
+  it('effectiveTo est lu depuis le TripContext si disponible', () => {
+    expect(src()).toMatch(/setEffectiveTo.*ctx\.to/);
+  });
+
+  it('from et to sont inclus dans le POST body envoyé à /api/country-guide', () => {
+    const s = src();
+    expect(s).toMatch(/from\s*:\s*effectiveFrom/);
+    expect(s).toMatch(/to\s*:\s*effectiveTo/);
+  });
+});

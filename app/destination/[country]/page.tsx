@@ -694,6 +694,8 @@ export default async function DestinationPage({ params, searchParams }: Props) {
                 travelType={userProfile?.travelType ?? 'solo'}
                 budget={userProfile?.budget}
                 duration={userProfile?.duration}
+                from={sp?.from ? String(sp.from) : undefined}  // TRAVEL-DATES-001
+                to={sp?.to   ? String(sp.to)   : undefined}    // TRAVEL-DATES-001
               />
             </div>
           </PremiumGate>

@@ -17,7 +17,13 @@ const schema = z.object({
   travelType: z.enum(['solo', 'couple', 'family', 'nomad']).optional(),
   budget: z.number().positive().max(1_000_000).optional(),
   duration: z.number().int().min(1).max(365).optional(),
-});
+  // TRAVEL-DATES-001 — dates de voyage optionnelles (YYYY-MM-DD)
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format attendu : YYYY-MM-DD').optional(),
+  to:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format attendu : YYYY-MM-DD').optional(),
+}).refine(
+  (d) => { if (!d.from || !d.to) return true; return new Date(d.to) > new Date(d.from); },
+  { message: 'La date de retour doit être après la date de départ', path: ['to'] },
+);
 
 export async function POST(request: Request): Promise<NextResponse> {
   const { user, isPremium } = await getUserWithSubscription();
@@ -75,6 +81,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       travelType: profile.travelType,
       budget: profile.budget,
       duration: profile.duration,
+      from: parsed.data.from,  // TRAVEL-DATES-001
+      to:   parsed.data.to,    // TRAVEL-DATES-001
     });
 
     const response: CountryGuideApiResponse = {
