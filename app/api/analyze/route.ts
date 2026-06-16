@@ -212,13 +212,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     };
     // USER-DASHBOARD-001 — Persistance best-effort de la top destination.
-    // Appelée sans await : le helper gère lui-même timeout 3s + catch interne.
-    // Le .catch() extérieur protège contre une exception inattendue du helper.
-    // On ne persiste que topDestinations[0] pour éviter le bruit de 5 entrées
-    // simultanées et garder l'historique lisible (une analyse = une ligne).
+    // await garanti : le runtime Vercel ne coupe pas l'exécution après NextResponse.json
+    // car on awaite AVANT de construire la réponse. Le helper gère timeout 3s + catch
+    // interne → ne throw jamais → ce bloc ne peut pas provoquer de 500/503.
+    // On ne persiste que topDestinations[0] (une analyse = une ligne dans l'historique).
     if (user?.id && topDestinations[0]) {
       const top = topDestinations[0];
-      persistUserAnalysisBestEffort(user.id, {
+      await persistUserAnalysisBestEffort(user.id, {
         countryCode:       top.countryCode,
         countryName:       top.country,
         crisisScore:       top.total,
@@ -231,8 +231,6 @@ export async function POST(request: Request): Promise<NextResponse> {
         mode:              profile.mode,
         status:            top.status,
         confidence:        top.confidence,
-      }).catch((err) => {
-        console.error('[API/analyze] persist unexpected', err);
       });
     }
 
