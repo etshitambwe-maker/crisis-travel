@@ -216,6 +216,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     // car on awaite AVANT de construire la réponse. Le helper gère timeout 3s + catch
     // interne → ne throw jamais → ce bloc ne peut pas provoquer de 500/503.
     // On ne persiste que topDestinations[0] (une analyse = une ligne dans l'historique).
+    // DIAG-001 — logs temporaires, à supprimer avant merge en main
+    console.log('[API/analyze][diag] user.id present:', !!user?.id);
+    console.log('[API/analyze][diag] topDestinations[0] present:', !!topDestinations[0]);
     if (user?.id && topDestinations[0]) {
       const top = topDestinations[0];
       await persistUserAnalysisBestEffort(user.id, {
