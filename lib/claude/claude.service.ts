@@ -342,7 +342,7 @@ RÈGLES ABSOLUES :
 Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragraphes). Commence directement par le premier titre.`;
 
   try {
-    const { data } = await withCache(
+    const { data, fromCache } = await withCache(
       cacheKey,
       async () => {
         const t0 = Date.now();
@@ -394,6 +394,10 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
       7200 // 2h cache
     );
 
+    // Log cache hit/miss — miroir de generateDestinationNarrative (ligne ~147).
+    // Permet de savoir en prod si Redis sert les itinéraires ou si tout part en live.
+    logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', 0, fromCache);
+
     // `data` est garanti = un texte de guide substantiel (validé dans le fetcher AVANT le
     // cache). GUIDE-V1 : c'est le narrativeText, et l'UNIQUE livrable. days reste vide
     // (le type le garde optionnel pour rétro-compat PDF/cache), globalAdvice vide.
@@ -424,10 +428,18 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
     // itinéraire » ne peut être resservi pendant 2h. La prochaine génération réessaie un
     // appel Claude frais. Le flag isFallback (posé par buildItineraryFallback) permet à
     // l'UI d'afficher un état honnête « génération trop longue » au lieu des fausses cartes.
+    const msg = error instanceof Error ? error.message : String(error);
+    const reasonCategory: 'timeout' | 'truncated' | 'too_short' | 'network' | 'unknown' =
+      msg.includes('hard timeout')     ? 'timeout'   :
+      msg.includes('max_tokens')       ? 'truncated' :
+      msg.includes('trop court')       ? 'too_short' :
+      (msg.includes('fetch') || msg.includes('ECONNREFUSED') || msg.includes('network')) ? 'network' :
+      'unknown';
+
     logger.error('Claude-Itinerary', error);
     logger.warn(
       'Claude-Itinerary',
-      `fallback honnête retourné (NON caché) pour ${req.countryCode ?? req.countryName ?? 'unknown'} — cause: ${error instanceof Error ? error.message : 'inconnue'}`,
+      `fallback honnête retourné (NON caché) countryCode=${req.countryCode ?? req.countryName ?? 'unknown'} travelType=${req.travelType ?? 'solo'} days=${days} reasonCategory=${reasonCategory}`,
     );
     return buildItineraryFallback(req, days);
   }

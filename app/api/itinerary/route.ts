@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getUserWithSubscription } from '@/lib/auth/supabase-server';
 import { generateItinerary } from '@/lib/claude/claude.service';
+import { logger } from '@/lib/utils/logger';
 import type { ItineraryApiResponse } from '@/types/crisis.types';
 
 export const maxDuration = 60;
@@ -47,18 +48,50 @@ const itinerarySchema = z.object({
   { message: 'La date de retour doit être après la date de départ', path: ['to'] }
 );
 
+// ── Helpers observabilité ─────────────────────────────────────────────────────
+
+/** Tronque un userId à 8 chars pour les logs — jamais l'email, jamais le token. */
+function safeUserId(id: string): string {
+  return id.slice(0, 8);
+}
+
+type ItineraryStage =
+  | 'auth'
+  | 'premium_gate'
+  | 'content_length'
+  | 'parse_payload'
+  | 'generate'
+  | 'response'
+  | 'unexpected';
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const t0 = Date.now();
+  let stage: ItineraryStage = 'auth';
+
   // 1. Auth check
-  const { user, isPremium } = await getUserWithSubscription();
+  let user: { id: string } | null = null;
+  let isPremium = false;
+  try {
+    ({ user, isPremium } = await getUserWithSubscription());
+  } catch (error) {
+    logger.error('API/itinerary', error);
+    logger.warn('API/itinerary', `stage=${stage} auth resolution failed durationMs=${Date.now() - t0}`);
+    return NextResponse.json({ error: 'Authentification requise' }, { status: 401 });
+  }
+
   if (!user) {
+    logger.warn('API/itinerary', 'stage=auth status=401 reason=unauthenticated');
     return NextResponse.json(
       { error: 'Authentification requise' },
       { status: 401 }
     );
   }
+
+  stage = 'premium_gate';
   if (!isPremium) {
+    logger.warn('API/itinerary', `stage=premium_gate status=402 userId=${safeUserId(user.id)}`);
     return NextResponse.json(
       { error: 'Génération d\'itinéraire disponible avec le plan Premium', upgradeUrl: '/pricing' },
       { status: 402 }
@@ -66,30 +99,61 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // 2. Payload size guard (max 10 KB)
+  stage = 'content_length';
   const contentLength = Number(request.headers.get('content-length') ?? 0);
   if (contentLength > 10_240) {
+    logger.warn('API/itinerary', `stage=content_length status=400 contentLength=${contentLength} userId=${safeUserId(user.id)}`);
     return NextResponse.json({ error: 'Payload trop volumineux' }, { status: 400 });
   }
 
   // 3. Parse + validate
+  stage = 'parse_payload';
   let body: unknown;
   try {
     body = await request.json();
   } catch {
+    logger.warn('API/itinerary', `stage=parse_payload status=400 reason=invalid_json userId=${safeUserId(user.id)}`);
     return NextResponse.json({ error: 'JSON invalide' }, { status: 400 });
   }
 
   const parsed = itinerarySchema.safeParse(body);
   if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const paths = Object.keys(flat.fieldErrors);
+    const codes = parsed.error.issues.map((i) => i.code);
+    logger.warn(
+      'API/itinerary',
+      `stage=parse_payload status=400 validation_error issueCount=${parsed.error.issues.length} paths=[${paths.join(',')}] codes=[${codes.join(',')}] userId=${safeUserId(user.id)}`,
+    );
     return NextResponse.json(
-      { error: 'Paramètres invalides', details: parsed.error.flatten().fieldErrors },
+      { error: 'Paramètres invalides', details: flat.fieldErrors },
       { status: 400 }
     );
   }
 
-  // 4. Generate
+  // 4. Log début — après validation, les champs sont sûrs
+  const data = parsed.data;
+  const days = data.from && data.to
+    ? Math.max(1, Math.ceil((new Date(data.to).getTime() - new Date(data.from).getTime()) / 86400000))
+    : (data.duration ?? 7);
+
+  logger.warn(
+    'API/itinerary',
+    `stage=generate started userId=${safeUserId(user.id)} countryCode=${data.countryCode ?? data.countryName ?? 'unknown'} travelType=${data.travelType ?? 'solo'} days=${days} budget=${data.budget ?? 'none'} from=${data.from ?? '-'} to=${data.to ?? '-'}`,
+  );
+
+  // 5. Generate
+  stage = 'generate';
   try {
-    const itinerary = await generateItinerary(parsed.data);
+    const itinerary = await generateItinerary(data);
+
+    stage = 'response';
+    const durationMs = Date.now() - t0;
+    logger.warn(
+      'API/itinerary',
+      `stage=response completed status=200 countryCode=${data.countryCode ?? data.countryName ?? 'unknown'} travelType=${data.travelType ?? 'solo'} days=${days} isFallback=${!!itinerary.isFallback} durationMs=${durationMs}`,
+    );
+
     const response: ItineraryApiResponse = {
       itinerary,
       meta: {
@@ -100,7 +164,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     };
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
-    console.error('[API/itinerary]', error);
+    const durationMs = Date.now() - t0;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('API/itinerary', error);
+    logger.warn(
+      'API/itinerary',
+      `stage=${stage} status=500 countryCode=${data.countryCode ?? data.countryName ?? 'unknown'} errorName=${errorName} errorMessage=${errorMessage} durationMs=${durationMs}`,
+    );
     return NextResponse.json({ error: 'Erreur lors de la génération de l\'itinéraire' }, { status: 500 });
   }
 }
