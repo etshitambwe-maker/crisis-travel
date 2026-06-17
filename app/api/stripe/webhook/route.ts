@@ -22,11 +22,19 @@ async function upsertSubscription(
   const supabase = getAdminClient();
 
   // Retrouver l'utilisateur par stripe_customer_id
-  const { data: profile } = await supabase
+  const { data: profile, error: findError } = await supabase
     .from('user_profiles')
     .select('id')
     .eq('stripe_customer_id', customerId)
     .single();
+
+  if (findError) {
+    console.error('[Stripe/webhook] upsertSubscription — erreur recherche profil', {
+      customerId,
+      subscriptionId,
+      error: findError.message,
+    });
+  }
 
   if (!profile) {
     console.warn('[Stripe/webhook] Utilisateur introuvable pour customer:', customerId);
@@ -36,7 +44,7 @@ async function upsertSubscription(
   const isPremium = status === 'active' || status === 'trialing';
   const endDate = new Date(currentPeriodEnd * 1000).toISOString();
 
-  await supabase
+  const { error: updateError } = await supabase
     .from('user_profiles')
     .update({
       subscription_tier: isPremium ? 'premium' : 'free',
@@ -45,12 +53,25 @@ async function upsertSubscription(
     })
     .eq('id', profile.id);
 
-  console.log(`[Stripe/webhook] user ${profile.id} → ${isPremium ? 'premium' : 'free'} (${status})`);
+  if (updateError) {
+    console.error('[Stripe/webhook] upsertSubscription — erreur update profil', {
+      userId: profile.id,
+      customerId,
+      subscriptionId,
+      status,
+      error: updateError.message,
+    });
+    return;
+  }
+
+  console.log(`[Stripe/webhook] sync OK: user ${profile.id} → ${isPremium ? 'premium' : 'free'} (${status})`);
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const customerId = session.customer as string;
   const userId = session.metadata?.supabase_user_id;
+
+  console.log('[Stripe/webhook] checkout.session.completed', { customerId, userId: userId ?? 'absent' });
 
   if (!customerId || !userId) return;
 
@@ -59,12 +80,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const supabase = getAdminClient();
 
   // Lier le stripe_customer_id au profil
-  await supabase
+  const { error: upsertError } = await supabase
     .from('user_profiles')
     .upsert({
       id: userId,
       stripe_customer_id: customerId,
     }, { onConflict: 'id' });
+
+  if (upsertError) {
+    console.error('[Stripe/webhook] checkout.session.completed — erreur liaison customer/user', {
+      userId,
+      customerId,
+      error: upsertError.message,
+    });
+  }
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -104,6 +133,11 @@ export async function POST(request: Request): Promise<NextResponse> {
         const periodEnd = sub.items?.data?.[0]?.current_period_end
           ?? (sub as unknown as { current_period_end?: number }).current_period_end
           ?? Math.floor(Date.now() / 1000) + 2592000; // fallback +30j
+        console.log(`[Stripe/webhook] ${event.type}`, {
+          customerId: sub.customer as string,
+          subscriptionId: sub.id,
+          status: sub.status,
+        });
         await upsertSubscription(
           sub.customer as string,
           sub.id,
@@ -115,14 +149,28 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
+        console.log('[Stripe/webhook] customer.subscription.deleted', {
+          customerId: sub.customer as string,
+          subscriptionId: sub.id,
+        });
         await upsertSubscription(sub.customer as string, sub.id, 'canceled', 0);
         break;
       }
 
       case 'invoice.payment_failed': {
         const inv = event.data.object as Stripe.Invoice;
-        console.warn('[Stripe/webhook] Paiement échoué pour customer:', inv.customer);
-        // On ne dégrade pas immédiatement — Stripe réessaie automatiquement
+        const attemptCount = (inv as unknown as { attempt_count?: number }).attempt_count ?? null;
+        const nextAttempt = (inv as unknown as { next_payment_attempt?: number | null }).next_payment_attempt ?? null;
+        console.warn('[Stripe/webhook] invoice.payment_failed', {
+          customerId: inv.customer,
+          attemptCount,
+          // null = Stripe a renoncé à réessayer (tous les retries épuisés)
+          nextPaymentAttempt: nextAttempt !== null ? new Date(nextAttempt * 1000).toISOString() : null,
+          willRetry: nextAttempt !== null,
+        });
+        // On ne dégrade pas immédiatement — Stripe réessaie automatiquement.
+        // Si nextPaymentAttempt est null, tous les retries sont épuisés :
+        // customer.subscription.deleted arrivera séparément et dégradera le compte.
         break;
       }
 

@@ -48,10 +48,14 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
     const v = await redis.get<T>(key);
     if (v !== null) _hits++; else _misses++;
     return v;
-  } catch {
+  } catch (err) {
     // Redis injoignable — compté comme ERREUR (pas un miss), traité comme cache absent.
     // On ouvre le circuit : les lookups suivants de cette requête seront instantanés.
     _errors++;
+    if (!_circuitOpen) {
+      // Log à l'ouverture seulement — évite le spam sur les appels suivants court-circuités.
+      console.warn('[Redis] circuit open — Redis unavailable, skipping remaining cache lookups', err instanceof Error ? err.message : err);
+    }
     _circuitOpen = true;
     return null;
   }

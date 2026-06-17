@@ -38,11 +38,20 @@ export async function getUserWithSubscription() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, isPremium: false };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('user_profiles')
     .select('subscription_tier, subscription_end_date')
     .eq('id', user.id)
     .single();
+
+  if (profileError) {
+    // Erreur Supabase lors de la lecture du profil : l'utilisateur sera traité comme free.
+    // Un premium dégradé silencieusement ici est un P1 — on log pour détecter les pannes.
+    console.error('[auth/supabase] getUserWithSubscription — profil illisible, fallback free', {
+      userId: user.id,
+      error: profileError.message,
+    });
+  }
 
   const isPremium = profile?.subscription_tier === 'premium'
     && (!profile.subscription_end_date || new Date(profile.subscription_end_date) > new Date());

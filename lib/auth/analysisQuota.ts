@@ -44,6 +44,7 @@ export async function checkAndIncrementQuota(userId: string | null): Promise<Quo
 
   if (error || !profile) {
     // Profil inexistant (race condition trigger) → créer et laisser passer
+    console.warn('[analysisQuota] profil absent pour userId, upsert+bypass', { userId, error: error?.message });
     await supabase.from('user_profiles').upsert({ id: userId }, { onConflict: 'id' });
     return { allowed: true, isPremium: false, remaining: FREE_LIMIT, used: 0, limit: FREE_LIMIT };
   }
@@ -75,6 +76,7 @@ export async function checkAndIncrementQuota(userId: string | null): Promise<Quo
   const remaining = Math.max(0, FREE_LIMIT - used);
 
   if (used >= FREE_LIMIT) {
+    console.warn('[analysisQuota] quota mensuel épuisé', { userId, used, limit: FREE_LIMIT });
     return { allowed: false, isPremium: false, remaining: 0, used, limit: FREE_LIMIT };
   }
 
@@ -88,8 +90,14 @@ async function incrementCount(
   userId: string,
   profile: { analyses_count_month: number }
 ) {
-  await supabase
+  const { error } = await supabase
     .from('user_profiles')
     .update({ analyses_count_month: (profile.analyses_count_month ?? 0) + 1 })
     .eq('id', userId);
+
+  if (error) {
+    // L'incrément a échoué — le quota ne sera pas décompté pour cette analyse.
+    // On log pour alerter sans bloquer la requête (le 200 est déjà engagé).
+    console.error('[analysisQuota] incrementCount failed — quota non décompté', { userId, error: error.message });
+  }
 }

@@ -88,6 +88,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         }
       );
     }
+    // Log si le rate-limit passe en mode dégradé (Upstash unavailable, fail-open)
+    if (rl.degraded) {
+      console.warn('[API/analyze] rate-limit dégradé (fail-open) — Upstash injoignable', { ip });
+    }
 
     // Quota analyses gratuites (3/mois pour les comptes free)
     try {
@@ -109,6 +113,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (!quota.allowed) {
+    console.warn('[API/analyze] quota mensuel épuisé — 402', {
+      userId: user?.id ?? 'anonymous',
+      used: quota.used,
+      limit: quota.limit,
+      remaining: quota.remaining,
+    });
     return NextResponse.json(
       {
         error: 'Quota mensuel atteint. Passez à Premium pour des analyses illimitées.',
@@ -145,6 +155,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       : profile.mode === 'budget_crisis' ? 'budget_crisis' : 'standard';
     countries = selectCandidates(countries, selectMode, profile.continent ? null : CANDIDATE_CAP);
 
+    const candidateCount = countries.length;
+
     // Batch de 6 pour limiter la concurrence sur les APIs externes
     const BATCH = 6;
     // Budget de temps global (GOAL-032) : on n'engage PAS un nouveau batch si on a
@@ -153,10 +165,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     const TIME_BUDGET_MS = 45000;
     const results = [];
     let partial = false;
+    let scoringRejected = 0;
     for (let i = 0; i < countries.length; i += BATCH) {
       if (Date.now() - t0 > TIME_BUDGET_MS) {
         partial = true;
-        console.warn(`[API/analyze] budget timeout — ${results.length}/${countries.length} pays scorés avant arrêt`);
+        console.warn(`[API/analyze] budget timeout — ${results.length}/${candidateCount} pays scorés avant arrêt`);
         break;
       }
       const batch = countries.slice(i, i + BATCH);
@@ -164,9 +177,21 @@ export async function POST(request: Request): Promise<NextResponse> {
         batch.map((c) => calculateCrisisScore(c, profile))
       );
       for (const r of settled) {
-        if (r.status === 'fulfilled') results.push(r.value);
+        if (r.status === 'fulfilled') {
+          results.push(r.value);
+        } else {
+          scoringRejected++;
+          console.warn('[API/analyze] scoring rejeté pour un pays', {
+            reason: r.reason instanceof Error ? r.reason.message : String(r.reason),
+          });
+        }
       }
     }
+
+    if (scoringRejected > 0) {
+      console.warn(`[API/analyze] ${scoringRejected} pays rejetés par Promise.allSettled sur ${candidateCount} candidats`);
+    }
+
     // Tri selon sortBy ou mode
     let sorted = [...results];
     const sortBy = profile.sortBy;
@@ -194,6 +219,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const msTotal = Date.now() - t0;
     const cache = getCacheStats();
+
+    // Log résumé de la requête (toujours actif — signal d'exploitation clé)
+    console.log('[API/analyze] terminé', {
+      scored: results.length,
+      candidates: candidateCount,
+      partial,
+      rejected: scoringRejected,
+      cacheHitRate: cache.hitRate,
+      durationMs: msTotal,
+      userId: user?.id ?? null,
+      isPremium: quota.isPremium,
+    });
 
     const response: AnalyzeResponse = {
       results: sorted,
