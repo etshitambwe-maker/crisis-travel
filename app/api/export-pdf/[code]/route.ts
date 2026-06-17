@@ -96,6 +96,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ): Promise<NextResponse> {
+  const startMs = Date.now();
+  // Mis à jour progressivement pour catégoriser les erreurs dans le catch global.
+  let stage = 'auth';
+  let selectedMode: 'Guide' | 'A_itinerary' | 'B_scoreSnapshot' | 'C_legacy' | 'unknown' = 'unknown';
+
   const { code } = await params;
 
   // Auth + vérification Premium — même pattern que /api/itinerary (402 non-premium)
@@ -110,11 +115,17 @@ export async function POST(
     );
   }
 
+  const userId = user.id;
+
+  stage = 'country_lookup';
   const country = findCountry(code.toUpperCase());
   if (!country) {
     return NextResponse.json({ error: 'Pays non trouvé' }, { status: 404 });
   }
 
+  console.log('[API/export-pdf] début', { code, userId });
+
+  stage = 'parse_payload';
   // Payload optionnel — si absent ou non-JSON, on utilise les fallbacks conservateurs.
   let clientProfile:       z.infer<typeof profileSchema>       = undefined;
   let clientItinerary:     ItineraryResult | undefined          = undefined;
@@ -133,10 +144,22 @@ export async function POST(
       clientScoreSnapshot = parsed.data.scoreSnapshot as CrisisScore | undefined;
       clientNarrative     = parsed.data.narrative;
       clientCountryGuide  = parsed.data.countryGuide  as PremiumCountryGuide | undefined;
+    } else {
+      // Validation échouée — on log les chemins sans jamais exposer les valeurs.
+      console.warn('[API/export-pdf] payload invalide — fallback Mode C', {
+        code,
+        userId,
+        issueCount: parsed.error.issues.length,
+        paths: parsed.error.issues.map((i) => i.path.join('.')),
+        codes: parsed.error.issues.map((i) => i.code),
+      });
+      // Le comportement reste identique : toutes les variables client restent undefined
+      // et la cascade tombera en Mode C (legacy). Le log rend ce chemin visible.
     }
   }
 
   try {
+    stage = 'select_mode';
     const profile = {
       budget:     clientProfile?.budget,
       duration:   clientProfile?.duration,
@@ -158,6 +181,18 @@ export async function POST(
       // Guide DÉJÀ généré côté client → AUCUN appel Perplexity/Claude/scoring.
       // Placé en TÊTE de cascade : un guide explicite ne doit jamais tomber dans
       // le legacy (Mode C) qui, lui, recalcule.
+      selectedMode = 'Guide';
+      console.log('[API/export-pdf] mode sélectionné', {
+        mode: selectedMode,
+        code,
+        countryCode: clientCountryGuide.countryCode,
+        hasProfile: !!clientProfile,
+        hasItinerary: false,
+        hasScoreSnapshot: false,
+        hasCountryGuide: true,
+        countryGuideFallbackExcluded: false,
+      });
+      stage = 'mode_guide_render';
       pdfBuffer = await renderReport({
         countryGuide: clientCountryGuide,
         profile,
@@ -166,6 +201,17 @@ export async function POST(
     } else if (clientItinerary) {
       // ── Mode A — export-only itinerary (PDF-UX-004) ────────────────────────
       // itinerary déjà généré → pas d'appel Claude/scoring.
+      selectedMode = 'A_itinerary';
+      console.log('[API/export-pdf] mode sélectionné', {
+        mode: selectedMode,
+        code,
+        countryCode: clientItinerary.countryCode,
+        hasProfile: !!clientProfile,
+        hasItinerary: true,
+        hasScoreSnapshot: false,
+        hasCountryGuide: false,
+      });
+      stage = 'mode_a_render';
       pdfBuffer = await renderReport({
         profile,
         itinerary:   clientItinerary,
@@ -174,6 +220,18 @@ export async function POST(
     } else if (clientScoreSnapshot) {
       // ── Mode B — export-only destination report (PDF-UX-005) ───────────────
       // score déjà calculé SSR sur la page destination → pas d'appel Claude/scoring.
+      selectedMode = 'B_scoreSnapshot';
+      console.log('[API/export-pdf] mode sélectionné', {
+        mode: selectedMode,
+        code,
+        countryCode: clientScoreSnapshot.countryCode,
+        hasProfile: !!clientProfile,
+        hasItinerary: false,
+        hasScoreSnapshot: true,
+        hasCountryGuide: !!clientCountryGuide,
+        countryGuideFallbackExcluded: !!(clientCountryGuide?.isFallback),
+      });
+      stage = 'mode_b_render';
       pdfBuffer = await renderReport({
         score:       clientScoreSnapshot,
         narrative:   clientNarrative,
@@ -184,6 +242,19 @@ export async function POST(
       // ── Mode C — legacy fallback : aucune donnée client suffisante ──────────
       // Uniquement si ni itinerary ni scoreSnapshot ne sont fournis.
       // Imports dynamiques isolés pour ne pas alourdir les modes A et B.
+      selectedMode = 'C_legacy';
+      console.log('[API/export-pdf] mode sélectionné', {
+        mode: selectedMode,
+        code,
+        countryCode: code.toUpperCase(),
+        hasProfile: !!clientProfile,
+        hasItinerary: false,
+        hasScoreSnapshot: false,
+        hasCountryGuide: !!clientCountryGuide,
+        countryGuideFallbackExcluded: !!(clientCountryGuide?.isFallback),
+      });
+
+      stage = 'mode_c_scoring';
       const { calculateCrisisScore }         = await import('@/lib/services/scoring/crisisScore.service');
       const { generateDestinationNarrative } = await import('@/lib/claude/claude.service');
 
@@ -196,9 +267,12 @@ export async function POST(
         mode:       'standard' as const,
       };
 
-      const score     = await calculateCrisisScore(country, fullProfile);
+      const score = await calculateCrisisScore(country, fullProfile);
+
+      stage = 'mode_c_narrative';
       const narrative = await generateDestinationNarrative(score, fullProfile);
 
+      stage = 'render_pdf';
       pdfBuffer = await renderReport({
         score,
         narrative,
@@ -207,6 +281,14 @@ export async function POST(
         countryName: country.name,
       });
     }
+
+    const durationMs = Date.now() - startMs;
+    console.log('[API/export-pdf] terminé', {
+      mode: selectedMode,
+      code,
+      durationMs,
+      success: true,
+    });
 
     const filename = `crisis-travel-${country.name.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.pdf`;
     const uint8 = new Uint8Array(pdfBuffer);
@@ -220,7 +302,17 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('[API/export-pdf]', error);
+    const durationMs = Date.now() - startMs;
+    const errName    = error instanceof Error ? error.name    : 'UnknownError';
+    const errMessage = error instanceof Error ? error.message : String(error);
+    console.error('[API/export-pdf] erreur', {
+      stage,
+      mode: selectedMode,
+      code,
+      durationMs,
+      errorName: errName,
+      errorMessage: errMessage,
+    });
     return NextResponse.json({ error: 'Erreur génération PDF' }, { status: 500 });
   }
 }
