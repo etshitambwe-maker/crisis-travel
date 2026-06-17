@@ -197,7 +197,7 @@ export function UserAnalysisHistory() {
                   <Tag>{TRAVEL_TYPE_LABEL[a.travelType] ?? a.travelType}</Tag>
                 )}
                 {a.duration && <Tag>{a.duration} jours</Tag>}
-                {a.budget && <Tag>{a.budget.toLocaleString('fr-FR')}€</Tag>}
+                {a.budget && <Tag>Budget : {a.budget.toLocaleString('fr-FR')} €</Tag>}
                 {a.mode && a.mode !== 'standard' && (
                   <Tag warn>{MODE_LABEL[a.mode] ?? a.mode}</Tag>
                 )}
@@ -207,7 +207,7 @@ export function UserAnalysisHistory() {
               {a.departureDate && (
                 <div style={{ marginTop: 5 }}>
                   <Tag>
-                    {new Date(a.departureDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                    Voyage : {new Date(a.departureDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
                     {a.returnDate
                       ? ` → ${new Date(a.returnDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}`
                       : ''}
@@ -226,26 +226,44 @@ export function UserAnalysisHistory() {
             </div>
 
             {/* Colonne droite : date + lien */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-              <span className="ctv3-mono" style={{
-                fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ctv3-faint)',
-                whiteSpace: 'nowrap',
-              }}>
-                {formatAnalysisDate(a.analyzedAt)}
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              <div style={{ textAlign: 'right' }}>
+                <div className="ctv3-mono" style={{
+                  fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: 'var(--ctv3-dim)', marginBottom: 2,
+                }}>
+                  Analysé le
+                </div>
+                <span className="ctv3-mono" style={{
+                  fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--ctv3-faint)',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {formatAnalysisDate(a.analyzedAt)}
+                </span>
+              </div>
               <a
                 href={destUrl}
                 className="ctv3-mono"
                 style={{
-                  padding: '6px 12px',
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '8px 14px', minHeight: 32,
                   border: '1px solid var(--ctv3-line-bright)',
                   color: 'var(--ctv3-paper)',
                   fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase',
                   textDecoration: 'none', fontWeight: 700,
                   whiteSpace: 'nowrap',
+                  transition: 'border-color 0.15s, color 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--ctv3-red)';
+                  e.currentTarget.style.color = 'var(--ctv3-red)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--ctv3-line-bright)';
+                  e.currentTarget.style.color = 'var(--ctv3-paper)';
                 }}
               >
-                Revoir →
+                Voir la fiche →
               </a>
             </div>
           </div>

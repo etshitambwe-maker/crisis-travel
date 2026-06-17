@@ -56,6 +56,7 @@ export function Header() {
           { href: '/', label: 'ACCUEIL' },
           { href: '/#analyse', label: 'ANALYSER' },
           { href: '/pricing', label: 'TARIFS' },
+          { href: '/dashboard', label: 'TABLEAU DE BORD' },
           { href: '/status', label: 'STATUT' },
         ].map((item) => (
           <Link
