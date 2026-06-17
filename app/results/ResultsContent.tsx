@@ -97,6 +97,9 @@ export function ResultsContent() {
       continent,
       priority,
       sortBy: sortByParam as 'score' | 'security' | 'budget',
+      // TRAVEL-DATES-001 — dates optionnelles transmises pour persistance dans user_analyses
+      ...(dateFrom ? { departureDate: dateFrom } : {}),
+      ...(dateTo   ? { returnDate:    dateTo   } : {}),
     };
 
     setLoading(true);
