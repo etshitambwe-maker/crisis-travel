@@ -265,15 +265,52 @@ export function ResultsContent() {
                   <span>Quota gratuit épuisé pour ce mois-ci.</span>
                   <a
                     href="/pricing"
+                    className="ctv3-mono"
                     style={{
-                      color: 'var(--ctv3-red-2)', textDecoration: 'underline',
-                      fontWeight: 700, letterSpacing: '0.1em',
+                      display: 'inline-block', padding: '7px 16px',
+                      background: 'var(--ctv3-red)', color: '#fff',
+                      fontSize: 10.5, letterSpacing: '0.12em',
+                      textDecoration: 'none', textTransform: 'uppercase', fontWeight: 700,
                     }}
                   >
                     Passer à Premium →
                   </a>
                 </>
               )}
+            </div>
+          )}
+
+          {/* FREE-QUOTA-UX-001 — Bandeau anonyme : incitation connexion après analyse réussie.
+              Affiché quand meta.quota est absent (anonyme ou premium sans analyse ce mois).
+              Ne mentionne aucun compteur inventé. Masqué si isPremium est confirmé. */}
+          {data && !data.meta.quota && (
+            <div
+              className="ctv3-mono"
+              style={{
+                marginTop: 12, padding: '10px 14px',
+                border: '1px solid var(--ctv3-line)',
+                background: 'var(--ctv3-ink-850)',
+                fontSize: 10.5, letterSpacing: '0.08em',
+                color: 'var(--ctv3-muted)',
+                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              }}
+            >
+              <span>
+                Connectez-vous pour retrouver vos analyses, suivre votre historique et conserver vos destinations.
+              </span>
+              <a
+                href="/"
+                className="ctv3-mono"
+                style={{
+                  display: 'inline-block', padding: '7px 14px',
+                  border: '1px solid var(--ctv3-line-bright)', color: 'var(--ctv3-paper)',
+                  fontSize: 10.5, letterSpacing: '0.12em',
+                  textDecoration: 'none', textTransform: 'uppercase', fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Créer mon compte gratuit →
+              </a>
             </div>
           )}
         </section>

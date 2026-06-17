@@ -632,6 +632,10 @@ function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
           ? `Renseigne encore ${remaining} critère${remaining > 1 ? 's' : ''} pour lancer l’analyse.`
           : 'Prêt à lancer — tu pourras affiner ensuite.'}
       </p>
+      {/* FREE-QUOTA-UX-001 — Microcopy freemium : texte statique, zéro logique, zéro appel API */}
+      <p className="ctv3-mono" style={{ fontSize: '0.62rem', color: 'var(--ctv3-dim)', letterSpacing: '0.08em', margin: '6px 0 0', textAlign: 'center' }}>
+        3 analyses gratuites par mois · Sans engagement
+      </p>
     </div>
   );
 }
