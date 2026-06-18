@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { estimateOpenRouterCostUsd } from './perplexity.service';
 
 // Mock axios pour piloter la réponse OpenRouter.
 let postImpl: () => Promise<unknown>;
@@ -90,5 +91,60 @@ describe('getPerplexityCountryFacts', () => {
     const { getPerplexityCountryFacts } = await load();
     await getPerplexityCountryFacts('PT', 'Portugal');
     expect(storedKeys.some((k) => k.includes('country-facts') && k.includes('guide-v1'))).toBe(true);
+  });
+
+  // ── AI-COST-001 — logs usage présents quand OpenRouter répond avec usage ──────
+
+  it('ne plante pas si usage est absent dans la réponse OpenRouter', async () => {
+    // La réponse n'a pas de champ usage → usageMissing: true dans le log, pas d'exception.
+    postImpl = () => Promise.resolve({ data: { choices: [{ message: { content: VALID_JSON } }] } });
+    const { getPerplexityCountryFacts } = await load();
+    await expect(getPerplexityCountryFacts('PT', 'Portugal')).resolves.not.toThrow();
+  });
+
+  it('ne plante pas si usage est présent dans la réponse OpenRouter', async () => {
+    postImpl = () => Promise.resolve({
+      data: {
+        choices: [{ message: { content: VALID_JSON } }],
+        usage: { prompt_tokens: 300, completion_tokens: 400, total_tokens: 700 },
+        model: 'perplexity/sonar-pro',
+      },
+    });
+    const { getPerplexityCountryFacts } = await load();
+    await expect(getPerplexityCountryFacts('PT', 'Portugal')).resolves.not.toThrow();
+  });
+});
+
+// ── AI-COST-001 — tests helper coût OpenRouter ────────────────────────────────
+
+describe('estimateOpenRouterCostUsd (AI-COST-001)', () => {
+  it('calcule correctement pour 0 tokens', () => {
+    expect(estimateOpenRouterCostUsd(0, 0)).toBe(0);
+  });
+
+  it('calcule correctement input seul', () => {
+    // 1000 input @ $3/M = $0.003
+    expect(estimateOpenRouterCostUsd(1000, 0)).toBeCloseTo(0.003, 5);
+  });
+
+  it('calcule correctement output seul', () => {
+    // 500 completion @ $15/M = $0.0075
+    expect(estimateOpenRouterCostUsd(0, 500)).toBeCloseTo(0.0075, 5);
+  });
+
+  it('calcule correctement input + output', () => {
+    // 200 prompt @ $3/M + 200 completion @ $15/M = $0.0006 + $0.003 = $0.0036
+    expect(estimateOpenRouterCostUsd(200, 200)).toBeCloseTo(0.0036, 5);
+  });
+
+  it('arrondit à 6 décimales maximum', () => {
+    const cost = estimateOpenRouterCostUsd(1, 1);
+    const decimals = cost.toString().split('.')[1]?.length ?? 0;
+    expect(decimals).toBeLessThanOrEqual(6);
+  });
+
+  it('retourne toujours un nombre positif ou nul (jamais négatif)', () => {
+    expect(estimateOpenRouterCostUsd(0, 0)).toBeGreaterThanOrEqual(0);
+    expect(estimateOpenRouterCostUsd(1000, 500)).toBeGreaterThan(0);
   });
 });

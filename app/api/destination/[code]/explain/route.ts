@@ -1,33 +1,17 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { calculateCrisisScore } from '@/lib/services/scoring/crisisScore.service';
-import { generateDestinationNarrative } from '@/lib/claude/claude.service';
-import { findCountry } from '@/lib/utils/countries';
 
-const QSchema = z.object({
-  travelType: z.enum(['solo', 'couple', 'family', 'nomad']).default('solo'),
-  budget: z.coerce.number().default(1500),
-  duration: z.coerce.number().default(7),
-});
-
+// AI-COST-001 (P0-B) : route debug/dev désactivée.
+// Aucune référence frontend trouvée lors de l'audit (grep explique zéro résultat hors ce fichier).
+// Appelait calculateCrisisScore + generateDestinationNarrative (Claude) sans auth ni quota.
+// Retourne 410 Gone pour signaler clairement que la route est morte — pas un 404 qui pourrait
+// laisser croire à une faute de frappe de chemin.
 export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ code: string }> }
+  _req: Request,
+  _ctx: { params: Promise<{ code: string }> },
 ): Promise<NextResponse> {
-  const { code } = await params;
-  const country = findCountry(code);
-  if (!country) return NextResponse.json({ error: 'Pays non trouvé' }, { status: 404 });
-
-  const url = new URL(req.url);
-  const q = QSchema.parse(Object.fromEntries(url.searchParams));
-  const profile = { ...q, departureCountry: 'FR', period: 'flexible', mode: 'standard' as const };
-
-  try {
-    const score = await calculateCrisisScore(country, profile);
-    const narrative = await generateDestinationNarrative(score, profile);
-    return NextResponse.json({ score, narrative });
-  } catch (error) {
-    console.error('[API/explain]', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
-  }
+  console.log('[API/explain] legacy route disabled (AI-COST-001 P0-B)');
+  return NextResponse.json(
+    { error: 'Cette route n\'est plus disponible.' },
+    { status: 410 },
+  );
 }

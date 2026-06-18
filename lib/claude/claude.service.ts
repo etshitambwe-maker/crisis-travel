@@ -4,6 +4,50 @@ import { logger } from '@/lib/utils/logger';
 import type { CrisisScore, UserProfile, ItineraryRequest, ItineraryResult, BudgetLevel, PremiumCountryGuide } from '@/types/crisis.types';
 import type { PerplexityCountryFacts } from '@/types/api.types';
 
+// ── AI Cost tracking helpers (AI-COST-001) ────────────────────────────────────
+
+// Tarifs indicatifs claude-sonnet-4-6 (USD / million de tokens).
+// Mis à jour si le modèle change — la valeur surestimée est préférable à
+// une sous-estimation qui masque un coût réel.
+const SONNET_INPUT_COST_PER_M  = 3.0;   // $3 / 1M input tokens
+const SONNET_OUTPUT_COST_PER_M = 15.0;  // $15 / 1M output tokens
+
+export function estimateAnthropicCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  // Tarifs connus pour claude-sonnet-4-x. Pour tout autre modèle on applique
+  // les tarifs Sonnet (conservateur) plutôt que de retourner 0.
+  const inputRate  = model.includes('haiku') ? 0.8  : SONNET_INPUT_COST_PER_M;
+  const outputRate = model.includes('haiku') ? 4.0  : SONNET_OUTPUT_COST_PER_M;
+  const cost = (inputTokens * inputRate + outputTokens * outputRate) / 1_000_000;
+  // Arrondi à 6 décimales pour éviter les flottants parasites dans les logs.
+  return Math.round(cost * 1_000_000) / 1_000_000;
+}
+
+type AiUsageLogParams = {
+  service: string;
+  provider: 'anthropic';
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  durationMs: number;
+  cacheHit: boolean;
+  countryCode?: string;
+  travelType?: string;
+  stopReason?: string;
+  fallbackUsed?: boolean;
+  errorCategory?: string;
+};
+
+// Actif en production sans dépendre du flag ENABLE_API_LOGS (coûts = signal critique).
+export function logAiUsageSafe(params: AiUsageLogParams): void {
+  console.log('[AI Usage]', params);
+}
+
 // maxRetries: 0 — sans ça, le SDK Anthropic réessaie (jusqu'à 2x) sur timeout/erreur,
 // ce qui transformait le timeout de 8s en ~25s d'attente sur le chemin critique
 // /api/analyze (GOAL-034). Un échec doit être immédiat ; les fallbacks gèrent la suite.
@@ -136,6 +180,24 @@ Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo'
           if ((msg as { stop_reason?: string }).stop_reason === 'max_tokens') {
             throw new Error('narrative: réponse tronquée (stop_reason=max_tokens)');
           }
+          const usageMsg = msg as { usage?: { input_tokens?: number; output_tokens?: number }; model?: string; stop_reason?: string };
+          const inputTokens  = usageMsg.usage?.input_tokens  ?? 0;
+          const outputTokens = usageMsg.usage?.output_tokens ?? 0;
+          const narrativeModel = usageMsg.model ?? 'claude-sonnet-4-6';
+          logAiUsageSafe({
+            service: 'claude-narrative',
+            provider: 'anthropic',
+            model: narrativeModel,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            estimatedCostUsd: estimateAnthropicCostUsd(narrativeModel, inputTokens, outputTokens),
+            durationMs: Date.now() - t0,
+            cacheHit: false,
+            countryCode: score.countryCode,
+            travelType: profile.travelType,
+            stopReason: usageMsg.stop_reason ?? 'end_turn',
+          });
           logger.api('Claude', score.countryCode, Date.now() - t0, false);
           return (msg.content[0] as { text: string }).text;
         } finally {
@@ -144,6 +206,21 @@ Recommandations spécifiques au type de voyage : ${profile.travelType === 'solo'
       },
       3600
     );
+    if (fromCache) {
+      logAiUsageSafe({
+        service: 'claude-narrative',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        durationMs: 0,
+        cacheHit: true,
+        countryCode: score.countryCode,
+        travelType: profile.travelType,
+      });
+    }
     logger.api('Claude', score.countryCode, 0, fromCache);
     return data;
   } catch (error) {
@@ -182,6 +259,21 @@ Réponds UNIQUEMENT avec ce JSON valide, sans markdown :
     },
     { timeout: OPPORTUNITIES_HARD_TIMEOUT_MS }
   );
+  const usageOpp = msg as { usage?: { input_tokens?: number; output_tokens?: number }; model?: string };
+  const oppInputTokens  = usageOpp.usage?.input_tokens  ?? 0;
+  const oppOutputTokens = usageOpp.usage?.output_tokens ?? 0;
+  const oppModel = usageOpp.model ?? 'claude-sonnet-4-6';
+  logAiUsageSafe({
+    service: 'claude-opportunities',
+    provider: 'anthropic',
+    model: oppModel,
+    inputTokens: oppInputTokens,
+    outputTokens: oppOutputTokens,
+    totalTokens: oppInputTokens + oppOutputTokens,
+    estimatedCostUsd: estimateAnthropicCostUsd(oppModel, oppInputTokens, oppOutputTokens),
+    durationMs: Date.now() - t0,
+    cacheHit: false,
+  });
   logger.api('Claude-Opportunities', 'global', Date.now() - t0, false);
   const text = (msg.content[0] as { text: string }).text.trim();
   return JSON.parse(text);
@@ -385,6 +477,24 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
           if (wordCount < MIN_NARRATIVE_WORDS) {
             throw new Error(`itinerary: guide trop court (${wordCount} mots < ${MIN_NARRATIVE_WORDS})`);
           }
+          const usageItin = msg as { usage?: { input_tokens?: number; output_tokens?: number }; model?: string; stop_reason?: string };
+          const itinInputTokens  = usageItin.usage?.input_tokens  ?? 0;
+          const itinOutputTokens = usageItin.usage?.output_tokens ?? 0;
+          const itinModel = usageItin.model ?? 'claude-sonnet-4-6';
+          logAiUsageSafe({
+            service: 'claude-itinerary',
+            provider: 'anthropic',
+            model: itinModel,
+            inputTokens: itinInputTokens,
+            outputTokens: itinOutputTokens,
+            totalTokens: itinInputTokens + itinOutputTokens,
+            estimatedCostUsd: estimateAnthropicCostUsd(itinModel, itinInputTokens, itinOutputTokens),
+            durationMs: Date.now() - t0,
+            cacheHit: false,
+            countryCode: req.countryCode ?? 'unknown',
+            travelType: req.travelType,
+            stopReason: usageItin.stop_reason ?? 'end_turn',
+          });
           logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', Date.now() - t0, false);
           return text;
         } finally {
@@ -396,6 +506,21 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
 
     // Log cache hit/miss — miroir de generateDestinationNarrative (ligne ~147).
     // Permet de savoir en prod si Redis sert les itinéraires ou si tout part en live.
+    if (fromCache) {
+      logAiUsageSafe({
+        service: 'claude-itinerary',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        durationMs: 0,
+        cacheHit: true,
+        countryCode: req.countryCode ?? 'unknown',
+        travelType: req.travelType,
+      });
+    }
     logger.api('Claude-Itinerary', req.countryCode ?? 'unknown', 0, fromCache);
 
     // `data` est garanti = un texte de guide substantiel (validé dans le fetcher AVANT le
@@ -565,7 +690,7 @@ RÈGLES ABSOLUES :
 Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragraphes). Commence directement par "**1. Vue d'ensemble".`;
 
   try {
-    const { data } = await withCache(
+    const { data, fromCache: guideFromCache } = await withCache(
       cacheKey,
       async () => {
         const t0 = Date.now();
@@ -593,6 +718,24 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
           if (wordCount < GUIDE_MIN_WORDS) {
             throw new Error(`country-guide: trop court (${wordCount} mots < ${GUIDE_MIN_WORDS})`);
           }
+          const usageGuide = msg as { usage?: { input_tokens?: number; output_tokens?: number }; model?: string; stop_reason?: string };
+          const guideInputTokens  = usageGuide.usage?.input_tokens  ?? 0;
+          const guideOutputTokens = usageGuide.usage?.output_tokens ?? 0;
+          const guideModel = usageGuide.model ?? 'claude-sonnet-4-6';
+          logAiUsageSafe({
+            service: 'claude-country-guide',
+            provider: 'anthropic',
+            model: guideModel,
+            inputTokens: guideInputTokens,
+            outputTokens: guideOutputTokens,
+            totalTokens: guideInputTokens + guideOutputTokens,
+            estimatedCostUsd: estimateAnthropicCostUsd(guideModel, guideInputTokens, guideOutputTokens),
+            durationMs: Date.now() - t0,
+            cacheHit: false,
+            countryCode: score.countryCode,
+            travelType: travelType,
+            stopReason: usageGuide.stop_reason ?? 'end_turn',
+          });
           logger.api('Claude-CountryGuide', score.countryCode, Date.now() - t0, false);
           return text;
         } finally {
@@ -601,6 +744,22 @@ Réponds UNIQUEMENT avec le texte du guide en markdown (titres en gras + paragra
       },
       21600, // 6h
     );
+
+    if (guideFromCache) {
+      logAiUsageSafe({
+        service: 'claude-country-guide',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        durationMs: 0,
+        cacheHit: true,
+        countryCode: score.countryCode,
+        travelType: travelType,
+      });
+    }
 
     return {
       countryCode: score.countryCode,

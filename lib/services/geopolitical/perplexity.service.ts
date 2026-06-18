@@ -4,6 +4,40 @@ import { withCache, buildCacheKey } from '@/lib/cache/redis';
 import { logger } from '@/lib/utils/logger';
 import type { PerplexityGeoAnalysis, PerplexityCountryFacts, ServiceResult } from '@/types/api.types';
 
+// ── AI Cost tracking — OpenRouter/Perplexity (AI-COST-001) ───────────────────
+
+// Tarifs indicatifs perplexity/sonar-pro via OpenRouter (USD / million de tokens).
+// Source : openrouter.ai/models — à réviser si le routage change.
+const SONAR_PRO_INPUT_COST_PER_M  = 3.0;   // $3 / 1M input tokens (estimation conservatrice)
+const SONAR_PRO_OUTPUT_COST_PER_M = 15.0;  // $15 / 1M output tokens
+
+export function estimateOpenRouterCostUsd(
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  const cost = (promptTokens * SONAR_PRO_INPUT_COST_PER_M + completionTokens * SONAR_PRO_OUTPUT_COST_PER_M) / 1_000_000;
+  return Math.round(cost * 1_000_000) / 1_000_000;
+}
+
+type OpenRouterUsageLog = {
+  service: string;
+  provider: 'openrouter';
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  durationMs: number;
+  cacheHit: boolean;
+  countryCode: string;
+  usageMissing?: boolean;
+  fallbackUsed?: boolean;
+};
+
+function logOpenRouterUsageSafe(params: OpenRouterUsageLog): void {
+  console.log('[AI Usage]', params);
+}
+
 const PerplexitySchema = z.object({
   stabilityScore: z.number().min(0).max(100),
   summary: z.string().max(500),
@@ -59,6 +93,23 @@ export async function getPerplexityGeoScore(
             timeout: 6000,
           }
         );
+        const usageGeo = res.data.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
+        const geoPromptTokens     = usageGeo?.prompt_tokens     ?? 0;
+        const geoCompletionTokens = usageGeo?.completion_tokens ?? 0;
+        const geoModel = (res.data.model as string | undefined) ?? 'perplexity/sonar-pro';
+        logOpenRouterUsageSafe({
+          service: 'perplexity-geo-score',
+          provider: 'openrouter',
+          model: geoModel,
+          promptTokens: geoPromptTokens,
+          completionTokens: geoCompletionTokens,
+          totalTokens: usageGeo?.total_tokens ?? (geoPromptTokens + geoCompletionTokens),
+          estimatedCostUsd: estimateOpenRouterCostUsd(geoPromptTokens, geoCompletionTokens),
+          durationMs: Date.now() - t0,
+          cacheHit: false,
+          countryCode,
+          usageMissing: !usageGeo,
+        });
         logger.api('Perplexity/OpenRouter', countryCode, Date.now() - t0, false);
         const text = res.data.choices[0].message.content as string;
         // sonar-pro peut encapsuler dans du markdown — on extrait le JSON
@@ -70,7 +121,21 @@ export async function getPerplexityGeoScore(
       },
       1800
     );
-    if (fromCache) logger.api('Perplexity/OpenRouter', countryCode, 0, true);
+    if (fromCache) {
+      logOpenRouterUsageSafe({
+        service: 'perplexity-geo-score',
+        provider: 'openrouter',
+        model: 'perplexity/sonar-pro',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        durationMs: 0,
+        cacheHit: true,
+        countryCode,
+      });
+      logger.api('Perplexity/OpenRouter', countryCode, 0, true);
+    }
     return { data, source: 'live' };
   } catch (error) {
     logger.error('Perplexity/OpenRouter', error);
@@ -119,7 +184,7 @@ export async function getPerplexityCountryFacts(
 
   const cacheKey = buildCacheKey('country-facts', countryCode, 'guide-v1');
   try {
-    const { data } = await withCache(
+    const { data, fromCache: factsFromCache } = await withCache(
       cacheKey,
       async () => {
         const t0 = Date.now();
@@ -139,6 +204,23 @@ export async function getPerplexityCountryFacts(
             timeout: 7000,
           },
         );
+        const usageFacts = res.data.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
+        const factsPromptTokens     = usageFacts?.prompt_tokens     ?? 0;
+        const factsCompletionTokens = usageFacts?.completion_tokens ?? 0;
+        const factsModel = (res.data.model as string | undefined) ?? 'perplexity/sonar-pro';
+        logOpenRouterUsageSafe({
+          service: 'perplexity-country-facts',
+          provider: 'openrouter',
+          model: factsModel,
+          promptTokens: factsPromptTokens,
+          completionTokens: factsCompletionTokens,
+          totalTokens: usageFacts?.total_tokens ?? (factsPromptTokens + factsCompletionTokens),
+          estimatedCostUsd: estimateOpenRouterCostUsd(factsPromptTokens, factsCompletionTokens),
+          durationMs: Date.now() - t0,
+          cacheHit: false,
+          countryCode,
+          usageMissing: !usageFacts,
+        });
         logger.api('Perplexity-Facts', countryCode, Date.now() - t0, false);
         const text = res.data.choices[0].message.content as string;
         // sonar-pro peut encapsuler dans du markdown — on extrait l'objet JSON complet.
@@ -150,6 +232,20 @@ export async function getPerplexityCountryFacts(
       },
       21600, // 6h — faits semi-stables
     );
+    if (factsFromCache) {
+      logOpenRouterUsageSafe({
+        service: 'perplexity-country-facts',
+        provider: 'openrouter',
+        model: 'perplexity/sonar-pro',
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        durationMs: 0,
+        cacheHit: true,
+        countryCode,
+      });
+    }
     return { data, source: 'live' };
   } catch (error) {
     logger.error('Perplexity-Facts', error);
