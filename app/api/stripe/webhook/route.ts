@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { constructWebhookEvent } from '@/lib/stripe/stripe.service';
 import { createClient } from '@supabase/supabase-js';
+import {
+  journalReceive,
+  journalProcessed,
+  journalFailed,
+  journalIgnored,
+} from '@/lib/stripe/stripe-event-journal';
 import type Stripe from 'stripe';
 
-// Client admin Supabase (service role) pour bypasser RLS
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,17 +16,20 @@ function getAdminClient() {
   );
 }
 
+/**
+ * Met à jour l'abonnement dans user_profiles.
+ * Throw si la mutation critique échoue — permet au handler de retourner 500 à Stripe.
+ */
 async function upsertSubscription(
   customerId: string,
   subscriptionId: string,
   status: string,
   currentPeriodEnd: number
-) {
+): Promise<void> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return;
 
   const supabase = getAdminClient();
 
-  // Retrouver l'utilisateur par stripe_customer_id
   const { data: profile, error: findError } = await supabase
     .from('user_profiles')
     .select('id')
@@ -42,13 +50,15 @@ async function upsertSubscription(
   }
 
   const isPremium = status === 'active' || status === 'trialing';
-  const endDate = new Date(currentPeriodEnd * 1000).toISOString();
+  const endDate = isPremium && currentPeriodEnd > 0
+    ? new Date(currentPeriodEnd * 1000).toISOString()
+    : null;
 
   const { error: updateError } = await supabase
     .from('user_profiles')
     .update({
       subscription_tier: isPremium ? 'premium' : 'free',
-      subscription_end_date: isPremium ? endDate : null,
+      subscription_end_date: endDate,
       stripe_subscription_id: subscriptionId,
     })
     .eq('id', profile.id);
@@ -61,31 +71,37 @@ async function upsertSubscription(
       status,
       error: updateError.message,
     });
-    return;
+    throw new Error(`upsertSubscription failed: ${updateError.message}`);
   }
 
-  console.log(`[Stripe/webhook] sync OK: user ${profile.id} → ${isPremium ? 'premium' : 'free'} (${status})`);
+  console.log('[Stripe/webhook] sync OK', {
+    userId: profile.id,
+    tier: isPremium ? 'premium' : 'free',
+    status,
+  });
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+/**
+ * Lie stripe_customer_id au profil utilisateur lors du premier checkout.
+ * Throw si l'UPSERT échoue — mutation critique.
+ */
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
   const customerId = session.customer as string;
   const userId = session.metadata?.supabase_user_id;
 
-  console.log('[Stripe/webhook] checkout.session.completed', { customerId, userId: userId ?? 'absent' });
+  console.log('[Stripe/webhook] checkout.session.completed', {
+    customerId,
+    userId: userId ?? 'absent',
+  });
 
   if (!customerId || !userId) return;
-
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return;
 
   const supabase = getAdminClient();
 
-  // Lier le stripe_customer_id au profil
   const { error: upsertError } = await supabase
     .from('user_profiles')
-    .upsert({
-      id: userId,
-      stripe_customer_id: customerId,
-    }, { onConflict: 'id' });
+    .upsert({ id: userId, stripe_customer_id: customerId }, { onConflict: 'id' });
 
   if (upsertError) {
     console.error('[Stripe/webhook] checkout.session.completed — erreur liaison customer/user', {
@@ -93,13 +109,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       customerId,
       error: upsertError.message,
     });
+    throw new Error(`handleCheckoutCompleted failed: ${upsertError.message}`);
   }
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    return NextResponse.json({ error: 'Webhook secret manquant' }, { status: 400 });
+    return NextResponse.json({ error: 'Webhook secret manquant' }, { status: 500 });
   }
 
   const sig = request.headers.get('stripe-signature');
@@ -112,10 +129,34 @@ export async function POST(request: Request): Promise<NextResponse> {
   let event: Stripe.Event;
   try {
     event = constructWebhookEvent(rawBody, sig, webhookSecret);
-  } catch (error) {
-    console.error('[Stripe/webhook] Signature invalide:', error);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown';
+    console.error('[Stripe/webhook] Signature invalide', { message });
     return NextResponse.json({ error: 'Signature invalide' }, { status: 400 });
   }
+
+  const canJournal = !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  let journalRowId: string | null = null;
+
+  if (canJournal) {
+    const supabase = getAdminClient();
+    const handle = await journalReceive(supabase, {
+      stripeEventId: event.id,
+      eventType: event.type,
+      livemode: event.livemode,
+    });
+
+    if (handle.isDuplicate) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    journalRowId = handle.rowId;
+  }
+
+  const supabase = canJournal ? getAdminClient() : null;
 
   try {
     switch (event.type) {
@@ -127,23 +168,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
-        // API 2026-05-27.dahlia : current_period_end est au niveau de l'item
-        // (sub.items.data[0]), plus à la racine de la souscription.
-        // On lit l'item en priorité, puis la racine (compat), puis fallback +30j.
-        const periodEnd = sub.items?.data?.[0]?.current_period_end
+        const periodEnd =
+          sub.items?.data?.[0]?.current_period_end
           ?? (sub as unknown as { current_period_end?: number }).current_period_end
-          ?? Math.floor(Date.now() / 1000) + 2592000; // fallback +30j
+          ?? Math.floor(Date.now() / 1000) + 2592000;
         console.log(`[Stripe/webhook] ${event.type}`, {
           customerId: sub.customer as string,
           subscriptionId: sub.id,
           status: sub.status,
+          livemode: event.livemode,
         });
-        await upsertSubscription(
-          sub.customer as string,
-          sub.id,
-          sub.status,
-          periodEnd
-        );
+        await upsertSubscription(sub.customer as string, sub.id, sub.status, periodEnd);
         break;
       }
 
@@ -152,8 +187,18 @@ export async function POST(request: Request): Promise<NextResponse> {
         console.log('[Stripe/webhook] customer.subscription.deleted', {
           customerId: sub.customer as string,
           subscriptionId: sub.id,
+          livemode: event.livemode,
         });
         await upsertSubscription(sub.customer as string, sub.id, 'canceled', 0);
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const inv = event.data.object as Stripe.Invoice;
+        console.log('[Stripe/webhook] invoice.payment_succeeded', {
+          customerId: inv.customer as string,
+          livemode: event.livemode,
+        });
         break;
       }
 
@@ -162,31 +207,41 @@ export async function POST(request: Request): Promise<NextResponse> {
         const attemptCount = (inv as unknown as { attempt_count?: number }).attempt_count ?? null;
         const nextAttempt = (inv as unknown as { next_payment_attempt?: number | null }).next_payment_attempt ?? null;
         console.warn('[Stripe/webhook] invoice.payment_failed', {
-          customerId: inv.customer,
+          customerId: inv.customer as string,
           attemptCount,
-          // null = Stripe a renoncé à réessayer (tous les retries épuisés)
           nextPaymentAttempt: nextAttempt !== null ? new Date(nextAttempt * 1000).toISOString() : null,
           willRetry: nextAttempt !== null,
+          livemode: event.livemode,
         });
-        // On ne dégrade pas immédiatement — Stripe réessaie automatiquement.
-        // Si nextPaymentAttempt est null, tous les retries sont épuisés :
-        // customer.subscription.deleted arrivera séparément et dégradera le compte.
         break;
       }
 
-      default:
-        // Événement non géré — on ignore sans erreur
-        break;
+      default: {
+        console.info('[Stripe/webhook] événement ignoré', {
+          eventType: event.type,
+          livemode: event.livemode,
+        });
+        if (supabase && journalRowId) {
+          await journalIgnored(supabase, journalRowId);
+        }
+        return NextResponse.json({ received: true, ignored: true });
+      }
     }
 
+    if (supabase && journalRowId) {
+      await journalProcessed(supabase, journalRowId);
+    }
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('[Stripe/webhook] Erreur traitement:', error);
+    const message = error instanceof Error ? error.message : 'unknown';
+    console.error('[Stripe/webhook] Erreur traitement', {
+      eventType: event.type,
+      stripeEventId: event.id,
+      error: message,
+    });
+    if (supabase && journalRowId) {
+      await journalFailed(supabase, journalRowId, message);
+    }
     return NextResponse.json({ error: 'Erreur traitement webhook' }, { status: 500 });
   }
 }
-
-// Nécessaire : lire le body brut pour la vérification de signature Stripe
-export const config = {
-  api: { bodyParser: false },
-};
