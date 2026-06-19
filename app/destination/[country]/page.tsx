@@ -21,6 +21,7 @@ import { VISA_REQUIREMENTS } from '@/lib/data/visa-requirements';
 import { PremiumActions } from '@/components/crisis/PremiumActions';
 import { CountryGuideBlock } from '@/components/crisis/CountryGuideBlock';
 import { NarrativeRenderer } from '@/components/crisis/NarrativeRenderer';
+import { CollapsibleSection } from '@/components/crisis/CollapsibleSection';
 import { LiveRisksBlock } from '@/components/crisis/LiveRisksBlock';
 import { buildFreeSummary } from '@/lib/services/summary/freeSummary';
 import type { VisaType } from '@/lib/data/visa-requirements';
@@ -287,8 +288,13 @@ export default async function DestinationPage({ params, searchParams }: Props) {
 
       <main style={{ maxWidth: 820, margin: '0 auto', padding: '32px 20px 72px' }}>
 
-        {/* Verdict line + source honesty (real `source` field, kept) */}
-        <section style={{ marginBottom: 32 }}>
+        {/* ── B. VERDICT UNIFIÉ — FRONTEND-CLARITY-001 Gate 2 ──────────────────
+            Fusionne en un seul bloc, visible immédiatement : la phrase verdict,
+            la jauge/score, le niveau MEAE résumé, les badges sources live/partiel
+            et le warning confiance basse. Répond à « est-ce sûr ? » en 1 écran.
+            Le DÉTAIL MEAE complet (carte + SecurityAlert) descend dans l'accordéon
+            « Comprendre le score » — rien n'est supprimé. */}
+        <section style={{ marginBottom: 28 }}>
           <p className="ctv3-serif" style={{ fontSize: 18, color: 'var(--ctv3-paper)', lineHeight: 1.45, marginBottom: 14 }}>
             {tierInfo.verdict}.
           </p>
@@ -297,6 +303,35 @@ export default async function DestinationPage({ params, searchParams }: Props) {
               ⚠ Données partielles — certaines sources étaient indisponibles au calcul.
             </p>
           )}
+
+          {/* Jauge — composant inchangé, désormais ancré dans le bloc verdict. */}
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 18px' }}>
+            <GaugeWithTooltip score={score} />
+          </div>
+
+          {/* Résumé MEAE — une ligne (niveau + libellé). Le détail va dans l'accordéon. */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            border: '1px solid var(--ctv3-line)', borderLeft: `2px solid ${meaeColor}`,
+            background: 'var(--ctv3-ink-850)', padding: '12px 14px', marginBottom: 14,
+          }}>
+            <div className="ctv3-mono" style={{
+              width: 30, height: 30, display: 'grid', placeItems: 'center', flexShrink: 0,
+              border: `1px solid ${meaeColor}`, color: meaeColor, fontSize: 15, fontWeight: 700,
+            }}>
+              {meae.ic}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <span className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+                MEAE · Niveau {meaeLevel}/4
+              </span>
+              <div style={{ fontFamily: 'var(--ctv3-display)', fontWeight: 800, fontSize: 14, color: meaeColor }}>
+                {meae.title}
+              </div>
+            </div>
+          </div>
+
+          {/* Badges sources live/partiel. */}
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
             {(['security', 'geopolitical', 'budget'] as const).map((key) => {
               const live = score[key].source === 'live';
@@ -318,14 +353,129 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           </div>
         </section>
 
-        {/* Gauge — existing component, unchanged, framed editorially */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 36 }}>
-          <GaugeWithTooltip score={score} />
+        {/* ── C. SYNTHÈSE COURTE (GRATUITE) — FRONTEND-CLARITY-001 Gate 2 ───────
+            Le paragraphe basicSynthesis (valeur gratuite obligatoire) reste visible
+            immédiatement, hors PremiumGate. Les listes secondaires (points forts /
+            vigilance / conseils) sont repliées dans un accordéon « En détail »
+            INTERNE à ce bloc — conservées, plus imposées. data-testid="free-summary"
+            préservé (invariant PREMIUM-FLOW-001D/E : avant le PremiumGate). */}
+        <SectionLabel num="01" label="Synthèse voyage" meta="Résumé · Gratuit" />
+        <div
+          data-testid="free-summary"
+          style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 24 }}
+        >
+          {/* Verdict + niveau de risque */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
+            <Chip tier={tier} solid>{tierInfo.label}</Chip>
+            <span className="ctv3-mono" style={{ fontSize: 10.5, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase' }}>
+              {freeSummary.riskLevel}
+            </span>
+            <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
+              Confiance {score.confidence === 'high' ? 'élevée' : score.confidence === 'medium' ? 'moyenne' : 'partielle'}
+            </span>
+          </div>
+
+          {/* PREMIUM-FLOW-001E — vrai PARAGRAPHE de synthèse basique (valeur gratuite). */}
+          <p
+            data-testid="basic-synthesis"
+            className="ctv3-serif"
+            style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--ctv3-paper)', marginBottom: freeSummary.lead ? 12 : 16 }}
+          >
+            {freeSummary.basicSynthesis}
+          </p>
+
+          {/* Extrait narrative — enrichissement optionnel, affiché seulement si dispo */}
+          {freeSummary.lead && (
+            <p className="ctv3-serif" style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--ctv3-muted)', marginBottom: 16, paddingLeft: 12, borderLeft: '2px solid var(--ctv3-line-soft)' }}>
+              {freeSummary.lead}
+            </p>
+          )}
+
+          {/* « En détail » — points forts / vigilance / conseils, repliés (conservés). */}
+          <CollapsibleSection title="En détail" meta="Forts · Vigilance · Conseils">
+            {/* Points forts / vigilance */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
+              <div>
+                <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-ideal)', marginBottom: 8 }}>
+                  Points forts
+                </div>
+                {freeSummary.strengths.length > 0 ? (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {freeSummary.strengths.map((s) => (
+                      <li key={s} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
+                        <span style={{ color: 'var(--ctv3-ideal)', fontWeight: 700, flexShrink: 0 }}>+</span>{s}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point fort marqué sur ces critères.</p>
+                )}
+              </div>
+              <div>
+                <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-reco)', marginBottom: 8 }}>
+                  Points de vigilance
+                </div>
+                {freeSummary.watchpoints.length > 0 ? (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {freeSummary.watchpoints.map((w) => (
+                      <li key={w} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
+                        <span style={{ color: 'var(--ctv3-reco)', fontWeight: 700, flexShrink: 0 }}>!</span>{w}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point de vigilance majeur détecté.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Conseils essentiels */}
+            <div style={{ paddingTop: 14, borderTop: '1px solid var(--ctv3-line-soft)' }}>
+              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)', marginBottom: 8 }}>
+                Conseils essentiels
+              </div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {freeSummary.essentialTips.map((t) => (
+                  <li key={t} className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-muted)', display: 'flex', gap: 8, lineHeight: 1.5 }}>
+                    <span style={{ color: 'var(--ctv3-faint)', flexShrink: 0 }}>·</span>{t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </CollapsibleSection>
         </div>
 
-        {/* 01 — Sous-scores */}
-        <SectionLabel num="01" label="Sous-scores" meta="Pondéré" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 36 }}>
+        {/* ── D. CTA PREMIUM (résumé) — FRONTEND-CLARITY-001 Gate 2 ────────────
+            Rappel court qui ancre vers le bloc premium existant (#premium).
+            PAS un nouveau PremiumGate, PAS un nouvel appel réseau : simple ancre.
+            Le gating réel reste dans l'unique PremiumGate plus bas. */}
+        <a
+          href="#premium"
+          className="ctv3-mono"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '16px 18px', marginBottom: 32,
+            border: '1px solid var(--ctv3-red)', background: 'var(--ctv3-ink-850)',
+            color: 'var(--ctv3-paper)', textDecoration: 'none',
+            fontSize: 12, letterSpacing: '0.04em', fontWeight: 700,
+          }}
+        >
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.14em', fontSize: 10, color: 'var(--ctv3-red)' }}>
+              Premium
+            </span>
+            <span className="ctv3-serif" style={{ fontSize: 14, fontWeight: 500, color: 'var(--ctv3-muted)', textTransform: 'none', letterSpacing: 0 }}>
+              Synthèse IA complète, itinéraire personnalisé, guide pays et export PDF.
+            </span>
+          </span>
+          <span aria-hidden style={{ flexShrink: 0, color: 'var(--ctv3-red)' }}>Voir le guide premium ↓</span>
+        </a>
+
+        {/* ── E. ACCORDÉON « Comprendre le score » ─────────────────────────────
+            Contient : sous-scores (01 d'origine), détail MEAE complet (02 d'origine),
+            SecurityAlert. Tout conservé, désormais replié par défaut. */}
+        <CollapsibleSection num="02" title="Comprendre le score" meta="Sous-scores · MEAE">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 28 }}>
           {subScores.map((s) => {
             const v = score[s.key].value;
             const c = TIER[tierFromScore(v)].color;
@@ -348,8 +498,7 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           })}
         </div>
 
-        {/* 02 — Alerte MEAE */}
-        <SectionLabel num="02" label="Alerte MEAE" meta="Officiel" />
+        {/* Détail MEAE complet (carte description + lien officiel + SecurityAlert) */}
         <div style={{
           display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'flex-start',
           border: '1px solid var(--ctv3-line)', borderLeft: `2px solid ${meaeColor}`,
@@ -373,25 +522,28 @@ export default async function DestinationPage({ params, searchParams }: Props) {
               {meae.title}
             </div>
             <p className="ctv3-serif" style={{ color: 'var(--ctv3-muted)', fontSize: 14, lineHeight: 1.45 }}>{meae.desc}</p>
+            {/* FRONTEND-CLARITY-001 : lien Diplomatie.gouv dédupliqué — il reste présent
+                dans « Infos pratiques » (Formalités + Contacts). Ici on garde la mention
+                « données intégrées » sans répéter le même lien une 3ᵉ fois. */}
             <p className="ctv3-mono" style={{ color: 'var(--ctv3-faint)', fontSize: 11, marginTop: 8, lineHeight: 1.4 }}>
-              Données intégrées — vérifiez la{' '}
-              <a href={meaeOfficialUrl} target="_blank" rel="noopener noreferrer"
-                style={{ color: 'var(--ctv3-faint)', textDecoration: 'underline' }}>
-                source officielle Diplomatie.gouv
-              </a>
-              {' '}avant départ.
+              Données intégrées le {MEAE_LAST_UPDATED} — vérifiez la source officielle avant départ (voir « Infos pratiques »).
             </p>
           </div>
         </div>
-        <div style={{ marginBottom: 36 }}>
+        <div style={{ marginBottom: 8 }}>
           <SecurityAlert level={meaeLevel} country={score.country} />
         </div>
+        </CollapsibleSection>
 
-        {/* 03 — Budget réel (conditional, real values only) */}
+        {/* ── F. ACCORDÉON « Infos pratiques » — FRONTEND-CLARITY-001 Gate 2 ────
+            Regroupe budget réel (03 d'origine) + formalités/visa (04) + contacts
+            officiels (05). Tout conservé, replié par défaut. */}
+        <CollapsibleSection num="03" title="Infos pratiques" meta="Budget · Formalités · Contacts">
+        {/* Budget réel (conditional, real values only) */}
         {budgetRows.length > 0 && (
           <>
-            <SectionLabel num="03" label="Budget réel" meta="Estimé · 14 j" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 36 }}>
+            <SectionLabel label="Budget réel" meta="Estimé · 14 j" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
               {budgetRows.map((row, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
@@ -412,11 +564,11 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           </>
         )}
 
-        {/* 04 — Formalités (visa + connexion aérienne — données statiques existantes) */}
+        {/* Formalités (visa + connexion aérienne — données statiques existantes) */}
         {visaReq && (
           <>
-            <SectionLabel num="04" label="Formalités" meta="Pour ressortissants français" />
-            <div style={{ marginBottom: 36 }}>
+            <SectionLabel label="Formalités" meta="Pour ressortissants français" />
+            <div style={{ marginBottom: 28 }}>
               {/* Visa type badge */}
               <div style={{
                 display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 14, alignItems: 'flex-start',
@@ -478,11 +630,11 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           </>
         )}
 
-        {/* 05 — Contacts officiels */}
-        <SectionLabel num="05" label="Contacts officiels" meta="Sources officielles" />
+        {/* Contacts officiels */}
+        <SectionLabel label="Contacts officiels" meta="Sources officielles" />
         <div style={{
           border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)',
-          padding: '18px 20px', marginBottom: 36,
+          padding: '18px 20px', marginBottom: 8,
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
             <div className="ctv3-mono" style={{
@@ -519,123 +671,24 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           >
             Vérifier les contacts officiels sur Diplomatie.gouv →
           </a>
-          <p className="ctv3-mono" style={{
-            fontSize: 10, color: 'var(--ctv3-faint)', lineHeight: 1.5,
-            letterSpacing: '0.02em', margin: 0,
-          }}>
-            La fiche officielle Diplomatie.gouv contient les coordonnées de l'ambassade de France,
-            les numéros d'urgence locaux et les recommandations consulaires à jour.
-            Vérifiez ces informations avant votre départ.
-          </p>
+          {/* FRONTEND-CLARITY-001 : paragraphe redondant retiré — il répétait le contenu
+              du lien ci-dessus (« la fiche officielle contient… vérifiez avant départ »).
+              Le lien officiel et l'information de contact restent présents. */}
         </div>
+        </CollapsibleSection>
 
-        {/* 06 — Synthèse voyage (GRATUITE, hors PremiumGate — PREMIUM-FLOW-001D).
-            Toujours visible : verdict, niveau de risque, points forts / vigilance,
-            conseils essentiels, et un extrait court de narrative quand disponible.
-            La valeur de base n'est JAMAIS cachée derrière le premium. */}
-        <SectionLabel num="06" label="Synthèse voyage" meta="Résumé · Gratuit" />
-        <div
-          data-testid="free-summary"
-          style={{ border: '1px solid var(--ctv3-line)', background: 'var(--ctv3-ink-850)', padding: '18px 20px', marginBottom: 36 }}
-        >
-          {/* Verdict + niveau de risque */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--ctv3-line-soft)' }}>
-            <Chip tier={tier} solid>{tierInfo.label}</Chip>
-            <span className="ctv3-mono" style={{ fontSize: 10.5, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase' }}>
-              {freeSummary.riskLevel}
-            </span>
-            <span className="ctv3-mono" style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)' }}>
-              Confiance {score.confidence === 'high' ? 'élevée' : score.confidence === 'medium' ? 'moyenne' : 'partielle'}
-            </span>
-          </div>
+        {/* ── G. BLOC PREMIUM (07) — inchangé fonctionnellement ────────────────
+            UN SEUL bloc premium unifié (PREMIUM-FLOW-001F). La synthèse gratuite
+            (section C plus haut) reste hors gate. Ancre #premium = cible du CTA
+            résumé (section D). Gating, narrative, itinéraire, guide, PDF inchangés.
 
-          {/* PREMIUM-FLOW-001E — vrai PARAGRAPHE de synthèse basique, mis en
-              évidence. Toujours présent (dérivé des données structurées), même
-              sans narrative Claude. C'est la valeur gratuite obligatoire. */}
-          <p
-            data-testid="basic-synthesis"
-            className="ctv3-serif"
-            style={{ fontSize: 16.5, lineHeight: 1.65, color: 'var(--ctv3-paper)', marginBottom: freeSummary.lead ? 12 : 20 }}
-          >
-            {freeSummary.basicSynthesis}
-          </p>
-
-          {/* Extrait narrative — enrichissement optionnel, affiché seulement si dispo */}
-          {freeSummary.lead && (
-            <p className="ctv3-serif" style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--ctv3-muted)', marginBottom: 20, paddingLeft: 12, borderLeft: '2px solid var(--ctv3-line-soft)' }}>
-              {freeSummary.lead}
-            </p>
-          )}
-
-          {/* Détail structuré — complément secondaire sous le paragraphe (PREMIUM-FLOW-001E) */}
-          <div className="ctv3-mono" style={{ fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ctv3-faint)', marginBottom: 10 }}>
-            En détail
-          </div>
-
-          {/* Points forts / vigilance */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 18 }}>
-            <div>
-              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-ideal)', marginBottom: 8 }}>
-                Points forts
-              </div>
-              {freeSummary.strengths.length > 0 ? (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {freeSummary.strengths.map((s) => (
-                    <li key={s} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
-                      <span style={{ color: 'var(--ctv3-ideal)', fontWeight: 700, flexShrink: 0 }}>+</span>{s}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point fort marqué sur ces critères.</p>
-              )}
-            </div>
-            <div>
-              <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-reco)', marginBottom: 8 }}>
-                Points de vigilance
-              </div>
-              {freeSummary.watchpoints.length > 0 ? (
-                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {freeSummary.watchpoints.map((w) => (
-                    <li key={w} className="ctv3-serif" style={{ fontSize: 13.5, color: 'var(--ctv3-paper)', display: 'flex', gap: 8 }}>
-                      <span style={{ color: 'var(--ctv3-reco)', fontWeight: 700, flexShrink: 0 }}>!</span>{w}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-faint)', margin: 0 }}>Aucun point de vigilance majeur détecté.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Conseils essentiels */}
-          <div style={{ paddingTop: 14, borderTop: '1px solid var(--ctv3-line-soft)' }}>
-            <div className="ctv3-mono" style={{ fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ctv3-faint)', marginBottom: 8 }}>
-              Conseils essentiels
-            </div>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {freeSummary.essentialTips.map((t) => (
-                <li key={t} className="ctv3-serif" style={{ fontSize: 13, color: 'var(--ctv3-muted)', display: 'flex', gap: 8, lineHeight: 1.5 }}>
-                  <span style={{ color: 'var(--ctv3-faint)', flexShrink: 0 }}>·</span>{t}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* 07 — Aller plus loin avec Premium (PREMIUM-FLOW-001F).
-            UN SEUL bloc premium unifié. La synthèse de base (06) reste gratuite ;
-            ce bloc regroupe l'approfondissement premium et ne répète plus les
-            promesses (auparavant : gate « Synthèse IA » + CTA itinéraire autonome
-            + gate « Export PDF », qui affichaient 3× les mêmes bénéfices).
-
-            - Non-premium → le PremiumGate (variant card) affiche UN seul upsell :
-              bénéfices listés une fois + un CTA d'état
+            - Non-premium → PremiumGate (variant card) : un seul upsell
               (non connecté → AuthModal ; connecté non premium → /pricing).
-            - Premium → le children est rendu : la narrative complète visible
-              immédiatement, puis les actions réelles (itinéraire + PDF) via
-              PremiumActions. Aucun upsell. */}
-        <SectionLabel num="07" label="Aller plus loin" meta="Approfondissement · Premium" />
+            - Premium → narrative complète + PremiumActions (itinéraire + PDF)
+              + CountryGuideBlock. */}
+        <div id="premium" style={{ scrollMarginTop: 16 }}>
+          <SectionLabel num="04" label="Aller plus loin" meta="Approfondissement · Premium" />
+        </div>
         <div style={{ marginBottom: 36 }}>
           <PremiumGate
             feature="Aller plus loin avec Premium"
@@ -701,29 +754,33 @@ export default async function DestinationPage({ params, searchParams }: Props) {
           </PremiumGate>
         </div>
 
-        {/* Alerte — action utilisateur (comportement inchangé), hors du bloc premium. */}
-        <div style={{ padding: '4px 0 32px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <AlertButton
+        {/* ── H. ACCORDÉON « Évolution & préparer » — FRONTEND-CLARITY-001 Gate 2 ─
+            Regroupe l'historique du score (08 d'origine) + l'action AlertButton.
+            AlertButton reste HORS du bloc premium (comportement inchangé). */}
+        <CollapsibleSection num="05" title="Évolution & préparer" meta="Historique · Alerte">
+          <div style={{ marginBottom: 24 }}>
+            <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
+          </div>
+          {/* Alerte — action utilisateur (comportement inchangé). */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <AlertButton
+              countryCode={score.countryCode}
+              countryName={score.country}
+              isLoggedIn={!!user}
+            />
+          </div>
+        </CollapsibleSection>
+
+        {/* ── I. ACCORDÉON « Pack voyage » — FRONTEND-CLARITY-001 Gate 2 ────────
+            TravelPackBlock affiliés (09 d'origine), replié par défaut. Inchangé. */}
+        <CollapsibleSection num="06" title="Pack voyage" meta="Affiliés">
+          <TravelPackBlock
             countryCode={score.countryCode}
             countryName={score.country}
-            isLoggedIn={!!user}
+            mealCheapEur={score.budget.details.mealCheap ? Number(score.budget.details.mealCheap) : undefined}
+            hotelAvgEur={score.budget.details.hotelAvg ? Number(score.budget.details.hotelAvg) : undefined}
           />
-        </div>
-
-        {/* 08 — Historique */}
-        <SectionLabel num="08" label="Historique" meta="6 mois" />
-        <div style={{ marginBottom: 36 }}>
-          <ScoreHistory countryCode={score.countryCode} countryName={score.country} />
-        </div>
-
-        {/* 09 — Pack Voyage (TravelPackBlock unchanged; contained by wrapper only) */}
-        <SectionLabel num="09" label="Pack voyage" meta="Affiliés" />
-        <TravelPackBlock
-          countryCode={score.countryCode}
-          countryName={score.country}
-          mealCheapEur={score.budget.details.mealCheap ? Number(score.budget.details.mealCheap) : undefined}
-          hotelAvgEur={score.budget.details.hotelAvg ? Number(score.budget.details.hotelAvg) : undefined}
-        />
+        </CollapsibleSection>
 
       </main>
     </div>
