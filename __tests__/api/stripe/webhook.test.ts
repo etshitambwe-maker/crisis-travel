@@ -387,3 +387,225 @@ describe('checkout.session.completed', () => {
     expect(mockJournalFailed).toHaveBeenCalled();
   });
 });
+
+// ── Helpers réutilisables pour les tests lifecycle ────────────────────────
+
+function makeOkClientWithUpdateSpy() {
+  const mockEqUpdate = vi.fn().mockResolvedValue({ error: null });
+  const mockUpdate = vi.fn().mockReturnValue({ eq: mockEqUpdate });
+  const mockClient = {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id: 'user-uuid-123' }, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      update: mockUpdate,
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: { id: 'row-uuid-001' }, error: null }),
+      }),
+    }),
+  };
+  return { mockClient, mockUpdate };
+}
+
+// ── Lifecycle — past_due ──────────────────────────────────────────────────
+
+describe('customer.subscription.updated — past_due', () => {
+  it('past_due + future periodEnd → sync OK (200), journal processed', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_pastdue_001',
+      customer: 'cus_001',
+      status: 'past_due',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const res = await POST(makeRequest());
+
+    expect(res.status).toBe(200);
+    expect(mockJournalProcessed).toHaveBeenCalledWith(expect.anything(), 'row-uuid-001');
+  });
+
+  it('past_due + future periodEnd → subscription_tier=premium écrit dans Supabase', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_pastdue_002',
+      customer: 'cus_001',
+      status: 'past_due',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'premium' })
+    );
+  });
+
+  it('past_due + past periodEnd → subscription_tier=free écrit dans Supabase', async () => {
+    const PAST = Math.floor(Date.now() / 1000) - 86400;
+    const sub = {
+      id: 'sub_pastdue_003',
+      customer: 'cus_001',
+      status: 'past_due',
+      items: { data: [{ current_period_end: PAST }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'free' })
+    );
+  });
+});
+
+// ── Lifecycle — cancel_at_period_end ─────────────────────────────────────
+
+describe('customer.subscription.updated — cancel_at_period_end=true', () => {
+  it('active + cancel_at_period_end + future periodEnd → subscription_tier=premium maintenu', async () => {
+    // Stripe maintient status='active' même avec cancel planifié.
+    // Le webhook ne lit pas cancel_at_period_end (pas de colonne en base),
+    // mais l'accès est maintenu via subscription_tier=premium + subscription_end_date future.
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400 * 14;
+    const sub = {
+      id: 'sub_cancel_scheduled_001',
+      customer: 'cus_001',
+      status: 'active',
+      cancel_at_period_end: true,
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'premium' })
+    );
+  });
+});
+
+// ── Lifecycle — statuts inactifs ─────────────────────────────────────────
+
+describe('customer.subscription.updated — statuts inactifs', () => {
+  const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+
+  async function expectInactiveStatus(status: string) {
+    const sub = {
+      id: `sub_${status}_001`,
+      customer: 'cus_001',
+      status,
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'free' })
+    );
+  }
+
+  it('unpaid → subscription_tier=free', () => expectInactiveStatus('unpaid'));
+  it('incomplete → subscription_tier=free', () => expectInactiveStatus('incomplete'));
+  it('incomplete_expired → subscription_tier=free', () => expectInactiveStatus('incomplete_expired'));
+});
+
+// ── Lifecycle — invoice.payment_failed ───────────────────────────────────
+
+describe('invoice.payment_failed — ne mute pas directement user_profiles', () => {
+  it('payment_failed ne déclenche aucun update subscription_tier (délégué à subscription.updated)', async () => {
+    const inv = {
+      id: 'in_failed_lifecycle_001',
+      customer: 'cus_001',
+      attempt_count: 1,
+      next_payment_attempt: Math.floor(Date.now() / 1000) + 86400,
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    const res = await POST(makeRequest());
+
+    expect(res.status).toBe(200);
+    // payment_failed ne mute pas subscription_tier — c'est subscription.updated qui suit
+    expect(mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: expect.anything() })
+    );
+  });
+});
+
+// ── Lifecycle — subscription.deleted ─────────────────────────────────────
+
+describe('customer.subscription.deleted — nettoyage final', () => {
+  it('deleted → subscription_tier=free écrit dans Supabase', async () => {
+    const sub = {
+      id: 'sub_deleted_lifecycle_001',
+      customer: 'cus_001',
+      status: 'canceled',
+      items: { data: [] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.deleted', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'free' })
+    );
+  });
+
+  it('deleted → subscription_end_date=null (nettoyage)', async () => {
+    const sub = {
+      id: 'sub_deleted_lifecycle_002',
+      customer: 'cus_001',
+      status: 'canceled',
+      items: { data: [] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.deleted', { data: { object: sub } })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_end_date: null })
+    );
+  });
+});

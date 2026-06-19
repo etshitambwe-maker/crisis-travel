@@ -9,6 +9,22 @@ import {
 } from '@/lib/stripe/stripe-event-journal';
 import type Stripe from 'stripe';
 
+/**
+ * Détermine si un statut Stripe maintient l'accès premium,
+ * en tenant compte de la période de retry Stripe (past_due).
+ *
+ * Statuts actifs  : active, trialing, past_due (retry en cours, période encore valide)
+ * Statuts inactifs: canceled, unpaid, incomplete, incomplete_expired
+ *
+ * Note : past_due → l'accès est maintenu tant que subscription_end_date est dans le futur.
+ * C'est getUserWithSubscription (supabase-server.ts) qui retire l'accès une fois la date passée.
+ */
+export function isPremiumFromStatus(status: string, currentPeriodEnd: number): boolean {
+  const activeStatuses = new Set(['active', 'trialing', 'past_due']);
+  const nowSec = Math.floor(Date.now() / 1000);
+  return activeStatuses.has(status) && currentPeriodEnd > nowSec;
+}
+
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,8 +65,8 @@ async function upsertSubscription(
     return;
   }
 
-  const isPremium = status === 'active' || status === 'trialing';
-  const endDate = isPremium && currentPeriodEnd > 0
+  const isPremium = isPremiumFromStatus(status, currentPeriodEnd);
+  const endDate = isPremium
     ? new Date(currentPeriodEnd * 1000).toISOString()
     : null;
 
@@ -184,10 +200,13 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
+        // Stripe envoie deleted après current_period_end dans le flux normal.
+        // On passe 0 volontairement : endDate sera null, tier=free. Nettoyage final.
         console.log('[Stripe/webhook] customer.subscription.deleted', {
           customerId: sub.customer as string,
           subscriptionId: sub.id,
           livemode: event.livemode,
+          status: sub.status,
         });
         await upsertSubscription(sub.customer as string, sub.id, 'canceled', 0);
         break;
