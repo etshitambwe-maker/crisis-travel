@@ -609,3 +609,477 @@ describe('customer.subscription.deleted — nettoyage final', () => {
     );
   });
 });
+
+// ── Ops logs — invoice.payment_failed ────────────────────────────────────
+
+describe('invoice.payment_failed — logs ops enrichis', () => {
+  it('loggue attemptCount dans le warn ops', async () => {
+    const inv = {
+      id: 'in_ops_001',
+      customer: 'cus_ops_001',
+      subscription: 'sub_ops_001',
+      attempt_count: 2,
+      next_payment_attempt: Math.floor(Date.now() / 1000) + 86400,
+      amount_due: 990,
+      currency: 'eur',
+      status: 'open',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const allArgs = warnSpy.mock.calls.flat();
+    const objects = allArgs.filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['attemptCount']).toBe(2);
+    warnSpy.mockRestore();
+  });
+
+  it('loggue nextPaymentAttempt comme ISO string quand présent', async () => {
+    const FUTURE_SEC = Math.floor(Date.now() / 1000) + 86400;
+    const inv = {
+      id: 'in_ops_002',
+      customer: 'cus_ops_002',
+      attempt_count: 1,
+      next_payment_attempt: FUTURE_SEC,
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    expect(opsLog).toBeDefined();
+    expect(typeof opsLog!['nextPaymentAttempt']).toBe('string');
+    expect(opsLog!['willRetry']).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('loggue willRetry=false et nextPaymentAttempt=null quand dernier retry', async () => {
+    const inv = {
+      id: 'in_ops_003',
+      customer: 'cus_ops_003',
+      attempt_count: 3,
+      next_payment_attempt: null,
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['willRetry']).toBe(false);
+    expect(opsLog!['nextPaymentAttempt']).toBeNull();
+    expect(opsLog!['attemptCount']).toBe(3);
+    warnSpy.mockRestore();
+  });
+
+  it('loggue amountDue et currency', async () => {
+    const inv = {
+      id: 'in_ops_004',
+      customer: 'cus_ops_004',
+      attempt_count: 1,
+      next_payment_attempt: Math.floor(Date.now() / 1000) + 3600,
+      amount_due: 1990,
+      currency: 'eur',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    expect(opsLog!['amountDue']).toBe(1990);
+    expect(opsLog!['currency']).toBe('eur');
+    warnSpy.mockRestore();
+  });
+
+  it('loggue opsAction=monitor_retry', async () => {
+    const inv = {
+      id: 'in_ops_005',
+      customer: 'cus_ops_005',
+      attempt_count: 1,
+      next_payment_attempt: Math.floor(Date.now() / 1000) + 3600,
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    expect(opsLog!['opsAction']).toBe('monitor_retry');
+    warnSpy.mockRestore();
+  });
+
+  it('ne loggue pas email, card, billing_details, payload complet', async () => {
+    const inv = {
+      id: 'in_ops_006',
+      customer: 'cus_ops_006',
+      customer_email: 'secret@example.com',
+      attempt_count: 1,
+      next_payment_attempt: null,
+      // Simule des champs sensibles qui ne doivent jamais apparaître dans les logs
+      billing_details: { name: 'John Doe', address: { city: 'Paris' } },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const allStr = JSON.stringify(warnSpy.mock.calls);
+    expect(allStr).not.toContain('secret@example.com');
+    expect(allStr).not.toMatch(/billing_details|card|address/i);
+    warnSpy.mockRestore();
+  });
+
+  it('ne loggue pas l\'objet invoice complet', async () => {
+    const inv = {
+      id: 'in_ops_007',
+      customer: 'cus_ops_007',
+      attempt_count: 1,
+      next_payment_attempt: null,
+      lines: { data: [{ id: 'line_001', amount: 990 }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_failed', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_failed');
+    // L'objet invoice complet (avec lines) ne doit pas être présent dans le log ops
+    expect(opsLog).not.toHaveProperty('lines');
+    expect(opsLog).not.toHaveProperty('id'); // invoice id n'est pas dans l'allowlist ops
+    warnSpy.mockRestore();
+  });
+});
+
+// ── Ops logs — invoice.payment_succeeded ─────────────────────────────────
+
+describe('invoice.payment_succeeded — logs ops enrichis', () => {
+  it('retourne 200 et appelle journalProcessed', async () => {
+    const inv = {
+      id: 'in_succ_001',
+      customer: 'cus_succ_001',
+      subscription: 'sub_succ_001',
+      amount_paid: 990,
+      currency: 'eur',
+      billing_reason: 'subscription_cycle',
+      status: 'paid',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_succeeded', { data: { object: inv } })
+    );
+
+    const res = await POST(makeRequest());
+
+    expect(res.status).toBe(200);
+    expect(mockJournalProcessed).toHaveBeenCalled();
+  });
+
+  it('loggue amountPaid et currency', async () => {
+    const inv = {
+      id: 'in_succ_002',
+      customer: 'cus_succ_002',
+      subscription: 'sub_succ_002',
+      amount_paid: 7900,
+      currency: 'eur',
+      billing_reason: 'subscription_create',
+      status: 'paid',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_succeeded', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_succeeded');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['amountPaid']).toBe(7900);
+    expect(opsLog!['currency']).toBe('eur');
+    warnSpy.mockRestore();
+  });
+
+  it('loggue billingReason si disponible', async () => {
+    const inv = {
+      id: 'in_succ_003',
+      customer: 'cus_succ_003',
+      billing_reason: 'subscription_cycle',
+      status: 'paid',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_succeeded', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_succeeded');
+    expect(opsLog!['billingReason']).toBe('subscription_cycle');
+    warnSpy.mockRestore();
+  });
+
+  it('loggue opsAction=payment_recovered_or_renewed', async () => {
+    const inv = {
+      id: 'in_succ_004',
+      customer: 'cus_succ_004',
+      status: 'paid',
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_succeeded', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_succeeded');
+    expect(opsLog!['opsAction']).toBe('payment_recovered_or_renewed');
+    warnSpy.mockRestore();
+  });
+
+  it('ne loggue pas email ni objet invoice complet', async () => {
+    const inv = {
+      id: 'in_succ_005',
+      customer: 'cus_succ_005',
+      customer_email: 'secret@example.com',
+      status: 'paid',
+      lines: { data: [{ id: 'line_succ_001' }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('invoice.payment_succeeded', { data: { object: inv } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const allStr = JSON.stringify(warnSpy.mock.calls);
+    expect(allStr).not.toContain('secret@example.com');
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'invoice_payment_succeeded');
+    expect(opsLog).not.toHaveProperty('lines');
+    warnSpy.mockRestore();
+  });
+});
+
+// ── Ops logs — transitions subscription.updated ───────────────────────────
+
+describe('customer.subscription.updated — logs ops transitions', () => {
+  it('active → past_due loggue opsAction=subscription_became_past_due', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_001',
+      customer: 'cus_trans_001',
+      status: 'past_due',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'active' },
+        },
+      })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'subscription_status_transition');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['opsAction']).toBe('subscription_became_past_due');
+    expect(opsLog!['previousStatus']).toBe('active');
+    expect(opsLog!['currentStatus']).toBe('past_due');
+    warnSpy.mockRestore();
+  });
+
+  it('past_due → active loggue opsAction=subscription_recovered', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_002',
+      customer: 'cus_trans_002',
+      status: 'active',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'past_due' },
+        },
+      })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'subscription_status_transition');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['opsAction']).toBe('subscription_recovered');
+    expect(opsLog!['previousStatus']).toBe('past_due');
+    expect(opsLog!['currentStatus']).toBe('active');
+    warnSpy.mockRestore();
+  });
+
+  it('past_due → unpaid loggue opsAction=subscription_became_unpaid', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_003',
+      customer: 'cus_trans_003',
+      status: 'unpaid',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'past_due' },
+        },
+      })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'subscription_status_transition');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['opsAction']).toBe('subscription_became_unpaid');
+    expect(opsLog!['previousStatus']).toBe('past_due');
+    expect(opsLog!['currentStatus']).toBe('unpaid');
+    warnSpy.mockRestore();
+  });
+
+  it('sans previous_attributes loggue opsAction=subscription_updated (pas de transition)', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_004',
+      customer: 'cus_trans_004',
+      status: 'active',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', { data: { object: sub } })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'subscription_status_transition');
+    expect(opsLog).toBeDefined();
+    expect(opsLog!['opsAction']).toBe('subscription_updated');
+    expect(opsLog!['previousStatus']).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('loggue computedTier correct lors de la transition', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_005',
+      customer: 'cus_trans_005',
+      status: 'past_due',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'active' },
+        },
+      })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const objects = warnSpy.mock.calls.flat().filter(a => typeof a === 'object') as Record<string, unknown>[];
+    const opsLog = objects.find(o => o['eventName'] === 'subscription_status_transition');
+    // past_due + future periodEnd → computedTier=premium
+    expect(opsLog!['computedTier']).toBe('premium');
+    warnSpy.mockRestore();
+  });
+
+  it('ne loggue pas PII dans les logs de transition', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_006',
+      customer: 'cus_trans_006',
+      status: 'past_due',
+      // Champs sensibles qui ne doivent jamais apparaître
+      metadata: { user_email: 'pii@example.com', full_name: 'Jane Doe' },
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'active' },
+        },
+      })
+    );
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await POST(makeRequest());
+
+    const allStr = JSON.stringify(warnSpy.mock.calls);
+    expect(allStr).not.toContain('pii@example.com');
+    expect(allStr).not.toContain('Jane Doe');
+    warnSpy.mockRestore();
+  });
+
+  it('la mutation premium reste conforme — past_due + future → tier=premium', async () => {
+    const FUTURE = Math.floor(Date.now() / 1000) + 86400;
+    const sub = {
+      id: 'sub_trans_007',
+      customer: 'cus_trans_007',
+      status: 'past_due',
+      items: { data: [{ current_period_end: FUTURE }] },
+    };
+    mockConstructWebhookEvent.mockReturnValue(
+      makeEvent('customer.subscription.updated', {
+        data: {
+          object: sub,
+          previous_attributes: { status: 'active' },
+        },
+      })
+    );
+
+    const { mockClient, mockUpdate } = makeOkClientWithUpdateSpy();
+    mockCreateClient.mockReturnValue(mockClient as unknown as ReturnType<typeof createClient>);
+
+    await POST(makeRequest());
+
+    // La logique premium est inchangée — past_due + future = premium maintenu
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ subscription_tier: 'premium' })
+    );
+  });
+});

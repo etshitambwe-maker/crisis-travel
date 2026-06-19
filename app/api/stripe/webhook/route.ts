@@ -10,6 +10,14 @@ import {
 import type Stripe from 'stripe';
 
 /**
+ * Log ops structuré — champs safe uniquement, jamais d'objet Stripe complet.
+ * Utilisé pour la visibilité opérationnelle en production (Vercel Logs).
+ */
+function logStripeOps(eventName: string, data: Record<string, unknown>): void {
+  console.warn('[Stripe Ops]', { eventName, ...data });
+}
+
+/**
  * Détermine si un statut Stripe maintient l'accès premium,
  * en tenant compte de la période de retry Stripe (past_due).
  *
@@ -188,12 +196,43 @@ export async function POST(request: Request): Promise<NextResponse> {
           sub.items?.data?.[0]?.current_period_end
           ?? (sub as unknown as { current_period_end?: number }).current_period_end
           ?? Math.floor(Date.now() / 1000) + 2592000;
+
+        const previousStatus = (
+          event.data.previous_attributes as Record<string, unknown> | undefined
+        )?.status as string | undefined;
+        const currentStatus = sub.status;
+        const cancelAtPeriodEnd = (sub as unknown as { cancel_at_period_end?: boolean }).cancel_at_period_end ?? false;
+        const computedTier = isPremiumFromStatus(currentStatus, periodEnd) ? 'premium' : 'free';
+
+        // Action ops dérivée de la transition de statut
+        let opsAction = 'subscription_updated';
+        if (previousStatus && previousStatus !== currentStatus) {
+          if (currentStatus === 'past_due') opsAction = 'subscription_became_past_due';
+          else if (previousStatus === 'past_due' && currentStatus === 'active') opsAction = 'subscription_recovered';
+          else if (currentStatus === 'unpaid') opsAction = 'subscription_became_unpaid';
+        }
+
         console.log(`[Stripe/webhook] ${event.type}`, {
           customerId: sub.customer as string,
           subscriptionId: sub.id,
-          status: sub.status,
+          status: currentStatus,
           livemode: event.livemode,
         });
+
+        logStripeOps('subscription_status_transition', {
+          stripeEventId: event.id,
+          eventType: event.type,
+          livemode: event.livemode,
+          customerId: sub.customer as string,
+          subscriptionId: sub.id,
+          previousStatus: previousStatus ?? null,
+          currentStatus,
+          currentPeriodEnd: new Date(periodEnd * 1000).toISOString(),
+          cancelAtPeriodEnd,
+          computedTier,
+          opsAction,
+        });
+
         await upsertSubscription(sub.customer as string, sub.id, sub.status, periodEnd);
         break;
       }
@@ -214,23 +253,73 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       case 'invoice.payment_succeeded': {
         const inv = event.data.object as Stripe.Invoice;
+        const invRaw = inv as unknown as {
+          subscription?: string | null;
+          amount_paid?: number;
+          currency?: string;
+          billing_reason?: string;
+          status?: string;
+        };
         console.log('[Stripe/webhook] invoice.payment_succeeded', {
           customerId: inv.customer as string,
           livemode: event.livemode,
+        });
+        logStripeOps('invoice_payment_succeeded', {
+          stripeEventId: event.id,
+          eventType: event.type,
+          livemode: event.livemode,
+          customerId: inv.customer as string,
+          subscriptionId: invRaw.subscription ?? null,
+          amountPaid: invRaw.amount_paid ?? null,
+          currency: invRaw.currency ?? null,
+          billingReason: invRaw.billing_reason ?? null,
+          invoiceStatus: invRaw.status ?? null,
+          opsAction: 'payment_recovered_or_renewed',
         });
         break;
       }
 
       case 'invoice.payment_failed': {
         const inv = event.data.object as Stripe.Invoice;
-        const attemptCount = (inv as unknown as { attempt_count?: number }).attempt_count ?? null;
-        const nextAttempt = (inv as unknown as { next_payment_attempt?: number | null }).next_payment_attempt ?? null;
+        const invFailedRaw = inv as unknown as {
+          attempt_count?: number;
+          next_payment_attempt?: number | null;
+          subscription?: string | null;
+          amount_due?: number;
+          currency?: string;
+          status?: string;
+          hosted_invoice_url?: string | null;
+          payment_intent?: { status?: string } | string | null;
+        };
+        const attemptCount = invFailedRaw.attempt_count ?? null;
+        const nextAttempt = invFailedRaw.next_payment_attempt ?? null;
+        const piStatus = typeof invFailedRaw.payment_intent === 'object' && invFailedRaw.payment_intent !== null
+          ? invFailedRaw.payment_intent.status ?? null
+          : null;
+
         console.warn('[Stripe/webhook] invoice.payment_failed', {
           customerId: inv.customer as string,
           attemptCount,
           nextPaymentAttempt: nextAttempt !== null ? new Date(nextAttempt * 1000).toISOString() : null,
           willRetry: nextAttempt !== null,
           livemode: event.livemode,
+        });
+
+        logStripeOps('invoice_payment_failed', {
+          stripeEventId: event.id,
+          eventType: event.type,
+          livemode: event.livemode,
+          customerId: inv.customer as string,
+          subscriptionId: invFailedRaw.subscription ?? null,
+          invoiceStatus: invFailedRaw.status ?? null,
+          attemptCount,
+          nextPaymentAttempt: nextAttempt !== null ? new Date(nextAttempt * 1000).toISOString() : null,
+          willRetry: nextAttempt !== null,
+          amountDue: invFailedRaw.amount_due ?? null,
+          currency: invFailedRaw.currency ?? null,
+          hostedInvoiceUrlPresent: invFailedRaw.hosted_invoice_url != null,
+          paymentIntentStatus: piStatus,
+          opsAction: 'monitor_retry',
         });
         break;
       }
