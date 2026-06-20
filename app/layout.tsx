@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Space_Mono, DM_Sans, Archivo, Newsreader, JetBrains_Mono } from 'next/font/google';
 import { Suspense } from 'react';
 import { AuthTrigger } from '@/components/auth/AuthTrigger';
@@ -39,6 +39,12 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://crisis-travel.app';
 const APP_TITLE = 'Crisis Travel — Voyage intelligent en temps de crise';
 const APP_DESCRIPTION =
   "Crisis Travel analyse une sélection de destinations opportunistes, émergentes ou sous-évaluées en tenant compte du contexte géopolitique, sécuritaire et économique mondial. Propulsé par l'IA.";
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0a0a0f',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
