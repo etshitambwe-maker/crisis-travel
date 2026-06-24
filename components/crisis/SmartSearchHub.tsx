@@ -162,40 +162,6 @@ function SectionHeader({ index, label, hint }: { index: string; label: string; h
   );
 }
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  // V1 (GOAL-038) : l'onglet 'direct' (Destination précise) est retiré de l'interface.
-  // Crisis Travel n'est pas un moteur universel de destinations ; il analyse une sélection
-  // de pays opportunistes/émergents/sous-évalués. On ne garde donc que les deux parcours
-  // de découverte, dans l'ordre produit voulu : découverte guidée d'abord, puis région.
-  const tabs: { id: Tab; label: string; icon: string }[] = [
-    { id: 'discovery', label: 'Surprends-moi',        icon: '' },
-    { id: 'region',    label: 'Explorer une région',  icon: '' },
-  ];
-  return (
-    <div style={{
-      display: 'flex', gap: 4, marginBottom: 22,
-      background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-      padding: 5,
-    }}>
-      {tabs.map((t) => (
-        <button key={t.id} onClick={() => onChange(t.id)} style={{
-          flex: 1, padding: '12px 10px', border: 'none', cursor: 'pointer',
-          background: active === t.id ? 'var(--ctv3-red)' : 'transparent',
-          color: active === t.id ? '#fff' : 'var(--ctv3-muted)',
-          fontFamily: 'var(--ctv3-mono)', fontSize: '0.78rem',
-          fontWeight: active === t.id ? 700 : 500,
-          letterSpacing: '0.06em', transition: 'all 0.2s',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-        }}>
-          {/* Sober premium marker replacing the legacy emoji (Option B) */}
-          <span aria-hidden style={{ fontSize: '0.5rem', opacity: active === t.id ? 1 : 0.5, lineHeight: 1 }}>●</span>
-          <span className="ct-tab-label">{t.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Airport Selector ─────────────────────────────────────────────────────────
 function AirportSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
@@ -463,68 +429,76 @@ const TRAVEL_TYPE_OPTIONS = [
 
 type ChoiceKey = 'priority' | 'duration' | 'budget' | 'travelType';
 
-function OptionGrid<T extends string>({
-  label, options, value, onChange,
+// ── MOBILE-ASSISTANT-001 — machine à états « une question par écran » ──────────
+type StepId = 'airport' | 'priority' | 'travelType' | 'duration' | 'budget';
+const STEPS: StepId[] = ['airport', 'priority', 'travelType', 'duration', 'budget'];
+
+const STEP_TITLES: Record<StepId, string> = {
+  airport: "D'où pars-tu ?",
+  priority: 'Qu’est-ce qui compte le plus ?',
+  travelType: 'Tu voyages comment ?',
+  duration: 'Combien de temps ?',
+  budget: 'Quel budget ?',
+};
+
+// Écrans non essentiels : un lien « Passer » y avance sans rien sélectionner.
+const SKIPPABLE: Record<StepId, boolean> = {
+  airport: false, priority: false, travelType: false, duration: true, budget: true,
+};
+
+// Gros bouton tappable (min-height 56px) réutilisé par tous les écrans d'options.
+function AssistantOption({
+  label, desc, selected, onClick,
 }: {
   label: string;
-  options: { id: T; label: string; icon: string; desc?: string }[];
-  value: T | null;
-  onChange: (v: T) => void;
+  desc?: string;
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div style={{ marginBottom: 22, borderTop: '1px solid var(--ctv3-line-soft)', paddingTop: 16 }}>
-      <div style={{
-        fontFamily: 'var(--ctv3-mono)', fontSize: '0.7rem', fontWeight: 700,
-        color: 'var(--ctv3-red)', letterSpacing: '0.14em', textTransform: 'uppercase',
-        marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <span aria-hidden style={{ width: 14, height: 1, background: 'var(--ctv3-red)', opacity: 0.6, display: 'inline-block' }} />
-        {label}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(options.length, 2)}, 1fr)`, gap: 10 }}>
-        {options.map((opt, idx) => (
-          <button
-            key={opt.id}
-            onClick={() => onChange(opt.id)}
-            style={{
-              padding: '14px 14px', cursor: 'pointer', textAlign: 'left',
-              border: value === opt.id ? '1.5px solid var(--ctv3-red)' : '1.5px solid var(--ctv3-line)',
-              background: value === opt.id ? 'rgba(228,51,43,0.16)' : 'var(--ctv3-ink-800)',
-              boxShadow: value === opt.id ? '0 0 0 1px rgba(228,51,43,0.25), 0 2px 12px rgba(228,51,43,0.12)' : 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            {/* Sober mono index marker replacing the legacy emoji (Option B) */}
-            <div style={{
-              fontFamily: 'var(--ctv3-mono)', fontSize: '0.68rem', fontWeight: 700,
-              letterSpacing: '0.08em', marginBottom: 8,
-              color: value === opt.id ? 'var(--ctv3-red-2)' : 'var(--ctv3-faint)',
-            }}>
-              {String(idx + 1).padStart(2, '0')}
-            </div>
-            <div style={{ fontSize: '0.9rem', color: value === opt.id ? 'var(--ctv3-red-2)' : 'var(--ctv3-paper)', fontWeight: 600 }}>{opt.label}</div>
-            {opt.desc && <div style={{ fontSize: '0.78rem', color: value === opt.id ? 'var(--ctv3-muted)' : 'var(--ctv3-faint)', marginTop: 3, lineHeight: 1.4 }}>{opt.desc}</div>}
-          </button>
-        ))}
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', minHeight: 56, padding: '14px 16px', cursor: 'pointer', textAlign: 'left',
+        border: selected ? '1.5px solid var(--ctv3-red)' : '1.5px solid var(--ctv3-line)',
+        background: selected ? 'rgba(228,51,43,0.16)' : 'var(--ctv3-ink-800)',
+        boxShadow: selected ? '0 0 0 1px rgba(228,51,43,0.25), 0 2px 12px rgba(228,51,43,0.12)' : 'none',
+        transition: 'all 0.15s',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3,
+      }}
+    >
+      <div style={{ fontSize: '0.95rem', color: selected ? 'var(--ctv3-red-2)' : 'var(--ctv3-paper)', fontWeight: 600 }}>{label}</div>
+      {desc && <div style={{ fontSize: '0.78rem', color: selected ? 'var(--ctv3-muted)' : 'var(--ctv3-faint)', lineHeight: 1.4 }}>{desc}</div>}
+    </button>
   );
 }
 
-function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
+function DiscoveryTab({ airport, onAirportChange, dateDepart, dateRetour, onDepartChange, onRetourChange, dateError }: {
   airport: string;
+  onAirportChange: (code: string) => void;
   dateDepart: string;
   dateRetour: string;
+  onDepartChange: (v: string) => void;
+  onRetourChange: (v: string) => void;
   dateError: string | null;
 }) {
   const router = useRouter();
   const [state, setState] = useState<DiscoveryState>({ priority: null, duration: null, budget: null, travelType: null });
   const [loading, setLoading] = useState(false);
-  const set = (key: ChoiceKey) => (val: string) => {
+  const [stepIndex, setStepIndex] = useState(0);
+
+  const advance = () => setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+
+  // Avancement AUTO au tap : on enregistre le choix puis on avance ~300ms après
+  // (laisser voir la sélection).
+  const choose = (key: ChoiceKey, val: string) => {
     setState((s) => ({ ...s, [key]: val as never }));
+    setTimeout(advance, 300);
   };
+
   const completed = Object.values(state).filter(Boolean).length;
   const total = 4;
+  const step = STEPS[stepIndex];
 
   // GOAL-032 : suppression du double appel /api/analyze. DiscoveryTab ne lance PLUS
   // sa propre analyse (qui était ensuite refaite par /results). On navigue directement
@@ -552,98 +526,165 @@ function DiscoveryTab({ airport, dateDepart, dateRetour, dateError }: {
     setTimeout(releaseAnalyzeLock, 3000);
   }
 
-  const remaining = Math.max(0, 2 - completed);
+  const canLaunch = completed >= 2 && !loading && !dateError;
+
+  // Rend l'écran courant uniquement (une question par écran).
+  function renderStep() {
+    if (step === 'airport') {
+      const current = FRENCH_AIRPORTS.find((a) => a.code === airport)?.code ?? airport;
+      return (
+        <div style={{ display: 'grid', gap: 10, maxHeight: 360, overflowY: 'auto' }}>
+          {FRENCH_AIRPORTS.map((ap) => (
+            <AssistantOption
+              key={ap.code}
+              label={ap.city}
+              desc={`${ap.name} · ${ap.code}`}
+              selected={ap.code === current}
+              onClick={() => { onAirportChange(ap.code); setTimeout(advance, 300); }}
+            />
+          ))}
+        </div>
+      );
+    }
+    if (step === 'priority') {
+      return (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {PRIORITY_OPTIONS.map((opt) => (
+            <AssistantOption key={opt.id} label={opt.label} desc={opt.desc} selected={state.priority === opt.id} onClick={() => choose('priority', opt.id)} />
+          ))}
+        </div>
+      );
+    }
+    if (step === 'travelType') {
+      return (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {TRAVEL_TYPE_OPTIONS.map((opt) => (
+            <AssistantOption key={opt.id} label={opt.label} selected={state.travelType === opt.id} onClick={() => choose('travelType', opt.id)} />
+          ))}
+        </div>
+      );
+    }
+    if (step === 'duration') {
+      return (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {DURATION_OPTIONS.map((opt) => (
+            <AssistantOption key={opt.id} label={opt.label} desc={opt.desc} selected={state.duration === opt.id} onClick={() => choose('duration', opt.id)} />
+          ))}
+          {/* Dates optionnelles (TRAVEL-DATES-001) — restent accessibles ; si présentes,
+              la durée est recalculée depuis from/to et prime sur ce choix. */}
+          <div style={{ marginTop: 6, borderTop: '1px solid var(--ctv3-line-soft)', paddingTop: 14 }}>
+            <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.7rem', color: 'var(--ctv3-muted)', letterSpacing: '0.1em', marginBottom: 10 }}>
+              OU FIXE TES DATES (optionnel)
+            </div>
+            <DateRangePicker
+              dateDepart={dateDepart}
+              dateRetour={dateRetour}
+              onDepartChange={onDepartChange}
+              onRetourChange={onRetourChange}
+              error={dateError}
+            />
+          </div>
+        </div>
+      );
+    }
+    // budget
+    return (
+      <div style={{ display: 'grid', gap: 10 }}>
+        {BUDGET_OPTIONS.map((opt) => (
+          <AssistantOption key={opt.id} label={opt.label} desc={opt.desc} selected={state.budget === opt.id} onClick={() => choose('budget', opt.id)} />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* FRONT-014 — Section 2 : Profil de voyage */}
-      <SectionHeader
-        index="02"
-        label="Profil de voyage"
-        hint="Réponds à au moins 2 critères. Plus tu en renseignes, plus l’analyse est précise."
-      />
-
-      <OptionGrid label="CE QUI COMPTE LE PLUS POUR TOI" options={PRIORITY_OPTIONS as never} value={state.priority} onChange={set('priority') as never} />
-      <OptionGrid label="DURÉE DU VOYAGE" options={DURATION_OPTIONS as never} value={state.duration} onChange={set('duration') as never} />
-      <OptionGrid label="BUDGET TOTAL" options={BUDGET_OPTIONS as never} value={state.budget} onChange={set('budget') as never} />
-      <OptionGrid label="TU VOYAGES" options={TRAVEL_TYPE_OPTIONS as never} value={state.travelType} onChange={set('travelType') as never} />
-
-      {/* FRONT-014 — Section 3 : Progression (compteur explicite + jalon du seuil minimum) */}
-      <div style={{ marginBottom: 22 }}>
-        <SectionHeader index="03" label="Progression" />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.78rem', fontWeight: 700, color: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-paper)' }}>
-            {completed} critère{completed > 1 ? 's' : ''} sur {total}
-          </span>
-          <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', color: 'var(--ctv3-muted)' }}>
-            minimum 2 pour lancer
-          </span>
-        </div>
-        <div style={{ position: 'relative', height: 4, background: 'var(--ctv3-line)', borderRadius: 2 }}>
-          <div style={{ height: '100%', width: `${(completed / total) * 100}%`, background: completed === total ? 'var(--ctv3-ideal)' : 'var(--ctv3-red)', borderRadius: 2, transition: 'width 0.3s ease' }} />
-          {/* Jalon visuel du seuil minimum (2/4 = 50%) — repère d'affichage, ne change aucun seuil */}
-          <div aria-hidden style={{ position: 'absolute', top: -2, left: '50%', width: 2, height: 8, background: 'var(--ctv3-paper)', opacity: 0.5 }} />
-        </div>
-      </div>
-
-      {/* FRONT-014 — Résumé « Votre analyse » (lecture seule, dérivé de l'état existant) */}
-      <div style={{
-        marginBottom: 22, padding: '14px 16px',
-        background: 'var(--ctv3-ink-900)', border: '1px solid var(--ctv3-line)',
-      }}>
-        <div style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ctv3-muted)', textTransform: 'uppercase', marginBottom: 10 }}>
-          Votre analyse
-        </div>
-        {[
-          { k: 'Départ', v: airport },
-          { k: 'Mode', v: 'Surprends-moi' },
-          { k: 'Critères', v: `${completed} sur ${total}` },
-          ...(dateDepart ? [{ k: 'Date départ', v: dateDepart }] : []),
-          ...(dateRetour ? [{ k: 'Date retour', v: dateRetour }] : []),
-        ].map((row) => (
-          <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '4px 0' }}>
-            <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-faint)', letterSpacing: '0.04em' }}>{row.k}</span>
-            <span style={{ fontSize: '0.84rem', color: 'var(--ctv3-paper)', fontWeight: 600 }}>{row.v}</span>
+      {/* En-tête assistant : retour + progression + compteur d'écrans */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <button
+          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+          disabled={stepIndex === 0}
+          aria-label="Écran précédent"
+          style={{
+            width: 36, height: 36, flexShrink: 0,
+            border: '1px solid var(--ctv3-line)',
+            background: 'var(--ctv3-ink-800)',
+            color: stepIndex === 0 ? 'var(--ctv3-faint)' : 'var(--ctv3-paper)',
+            cursor: stepIndex === 0 ? 'default' : 'pointer',
+            opacity: stepIndex === 0 ? 0.4 : 1,
+            fontFamily: 'var(--ctv3-mono)', fontSize: '1rem',
+          }}
+        >
+          ←
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ height: 4, background: 'var(--ctv3-line)', borderRadius: 2 }}>
+            <div style={{ height: '100%', width: `${((stepIndex + 1) / STEPS.length) * 100}%`, background: 'var(--ctv3-red)', borderRadius: 2, transition: 'width 0.3s ease' }} />
           </div>
-        ))}
+        </div>
+        <span style={{ fontFamily: 'var(--ctv3-mono)', fontSize: '0.72rem', color: 'var(--ctv3-muted)', flexShrink: 0 }}>
+          {stepIndex + 1}/{STEPS.length}
+        </span>
       </div>
 
-      {/* FRONT-014 — Section 4 : Lancer l'analyse */}
-      <SectionHeader index="04" label="Lancer l'analyse" />
-      <button
-        onClick={handleGenerate}
-        disabled={completed < 2 || loading || !!dateError}
-        style={{
-          width: '100%', padding: '16px',
-          cursor: completed < 2 || loading || !!dateError ? 'not-allowed' : 'pointer',
-          background: completed >= 2 && !dateError ? 'var(--ctv3-red)' : 'var(--ctv3-ink-700)',
-          border: completed >= 2 && !dateError ? '1px solid transparent' : '1px solid var(--ctv3-line)',
-          color: completed >= 2 && !dateError ? '#fff' : 'var(--ctv3-faint)',
-          fontFamily: 'var(--ctv3-mono)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em',
-          transition: 'all 0.2s', marginTop: 8,
-          boxShadow: completed >= 2 && !dateError ? '0 6px 24px rgba(228,51,43,0.35)' : 'none',
-        }}
-      >
-        {loading ? 'ANALYSE EN COURS...' : completed >= 4 ? 'SURPRENDS-MOI →' : completed >= 2 ? 'VOIR MES DESTINATIONS →' : 'Réponds à au moins 2 questions'}
-      </button>
-      {/* FRONT-014 — Sous-texte d'état du CTA (affichage dérivé de completed, aucune logique modifiée) */}
-      <p style={{ fontSize: '0.78rem', color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '8px 0 0', textAlign: 'center' }}>
-        {completed < 2
-          ? `Renseigne encore ${remaining} critère${remaining > 1 ? 's' : ''} pour lancer l’analyse.`
-          : 'Prêt à lancer — tu pourras affiner ensuite.'}
-      </p>
-      {/* FREE-QUOTA-UX-001 — Microcopy freemium : texte statique, zéro logique, zéro appel API */}
-      <p className="ctv3-mono" style={{ fontSize: '0.62rem', color: 'var(--ctv3-dim)', letterSpacing: '0.08em', margin: '6px 0 0', textAlign: 'center' }}>
-        3 analyses gratuites par mois · Sans engagement
-      </p>
+      {/* Question courte de l'écran */}
+      <h2 style={{
+        fontFamily: 'var(--ctv3-display)', fontSize: '1.35rem', color: 'var(--ctv3-paper)',
+        fontWeight: 700, margin: '0 0 16px', lineHeight: 1.2,
+      }}>
+        {STEP_TITLES[step]}
+      </h2>
+
+      {renderStep()}
+
+      {/* « Passer » discret sur les écrans non essentiels */}
+      {SKIPPABLE[step] && (
+        <button
+          onClick={advance}
+          style={{
+            display: 'block', margin: '14px auto 0', background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-muted)',
+            letterSpacing: '0.06em', textDecoration: 'underline',
+          }}
+        >
+          Passer
+        </button>
+      )}
+
+      {/* Lancement : apparaît dès que completed >= 2 (logique handleGenerate INCHANGÉE) */}
+      {completed >= 2 && (
+        <div style={{ marginTop: 22, borderTop: '1px solid var(--ctv3-line-soft)', paddingTop: 18 }}>
+          <button
+            onClick={handleGenerate}
+            disabled={completed < 2 || loading || !!dateError}
+            style={{
+              width: '100%', padding: '16px',
+              cursor: canLaunch ? 'pointer' : 'not-allowed',
+              background: canLaunch ? 'var(--ctv3-red)' : 'var(--ctv3-ink-700)',
+              border: canLaunch ? '1px solid transparent' : '1px solid var(--ctv3-line)',
+              color: canLaunch ? '#fff' : 'var(--ctv3-faint)',
+              fontFamily: 'var(--ctv3-mono)', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.1em',
+              transition: 'all 0.2s',
+              boxShadow: canLaunch ? '0 6px 24px rgba(228,51,43,0.35)' : 'none',
+            }}
+          >
+            {loading ? 'ANALYSE EN COURS...' : 'VOIR MES DESTINATIONS →'}
+          </button>
+          {/* FREE-QUOTA-UX-001 — Microcopy freemium : texte statique, zéro logique, zéro appel API */}
+          <p className="ctv3-mono" style={{ fontSize: '0.62rem', color: 'var(--ctv3-dim)', letterSpacing: '0.08em', margin: '8px 0 0', textAlign: 'center' }}>
+            3 analyses gratuites · sans engagement
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function SmartSearchHub() {
-  // GOAL-038 : la V1 ouvre sur la découverte guidée (« Surprends-moi »), cœur du
-  // positionnement produit. L'ancien onglet 'direct' n'est plus atteignable via l'UI.
+  // MOBILE-ASSISTANT-001 : la V1 ouvre sur l'assistant découverte (« une question par
+  // écran »). « Explorer une région » reste accessible via un lien discret en bas.
+  // L'ancienne TabBar n'est plus rendue dans la vue principale.
   const [tab, setTab] = useState<Tab>('discovery');
   const [airport, setAirport] = useState('CDG');
   const [dateDepart, setDateDepart] = useState('');
@@ -687,44 +728,57 @@ export function SmartSearchHub() {
       overflowX: 'hidden',
     }}>
 
-      {/* Sélecteur d'aéroport — persistant, visible sur tous les onglets */}
-      <AirportSelector value={airport} onChange={handleAirportChange} />
+      {tab === 'region' ? (
+        <>
+          {/* Retour à l'assistant depuis le mode région */}
+          <button
+            onClick={() => setTab('discovery')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 16,
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-muted)', letterSpacing: '0.06em',
+            }}
+          >
+            ← Revenir à l’assistant
+          </button>
+          {/* Aéroport requis par RegionTab — sélecteur conservé dans ce mode */}
+          <AirportSelector value={airport} onChange={handleAirportChange} />
+          <DateRangePicker
+            dateDepart={dateDepart}
+            dateRetour={dateRetour}
+            onDepartChange={setDateDepart}
+            onRetourChange={setDateRetour}
+            error={dateError}
+          />
+          <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} dateError={dateError} />
+        </>
+      ) : (
+        <>
+          <DiscoveryTab
+            airport={airport}
+            onAirportChange={handleAirportChange}
+            dateDepart={dateDepart}
+            dateRetour={dateRetour}
+            onDepartChange={setDateDepart}
+            onRetourChange={setDateRetour}
+            dateError={dateError}
+          />
 
-      {/* Dates de voyage — optionnelles, visibles sur tous les onglets */}
-      <DateRangePicker
-        dateDepart={dateDepart}
-        dateRetour={dateRetour}
-        onDepartChange={setDateDepart}
-        onRetourChange={setDateRetour}
-        error={dateError}
-      />
-
-      {/* Microcopy de positionnement (GOAL-038) — visible sur les deux parcours V1.
-          Clarifie que Crisis Travel n'est pas un moteur universel de destinations :
-          il détecte les pays où le contexte actuel crée une opportunité de voyage. */}
-      <p style={{
-        fontSize: '0.82rem', color: 'var(--ctv3-muted)', lineHeight: 1.6,
-        textAlign: 'center', margin: '0 0 22px',
-      }}>
-        Pas toutes les destinations. Les bonnes opportunités. Crisis Travel analyse une
-        sélection de pays <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 600 }}>opportunistes,
-        émergents ou sous-évalués</strong> et repère ceux où le contexte actuel peut rendre
-        le voyage plus avantageux.
-      </p>
-
-      {/* FRONT-014 — Section 1 : Mode d'analyse (titre + onglets + aide contextuelle) */}
-      <div style={{ marginBottom: 22 }}>
-        <SectionHeader index="01" label="Mode d'analyse" />
-        <TabBar active={tab} onChange={setTab} />
-        <p style={{ fontSize: '0.8rem', color: 'var(--ctv3-muted)', lineHeight: 1.5, margin: '10px 0 0' }}>
-          {tab === 'discovery'
-            ? 'Réponds à quelques critères : l’analyse trouve les destinations qui te correspondent.'
-            : 'Choisis une région : l’analyse se concentre sur ses destinations.'}
-        </p>
-      </div>
-
-      {tab === 'region' && <RegionTab onAnalyze={handleRegionAnalyze} airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} dateError={dateError} />}
-      {tab === 'discovery' && <DiscoveryTab airport={airport} dateDepart={dateDepart} dateRetour={dateRetour} dateError={dateError} />}
+          {/* Accès discret au parcours « Explorer une région » (RegionTab conservé) */}
+          <button
+            onClick={() => setTab('region')}
+            style={{
+              display: 'block', width: '100%', marginTop: 20, paddingTop: 16,
+              borderTop: '1px solid var(--ctv3-line-soft)', border: 'none', borderTopWidth: 1,
+              background: 'none', cursor: 'pointer',
+              fontFamily: 'var(--ctv3-mono)', fontSize: '0.74rem', color: 'var(--ctv3-muted)',
+              letterSpacing: '0.06em', textAlign: 'center',
+            }}
+          >
+            Plutôt explorer une région précise ? →
+          </button>
+        </>
+      )}
     </div>
   );
 }

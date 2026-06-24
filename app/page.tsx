@@ -117,40 +117,91 @@ export default function HomePage() {
 
           <p
             className="ctv3-serif"
-            style={{ maxWidth: 560, color: 'var(--ctv3-muted)', fontSize: 17, lineHeight: 1.65, margin: '0 0 20px' }}
+            style={{ maxWidth: 560, color: 'var(--ctv3-muted)', fontSize: 17, lineHeight: 1.65, margin: '0 0 24px' }}
           >
-            Crisis Travel analyse la sécurité, la géopolitique, le budget et la praticité pour
-            révéler les destinations les plus avantageuses du moment.
+            On analyse sécurité, budget et contexte pour révéler les meilleures destinations du moment.
           </p>
 
+          {/* CTA principal — bouton rouge plein largeur sur mobile */}
+          <Link
+            href="#analyse"
+            style={{
+              display: 'block',
+              width: '100%',
+              maxWidth: 420,
+              boxSizing: 'border-box',
+              padding: '16px 20px',
+              minHeight: 56,
+              background: 'var(--ctv3-red)',
+              color: '#fff',
+              fontFamily: 'var(--ctv3-mono)',
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+              textAlign: 'center',
+              borderRadius: 0,
+            }}
+          >
+            Trouver ma destination →
+          </Link>
+
+          {/* Réassurance sous le CTA */}
+          <p
+            className="ctv3-mono"
+            style={{
+              margin: '10px 0 0',
+              fontSize: 11,
+              letterSpacing: '0.06em',
+              color: 'var(--ctv3-faint)',
+            }}
+          >
+            3 analyses gratuites · sans engagement
+          </p>
+
+          {/* Lien secondaire discret */}
+          <Link
+            href="#comment-ca-marche"
+            className="ctv3-mono"
+            style={{
+              display: 'inline-block',
+              margin: '14px 0 0',
+              fontSize: 11,
+              letterSpacing: '0.06em',
+              color: 'var(--ctv3-muted)',
+              textDecoration: 'underline',
+              textUnderlineOffset: 3,
+            }}
+          >
+            Comment ça marche ?
+          </Link>
+
+          {/* Stats — discrètes, sous le pli */}
           <div
             className="ctv3-mono"
             style={{
               display: 'flex',
               flexWrap: 'wrap',
-              gap: 14,
-              fontSize: 11,
+              gap: 10,
+              marginTop: 24,
+              fontSize: 9.5,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: 'var(--ctv3-faint)',
             }}
           >
             <span>
-              <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 700 }}>{COVERED}</strong> destinations couvertes
+              <strong style={{ color: 'var(--ctv3-muted)', fontWeight: 700 }}>{COVERED}</strong> destinations couvertes
             </span>
             <span style={{ color: 'var(--ctv3-line-bright)' }}>·</span>
             <span>
-              jusqu'à <strong style={{ color: 'var(--ctv3-paper)', fontWeight: 700 }}>{SCORED_PER_REQUEST}</strong> analysées
+              jusqu'à <strong style={{ color: 'var(--ctv3-muted)', fontWeight: 700 }}>{SCORED_PER_REQUEST}</strong> analysées
               par requête
             </span>
             <span style={{ color: 'var(--ctv3-line-bright)' }}>·</span>
             <span>sources officielles &amp; marché</span>
           </div>
-        </section>
-
-        {/* ── COMMENT ÇA MARCHE ───────────────────────────────── */}
-        <section style={{ marginBottom: 44 }}>
-          <HowItWorks />
         </section>
 
         {/* ── FORMULAIRE D'ANALYSE ────────────────────────────── */}
@@ -336,33 +387,42 @@ export default function HomePage() {
                     </span>
                   </div>
 
-                  {/* Features */}
+                  {/* Features — 3 visibles, le reste replié dans un <details> natif */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 18, flex: 1 }}>
-                    {plan.features.map((feat) => (
-                      <div
-                        key={feat}
-                        style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12 }}
-                      >
-                        <span
+                    {plan.features.slice(0, 3).map((feat) => (
+                      <FeatureRow key={feat} plan={plan} feat={feat} />
+                    ))}
+
+                    {plan.features.length > 3 && (
+                      <details style={{ marginTop: 3 }}>
+                        <summary
+                          className="ctv3-mono"
                           style={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: '50%',
-                            flexShrink: 0,
-                            display: 'grid',
-                            placeItems: 'center',
-                            background: `${plan.color}22`,
-                            color: plan.color,
-                            fontSize: 8,
-                            fontWeight: 700,
-                            marginTop: 1,
+                            cursor: 'pointer',
+                            fontFamily: 'var(--ctv3-mono)',
+                            fontSize: 11,
+                            letterSpacing: '0.08em',
+                            color: 'var(--ctv3-faint)',
+                            listStyle: 'none',
+                            padding: '4px 0 2px',
                           }}
                         >
-                          +
-                        </span>
-                        <span style={{ color: 'var(--ctv3-muted)', lineHeight: 1.4 }}>{feat}</span>
-                      </div>
-                    ))}
+                          + {plan.features.length - 3} de plus
+                        </summary>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 7,
+                            marginTop: 7,
+                          }}
+                        >
+                          {plan.features.slice(3).map((feat) => (
+                            <FeatureRow key={feat} plan={plan} feat={feat} />
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
 
                   {/* CTA */}
@@ -397,6 +457,12 @@ export default function HomePage() {
           <OpportunityCards />
         </section>
 
+        {/* ── COMMENT ÇA MARCHE ───────────────────────────────── */}
+        <section id="comment-ca-marche" style={{ marginBottom: 44 }}>
+          <SectionHead label="Comment ça marche" meta="En 4 étapes" />
+          <HowItWorks />
+        </section>
+
         {/* Footer */}
         <footer
           className="ctv3-mono"
@@ -422,6 +488,34 @@ export default function HomePage() {
           <div>© Crisis Travel</div>
         </footer>
       </main>
+    </div>
+  );
+}
+
+/* ── Ligne de feature (factorisée, DRY) ────────────────────── */
+type HomePlan = (typeof HOME_PLANS)[number];
+
+function FeatureRow({ plan, feat }: { plan: HomePlan; feat: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12 }}>
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: '50%',
+          flexShrink: 0,
+          display: 'grid',
+          placeItems: 'center',
+          background: `${plan.color}22`,
+          color: plan.color,
+          fontSize: 8,
+          fontWeight: 700,
+          marginTop: 1,
+        }}
+      >
+        +
+      </span>
+      <span style={{ color: 'var(--ctv3-muted)', lineHeight: 1.4 }}>{feat}</span>
     </div>
   );
 }
